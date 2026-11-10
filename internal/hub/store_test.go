@@ -71,6 +71,30 @@ func TestPairingCodeSingleUse(t *testing.T) {
 	}
 }
 
+func TestStepUpWindow(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	token, _, err := s.CreateSession(u.ID, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	si, err := s.SessionByToken(token)
+	if err != nil || !si.StepUpUntil.IsZero() {
+		t.Fatalf("unexpected initial step-up: %v %v", si.StepUpUntil, err)
+	}
+	if err := s.MarkStepUp(token, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	si, err = s.SessionByToken(token)
+	if err != nil || !si.StepUpUntil.After(time.Now()) {
+		t.Fatalf("step-up not recorded: %v %v", si.StepUpUntil, err)
+	}
+}
+
 func TestHostConfirmation(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")
 	if err != nil {

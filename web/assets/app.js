@@ -83,7 +83,7 @@ function copyText(text) {
 }
 
 async function api(path, options = {}) {
-  const { method = 'GET', body, allow401 = false } = options;
+  const { method = 'GET', body, allow401 = false, stepUpRetry = false } = options;
   const headers = { 'X-Nexus-Request': '1', Accept: 'application/json' };
   const init = { method, headers, credentials: 'same-origin' };
   if (body !== undefined) {
@@ -97,6 +97,10 @@ async function api(path, options = {}) {
     try { data = JSON.parse(text); } catch { data = { error: text }; }
   }
   if (!res.ok) {
+    if (res.status === 403 && data.step_up_required && !stepUpRetry) {
+      await ensureStepUp();
+      return api(path, { ...options, stepUpRetry: true });
+    }
     const err = new Error(data.error || `${res.status} ${res.statusText}`);
     err.status = res.status;
     if (res.status === 401 && !allow401) {
@@ -122,7 +126,10 @@ function b64decode(value) {
   return out;
 }
 
-function modal(html) {
+let modalOnClose = null;
+function modal(html, onClose) {
+  if (modalRoot.firstElementChild) closeModal();
+  modalOnClose = onClose || null;
   modalRoot.innerHTML = `<div class="modal-backdrop" data-modal-backdrop><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
   const backdrop = modalRoot.firstElementChild;
   backdrop.addEventListener('click', (e) => {
@@ -131,7 +138,12 @@ function modal(html) {
   modalRoot.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeModal));
 }
 
-function closeModal() { modalRoot.innerHTML = ''; }
+function closeModal() {
+  const cb = modalOnClose;
+  modalOnClose = null;
+  modalRoot.innerHTML = '';
+  if (cb) cb();
+}
 
 function confirmDanger(message, onConfirm) {
   modal(`
@@ -501,7 +513,12 @@ async function pageHosts() {
   }));
 }
 
-function pairHostDialog() {
+async function pairHostDialog() {
+  try {
+    await ensureStepUp();
+  } catch {
+    return;
+  }
   modal(`
     <h2>Pair a host</h2>
     <p class="hint">The code is single-use and expires after 10 minutes. The host connects outbound; no inbound ports are required.</p>
@@ -847,6 +864,11 @@ async function pageUsers() {
 }
 
 async function shareHostDialog(host) {
+  try {
+    await ensureStepUp();
+  } catch {
+    return;
+  }
   const [users, grants] = await Promise.all([api('/users'), api(`/hosts/${host.id}/grants`)]);
   const byUser = new Map(grants.grants.map((g) => [g.user_id, g.permissions.split(',')]));
   const permissions = ['view','read_transcript','resume','create','fork','terminal_input','approve','manage'];
@@ -1372,6 +1394,64 @@ async function passkeyLogin(username) {
     method: 'POST',
     body: serializeCredential(cred, 'get'),
     allow401: true,
+  });
+}
+
+let stepUpFlight = null;
+function ensureStepUp() {
+  if (!stepUpFlight) {
+    stepUpFlight = performStepUp().finally(() => { stepUpFlight = null; });
+  }
+  return stepUpFlight;
+}
+
+async function performStepUp() {
+  const status = await api('/auth/step-up');
+  if (status.valid_until && new Date(status.valid_until) > new Date()) return;
+  const begin = await api('/auth/step-up/begin', { method: 'POST' });
+  if (begin.method === 'passkey') {
+    if (!window.PublicKeyCredential) throw new Error('WebAuthn is not supported by this browser');
+    const cred = await navigator.credentials.get({ publicKey: prepareAssertion(begin.publicKey) });
+    if (!cred) throw new Error('Step-up confirmation was cancelled');
+    await api(`/auth/step-up/passkey?session=${encodeURIComponent(begin.session_id)}`, {
+      method: 'POST',
+      body: serializeCredential(cred, 'get'),
+      allow401: true,
+    });
+  } else {
+    await stepUpPasswordDialog(begin.totp_enabled);
+  }
+  toast('Confirmed');
+}
+
+function stepUpPasswordDialog(totpEnabled) {
+  return new Promise((resolve, reject) => {
+    modal(`
+      <h2>Confirm it's you</h2>
+      <p class="hint">This change needs a fresh confirmation. Enter your password${totpEnabled ? ' and authenticator code' : ''}.</p>
+      <form class="form" id="step-up-form">
+        <label class="label">Password<input class="input" type="password" name="password" required autocomplete="current-password"></label>
+        ${totpEnabled ? '<label class="label">One-time code<input class="input" name="totp" inputmode="numeric" autocomplete="one-time-code" required></label>' : ''}
+        <div class="modal-actions">
+          <button class="btn ghost" type="button" data-close>Cancel</button>
+          <button class="btn primary" type="submit">Confirm</button>
+        </div>
+      </form>`, () => reject(new Error('step-up cancelled')));
+    document.getElementById('step-up-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.target);
+      try {
+        await api('/auth/step-up/password', {
+          method: 'POST',
+          body: { password: form.get('password'), totp: form.get('totp') || '' },
+          allow401: true,
+        });
+        resolve();
+        closeModal();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
   });
 }
 

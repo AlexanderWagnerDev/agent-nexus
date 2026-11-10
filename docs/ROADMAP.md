@@ -38,7 +38,7 @@ what is actually implemented and tested versus what is still open.
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
-| 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, outbound link, reconnect, agent detection, per-user service, `doctor` | Step-up auth, Windows Task Scheduler/NSSM service option |
+| 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user service, `doctor` | Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
 | 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Mobile usability review |

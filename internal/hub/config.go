@@ -28,6 +28,7 @@ const (
 	ctxUser ctxKey = iota
 	ctxDevice
 	ctxToken
+	ctxStepUp
 )
 
 type authInfo struct {
@@ -52,7 +53,22 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), ctxUser, si.User)
 		ctx = context.WithValue(ctx, ctxDevice, si.Device)
 		ctx = context.WithValue(ctx, ctxToken, cookie.Value)
+		ctx = context.WithValue(ctx, ctxStepUp, si.StepUpUntil)
 		next(w, r.WithContext(ctx))
+	}
+}
+
+// requireStepUp guards actions that can widen access or change credentials.
+func (s *Server) requireStepUp(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		until, _ := r.Context().Value(ctxStepUp).(time.Time)
+		if !time.Now().Before(until) {
+			writeJSON(w, http.StatusForbidden, map[string]any{
+				"error": "step-up required", "step_up_required": true,
+			})
+			return
+		}
+		next(w, r)
 	}
 }
 

@@ -44,6 +44,13 @@ func OpenStore(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+// MarkStepUp extends the step-up window for one signed-in session.
+func (s *Store) MarkStepUp(token string, window time.Duration) error {
+	_, err := s.db.Exec(`UPDATE auth_sessions SET step_up_until=? WHERE token_hash=?`,
+		ms(time.Now().Add(window)), hashToken(token))
+	return err
+}
+
 func (s *Store) migrate() error {
 	_, err := s.db.Exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -69,7 +76,8 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
   created_at INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL
+  expires_at INTEGER NOT NULL,
+  step_up_until INTEGER
 );
 CREATE TABLE IF NOT EXISTS pairing_codes (
   code_hash TEXT PRIMARY KEY,
@@ -179,7 +187,13 @@ CREATE TABLE IF NOT EXISTS passkeys (
   last_used INTEGER
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	// Existing databases predate column-level migrations; SQLite reports a
+	// duplicate-column error which is safe to ignore.
+	_, _ = s.db.Exec(`ALTER TABLE auth_sessions ADD COLUMN step_up_until INTEGER`)
+	return nil
 }
 
 func newID() string {
@@ -317,9 +331,10 @@ func (s *Store) CreateSession(userID, deviceName string) (token string, device D
 }
 
 type SessionInfo struct {
-	User      User
-	Device    Device
-	ExpiresAt time.Time
+	User        User
+	Device      Device
+	ExpiresAt   time.Time
+	StepUpUntil time.Time
 }
 
 func (s *Store) SessionByToken(token string) (SessionInfo, error) {
@@ -327,17 +342,17 @@ func (s *Store) SessionByToken(token string) (SessionInfo, error) {
 	var deviceID string
 	var userCreated, devCreated, devSeen, authCreated, authSeen, expires int64
 	var totp int
-	var revoked sql.NullInt64
+	var revoked, stepUp sql.NullInt64
 	err := s.db.QueryRow(`SELECT u.id,u.username,u.password_hash,u.totp_secret,u.totp_enabled,u.role,u.created_at,
 		d.id,d.name,d.created_at,d.last_seen,d.revoked_at,
-		a.created_at,a.last_seen,a.expires_at
+		a.created_at,a.last_seen,a.expires_at,a.step_up_until
 		FROM auth_sessions a
 		JOIN users u ON u.id=a.user_id
 		JOIN devices d ON d.id=a.device_id
 		WHERE a.token_hash=?`, hashToken(token)).Scan(
 		&si.User.ID, &si.User.Username, &si.User.PasswordHash, &si.User.TOTPSecret, &totp, &si.User.Role, &userCreated,
 		&deviceID, &si.Device.Name, &devCreated, &devSeen, &revoked,
-		&authCreated, &authSeen, &expires)
+		&authCreated, &authSeen, &expires, &stepUp)
 	if err != nil {
 		return si, err
 	}
@@ -350,6 +365,9 @@ func (s *Store) SessionByToken(token string) (SessionInfo, error) {
 	si.Device.CreatedAt = fromMS(devCreated)
 	si.Device.LastSeen = fromMS(devSeen)
 	si.ExpiresAt = fromMS(expires)
+	if stepUp.Valid {
+		si.StepUpUntil = fromMS(stepUp.Int64)
+	}
 	if time.Now().After(si.ExpiresAt) {
 		return si, errors.New("session expired")
 	}

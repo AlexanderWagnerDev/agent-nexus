@@ -143,7 +143,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | Phase | Status |
 | --- | --- |
 | 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; spike reports are not yet written |
-| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys and host SAS confirmation available, step-up auth pending |
+| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
 | 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing and host SAS confirmation implemented; mobile review open |
