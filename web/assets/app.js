@@ -3,6 +3,22 @@ const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 const toastRoot = document.getElementById('toast-root');
 
+const iconPaths = {
+  overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  hosts: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
+  sessions: '<path d="M4 5h16v11H9l-5 4V5Z"/>',
+  runs: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="m7 9 3 3-3 3M13 16h4"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
+  settings: '<path d="M4 7h8M17 7h3M4 17h3M12 17h8M4 12h12M19 12h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/><circle cx="18" cy="12" r="2"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/>',
+  monitor: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
+};
+
+function svgIcon(name, size = 15) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.overview}</svg>`;
+}
+
 const state = {
   me: null,
   setupRequired: false,
@@ -206,12 +222,12 @@ function wsSend(msg) {
 /* ---------- shell ---------- */
 
 const navItems = [
-  ['#/', 'Overview', '◈', 'overview'],
-  ['#/hosts', 'Hosts', '▤', 'hosts'],
-  ['#/sessions', 'Sessions', '▦', 'sessions'],
-  ['#/runs', 'Runs', '▶', 'runs'],
-  ['#/search', 'Search', '⌕', 'search'],
-  ['#/settings', 'Settings', '⚙', 'settings'],
+  ['#/', 'Overview', 'overview', 'overview'],
+  ['#/hosts', 'Hosts', 'hosts', 'hosts'],
+  ['#/sessions', 'Sessions', 'sessions', 'sessions'],
+  ['#/runs', 'Runs', 'runs', 'runs'],
+  ['#/search', 'Search', 'search', 'search'],
+  ['#/settings', 'Settings', 'settings', 'settings'],
 ];
 
 function renderShell(active = 'overview') {
@@ -227,7 +243,7 @@ function renderShell(active = 'overview') {
         <nav class="nav">
           ${navItems.map(([href, label, icon, key]) => `
             <a href="${href}" class="${key === active ? 'active' : ''}">
-              <span class="icon" aria-hidden="true">${icon}</span><span>${label}</span>
+              <span class="icon" aria-hidden="true">${svgIcon(icon)}</span><span>${label}</span>
             </a>`).join('')}
         </nav>
         <div class="sidebar-extra" id="sidebar-extra"></div>
@@ -272,7 +288,7 @@ async function loadSidebar() {
   try {
     const [{ hosts }, { sessions }] = await Promise.all([api('/hosts'), api('/sessions?limit=6')]);
     const hostRows = hosts.slice(0, 6).map((h) => `<a class="side-row" href="#/hosts" title="${esc(h.name)}"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span><span class="truncate">${esc(h.name)}</span></a>`).join('');
-    const chatRows = sessions.slice(0, 6).map((s) => `<a class="side-row" href="#/sessions/${esc(s.id)}" title="${esc(s.title || '')}"><span class="side-agent">${esc((s.agent || '?').slice(0, 1))}</span><span class="truncate">${esc(s.title || 'Untitled session')}</span></a>`).join('');
+    const chatRows = sessions.slice(0, 6).map((s) => `<a class="side-row" href="#/sessions/${esc(s.id)}" title="${esc(s.title || '')}"><span class="side-dot ${s.state === 'running' || s.state === 'waiting_for_input' ? 'on' : ''}"></span><span class="side-agent">${esc({ opencode: 'OC', codex: 'CX', claude: 'CL', gemini: 'GM' }[s.agent] || (s.agent || '?').slice(0, 2).toUpperCase())}</span><span class="truncate">${esc(s.title || 'Untitled session')}</span></a>`).join('');
     box.innerHTML = `
       <div class="side-section"><div class="side-head"><span>Hosts</span></div>${hostRows || '<div class="side-empty">No hosts yet</div>'}</div>
       <div class="side-section"><div class="side-head"><span>Recent chats</span></div>${chatRows || '<div class="side-empty">No sessions yet</div>'}</div>`;
@@ -281,8 +297,8 @@ async function loadSidebar() {
 
 function themeButtonLabel() {
   const mode = state.settings.theme || 'system';
-  const icon = mode === 'dark' ? '\u263e' : mode === 'light' ? '\u2600' : '\u25d0';
-  return `${icon} ${mode[0].toUpperCase() + mode.slice(1)}`;
+  const icon = mode === 'dark' ? 'moon' : mode === 'light' ? 'sun' : 'monitor';
+  return `${svgIcon(icon, 13)} ${mode[0].toUpperCase() + mode.slice(1)}`;
 }
 
 async function saveTheme(theme) {
@@ -482,11 +498,11 @@ async function pageOverview() {
   const agents = new Set();
   hosts.forEach((h) => (h.agents || []).forEach((a) => agents.add(a.name)));
   view.innerHTML = `
-    <div class="grid cols-4">
-      <div class="card stat"><span class="value">${hosts.filter((h) => h.status === 'online').length}<span class="muted" style="font-size:16px">/${hosts.length}</span></span><span class="label">Hosts online</span><span class="delta">${hosts.length ? 'connected to this hub' : 'pair your first machine'}</span></div>
-      <div class="card stat"><span class="value">${sessions.length}</span><span class="label">Recent sessions</span><span class="delta">latest across all hosts</span></div>
-      <div class="card stat"><span class="value">${attention.length}</span><span class="label">Need attention</span><span class="delta">running or waiting for input</span></div>
-      <div class="card stat"><span class="value">${agents.size}</span><span class="label">Agent types</span><span class="delta">${[...agents].map(esc).join(' · ') || 'none detected yet'}</span></div>
+    <div class="stats">
+      <div class="stat"><span class="value">${hosts.filter((h) => h.status === 'online').length}<span class="muted" style="font-size:12px">/${hosts.length}</span></span><span class="label">Hosts online</span><span class="delta">${hosts.length ? 'connected' : 'pair your first machine'}</span></div>
+      <div class="stat"><span class="value">${sessions.length}</span><span class="label">Recent sessions</span><span class="delta">across all hosts</span></div>
+      <div class="stat"><span class="value">${attention.length}</span><span class="label">Need attention</span><span class="delta">running or waiting</span></div>
+      <div class="stat"><span class="value">${agents.size}</span><span class="label">Agent types</span><span class="delta">${[...agents].map(esc).join(', ') || 'none detected'}</span></div>
     </div>
 
     <div class="grid cols-2 mt-3" style="align-items:start">
@@ -532,25 +548,19 @@ async function pageHosts() {
     view.innerHTML = `<div class="card empty"><strong>No hosts paired</strong>Create a one-time code, then run <code>nexusd pair --hub ${esc(location.origin)} --code &lt;code&gt;</code> on the machine.</div>`;
     return;
   }
-  view.innerHTML = `<div class="grid cols-2">${hosts.map((h) => `
-    <div class="card host-card">
-      <div class="host-head">
-        <div class="host-title">
-          <div class="brand-mark" style="width:34px;height:34px;font-size:15px">${esc((h.name || '?').slice(0, 1).toUpperCase())}</div>
-          <div><h3>${esc(h.name)}</h3><div class="meta">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')}</div></div>
-        </div>
-        ${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'awaiting confirmation' : h.status)}
+  view.innerHTML = `<div class="list">${hosts.map((h) => `
+    <div class="host-row">
+      <div class="host-id">
+        <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'waiting_for_input' : h.status)}</div>
+        <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · seen ${esc(fmtRelative(h.last_seen))}</div>
       </div>
-      <div class="mono-small">id ${esc(h.id)}<br>last seen ${esc(fmtTime(h.last_seen))}</div>
-      ${h.pending ? `<div class="notice info mt-1"><strong>Compare this SAS with the daemon output.</strong><div class="secret mt-1">${esc(h.sas)}</div><p class="small muted">Run <code>nexusd pair ...</code> on the host and check that both codes match before confirming. Unconfirmed hosts cannot connect.</p><button class="btn primary small mt-1" data-confirm-host="${esc(h.id)}">Confirm host</button></div>` : ''}
-      <div class="agent-chips">
-        ${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(a.version)}</span>`).join('') || '<span class="chip">no agents detected</span>'}
-      </div>
-      <div class="split wrap">
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(a.version)}</span>`).join('') || '<span class="chip">no agents</span>'}</div>
+      <div class="host-actions">
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>New session</button>
         <button class="btn small" data-share-host="${esc(h.id)}">Share</button>
         <button class="btn small danger" data-revoke-host="${esc(h.id)}">Revoke</button>
       </div>
+      ${h.pending ? `<div class="host-pending"><span>Compare SAS with the daemon.</span><span class="secret">${esc(h.sas)}</span><button class="btn primary small" data-confirm-host="${esc(h.id)}">Confirm host</button></div>` : ''}
     </div>`).join('')}</div>`;
   view.querySelectorAll('[data-new-session]').forEach((b) => b.addEventListener('click', () => newSessionDialog(hosts.find((h) => h.id === b.dataset.newSession))));
   view.querySelectorAll('[data-confirm-host]').forEach((b) => b.addEventListener('click', async () => {
@@ -622,7 +632,7 @@ async function newSessionPicker() {
       <h2>New session</h2>
       <p class="hint">Choose the machine that should run the agent.</p>
       <form class="form" id="host-picker-form">
-        <label class="label">Host<select class="select" name="host">${online.map((h) => `<option value="${esc(h.id)}">${esc(h.name)} ? ${esc(h.os)}/${esc(h.arch)}</option>`).join('')}</select></label>
+        <label class="label">Host<select class="select" name="host">${online.map((h) => `<option value="${esc(h.id)}">${esc(h.name)} · ${esc(h.os)}/${esc(h.arch)}</option>`).join('')}</select></label>
         <div class="modal-actions"><button class="btn ghost" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Continue</button></div>
       </form>`);
     document.getElementById('host-picker-form').addEventListener('submit', (event) => {
@@ -848,9 +858,9 @@ async function pageSettings() {
         <h2 class="mt-0">Appearance</h2>
         <p class="hint">The theme is stored on the hub for your user and follows you across devices.</p>
         <div class="theme-choices" role="group" aria-label="Theme">
-          ${[['system', '◐', 'System', 'Follow the operating system'], ['dark', '☾', 'Dark', 'Always dark'], ['light', '☀', 'Light', 'Always light']].map(([value, icon, label, hint]) => `
+          ${[['system', 'monitor', 'System', 'Follow the operating system'], ['dark', 'moon', 'Dark', 'Always dark'], ['light', 'sun', 'Light', 'Always light']].map(([value, icon, label, hint]) => `
             <button type="button" class="theme-choice ${state.settings.theme === value ? 'active' : ''}" data-theme-choice="${value}" aria-pressed="${state.settings.theme === value}">
-              <span class="theme-icon" aria-hidden="true">${icon}</span>
+              <span class="theme-icon" aria-hidden="true">${svgIcon(icon, 16)}</span>
               <span><strong>${label}</strong><small>${hint}</small></span>
             </button>`).join('')}
         </div>
@@ -1101,6 +1111,7 @@ async function pageStructuredRun(id, run) {
   setPage('Structured chat', `run ${shortId(run.id)} · ${run.mode} mode`, `<button class="btn small danger" id="stop-run">Stop run</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
   const view = document.getElementById('view');
   view.innerHTML = `
+    <div class="chat-layout">
     <div class="card mb-2">
       <div class="run-head">
         <div class="split wrap"><span id="chat-state" class="badge running">running</span>${agentBadge(run.agent || 'agent')}<span class="mono-small">host ${esc(shortId(run.host_id))}</span></div>
@@ -1116,7 +1127,8 @@ async function pageStructuredRun(id, run) {
         <button class="btn primary" type="submit" id="send-prompt">Send</button>
         <button class="btn" type="button" id="interrupt-run">Interrupt</button>
       </div>
-    </form>`;
+    </form>
+    </div>`;
   const chat = document.getElementById('chat');
   const empty = document.getElementById('chat-empty');
   const stateBadge = document.getElementById('chat-state');
@@ -1361,18 +1373,15 @@ async function pageRuns() {
     const { runs } = await api('/runs');
     const box = document.getElementById('runs-list');
     if (!box) return;
-    box.innerHTML = runs.length ? `<div class="grid cols-2">${runs.map((run) => `
-      <div class="card host-card">
-        <div class="host-head">
-          <div class="host-title">
-            <div class="brand-mark" style="width:34px;height:34px;font-size:15px">${esc((run.session_title || run.agent || '?').slice(0, 1).toUpperCase())}</div>
-            <div><h3>${esc(run.session_title || 'Untitled session')}</h3><div class="meta">${esc(run.host_name || run.host_id)} · ${esc(run.mode)} · ${esc(fmtRelative(run.started_at))}</div></div>
-          </div>
-          ${stateBadge(run.state)}
+    box.innerHTML = runs.length ? `<div class="list">${runs.map((run) => `
+      <div class="run-row">
+        <div class="run-main">
+          <div class="title">${esc(run.session_title || 'Untitled session')}</div>
+          <div class="sub"><span>${esc(run.host_name || run.host_id)}</span><span>${esc(run.mode)}</span><span>${esc(fmtRelative(run.started_at))}</span><span class="mono-small">run ${esc(shortId(run.id))}</span></div>
         </div>
-        <div class="agent-chips">${agentBadge(run.agent || 'agent')}<span class="chip">run ${esc(shortId(run.id))}</span></div>
-        <div class="split wrap">
-          <a class="btn small primary" href="#/runs/${esc(run.id)}">Open live view</a>
+        <div class="run-meta">${agentBadge(run.agent || 'agent')}${stateBadge(run.state)}</div>
+        <div class="run-actions">
+          <a class="btn small" href="#/runs/${esc(run.id)}">Open</a>
           ${run.session_id ? `<a class="btn small" href="#/sessions/${esc(run.session_id)}">Session</a>` : ''}
         </div>
       </div>`).join('')}</div>` : '<div class="card empty"><strong>No active runs</strong>Resume a session or start a new one on an online host.</div>';

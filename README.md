@@ -19,18 +19,17 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | Dark | Light |
 | --- | --- |
 | ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) |
-| ![Structured chat in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat in light mode](docs/screenshots/chat-light.png) |
-
-| Feature | Preview |
-| --- | --- |
-| Multi-agent dashboard | ![Active runs dashboard](docs/screenshots/multi-agent-dashboard.png) |
-| Settings and themes | ![Settings in light mode](docs/screenshots/settings-light.png) |
-| Mobile | ![Mobile dashboard](docs/screenshots/mobile-dashboard.png) |
-| Sign in | ![Login screen](docs/screenshots/login-light.png) |
+| ![Structured chat with tool calls in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat with tool calls in light mode](docs/screenshots/chat-light.png) |
+| ![Active runs in dark mode](docs/screenshots/multi-agent-dashboard.png) | ![Active runs in light mode](docs/screenshots/runs-light.png) |
+| ![Settings in dark mode](docs/screenshots/settings-dark.png) | ![Settings in light mode](docs/screenshots/settings-light.png) |
+| ![Mobile dashboard in dark mode](docs/screenshots/mobile-dashboard.png) | ![Mobile dashboard in light mode](docs/screenshots/mobile-dashboard-light.png) |
+| ![Sign in in dark mode](docs/screenshots/login-dark.png) | ![Sign in in light mode](docs/screenshots/login-light.png) |
 
 The screenshots were captured from a running hub with a paired Windows host and
-a real Codex structured session. They are not mockups. The same UI is used on
-desktop, tablet and phone; the theme is stored per user on the hub.
+real Codex and OpenCode structured sessions, including a conversation with tool
+calls. They are not mockups. The same UI is used on desktop, tablet and phone;
+the theme is stored per user on the hub. The mobile view of an active structured
+chat is in `docs/screenshots/mobile-chat.png`.
 
 ## What works today
 
