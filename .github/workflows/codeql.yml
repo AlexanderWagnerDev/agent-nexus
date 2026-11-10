@@ -8,6 +8,9 @@ on:
   schedule:
     - cron: "32 3 * * 1"
 
+# Set the repository variable NEXUS_SELF_HOSTED=true to use self-hosted runners.
+# Without it these jobs use GitHub-hosted runners as a safe default.
+
 permissions:
   contents: read
   security-events: write
@@ -15,7 +18,7 @@ permissions:
 
 jobs:
   analyze:
-    runs-on: [self-hosted, linux]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false

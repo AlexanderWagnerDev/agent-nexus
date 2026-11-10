@@ -1,5 +1,8 @@
 name: CI
 
+# Set the repository variable NEXUS_SELF_HOSTED=true to use self-hosted runners.
+# Without it these jobs use GitHub-hosted runners as a safe default.
+
 on:
   push:
     branches: [main]
@@ -15,12 +18,15 @@ concurrency:
 jobs:
   test:
     name: Test (${{ matrix.os }})
-    runs-on: [self-hosted, "${{ matrix.os }}"]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON(format('["self-hosted","{0}"]', matrix.os)) || matrix.hosted }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, windows, macOS]
+        include:
+          - { os: linux, hosted: ubuntu-latest }
+          - { os: windows, hosted: windows-latest }
+          - { os: macOS, hosted: macos-latest }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -48,7 +54,7 @@ jobs:
 
   race:
     name: Race detector
-    runs-on: [self-hosted, linux]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -60,7 +66,7 @@ jobs:
 
   build:
     name: Cross-compile
-    runs-on: [self-hosted, linux]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -92,7 +98,7 @@ jobs:
 
   browser:
     name: Browser E2E
-    runs-on: [self-hosted, linux]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -122,7 +128,7 @@ jobs:
 
   vulnerability:
     name: govulncheck
-    runs-on: [self-hosted, linux]
+    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
