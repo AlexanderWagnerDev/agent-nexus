@@ -20,11 +20,13 @@ import (
 
 type pairResponse struct {
 	HostID string `json:"host_id"`
+	SAS    string `json:"sas"`
 	Error  string `json:"error"`
 }
 
-// Pair redeems a one-time pairing code and stores the host identity.
-func Pair(ctx context.Context, hubURL, code, name string) (Config, error) {
+// Pair redeems a one-time pairing code and stores the host identity. It
+// returns the short authentication string the user must compare with the hub.
+func Pair(ctx context.Context, hubURL, code, name string) (Config, string, error) {
 	hubURL = strings.TrimSuffix(strings.TrimSpace(hubURL), "/")
 	if !strings.HasPrefix(hubURL, "http://") && !strings.HasPrefix(hubURL, "https://") {
 		hubURL = "http://" + hubURL
@@ -34,7 +36,7 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, error) {
 	}
 	pub, priv, err := NewIdentity()
 	if err != nil {
-		return Config{}, err
+		return Config{}, "", err
 	}
 	body, _ := json.Marshal(map[string]string{
 		"code":       strings.ToUpper(strings.TrimSpace(code)),
@@ -46,14 +48,14 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, error) {
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hubURL+"/api/v1/hosts/pair", bytes.NewReader(body))
 	if err != nil {
-		return Config{}, err
+		return Config{}, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Nexus-Request", "1")
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return Config{}, fmt.Errorf("cannot reach hub: %w", err)
+		return Config{}, "", fmt.Errorf("cannot reach hub: %w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
@@ -63,7 +65,7 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, error) {
 		if pr.Error == "" {
 			pr.Error = resp.Status
 		}
-		return Config{}, errors.New(pr.Error)
+		return Config{}, "", errors.New(pr.Error)
 	}
 	cfg := Config{
 		HubURL:     hubURL,
@@ -73,9 +75,9 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, error) {
 		Policy:     DefaultPolicy(),
 	}
 	if err := SaveConfig(cfg); err != nil {
-		return Config{}, err
+		return Config{}, "", err
 	}
-	return cfg, nil
+	return cfg, pr.SAS, nil
 }
 
 // Doctor prints configuration problems and returns the number of issues.

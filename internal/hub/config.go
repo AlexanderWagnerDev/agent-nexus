@@ -433,8 +433,30 @@ func (s *Server) handlePairHost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	sas := protocol.HostSAS(id, key)
+	if err := s.store.CreateHostConfirmation(id, sas); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.audit(name, "host.paired", map[string]string{"host_id": id, "os": req.OS, "arch": req.Arch})
-	writeJSON(w, http.StatusCreated, map[string]string{"host_id": id})
+	writeJSON(w, http.StatusCreated, map[string]string{"host_id": id, "sas": sas})
+}
+
+func (s *Server) handleConfirmHost(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	id := r.PathValue("id")
+	host, err := s.store.HostByID(id)
+	if err != nil || (host.OwnerID != u.ID && !isAdminRole(u.Role)) {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	if err := s.store.ConfirmHost(host.OwnerID, id); err != nil {
+		writeError(w, http.StatusNotFound, "host confirmation not found")
+		return
+	}
+	s.broadcastHostUpdate(id)
+	s.audit(u.Username, "host.confirmed", map[string]string{"host_id": id})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "confirmed"})
 }
 
 func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {

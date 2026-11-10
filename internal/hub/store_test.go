@@ -71,6 +71,38 @@ func TestPairingCodeSingleUse(t *testing.T) {
 	}
 }
 
+func TestHostConfirmation(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	hostID, err := s.CreateHost(u.ID, "host", make([]byte, 32), "linux", "amd64", "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sas := protocol.HostSAS(hostID, make([]byte, 32))
+	if err := s.CreateHostConfirmation(hostID, sas); err != nil {
+		t.Fatal(err)
+	}
+	got, confirmed, exists, err := s.HostConfirmation(hostID)
+	if err != nil || !exists || confirmed || got != sas {
+		t.Fatalf("unexpected pending confirmation: %q %v %v %v", got, confirmed, exists, err)
+	}
+	hosts, err := s.ListHosts(u.ID, true)
+	if err != nil || len(hosts) != 1 || !hosts[0].Pending || hosts[0].SAS != sas {
+		t.Fatalf("pending host not exposed: %+v %v", hosts, err)
+	}
+	if err := s.ConfirmHost(u.ID, hostID); err != nil {
+		t.Fatal(err)
+	}
+	hosts, err = s.ListHosts(u.ID, true)
+	if err != nil || len(hosts) != 1 || hosts[0].Pending {
+		t.Fatalf("host still pending after confirm: %+v %v", hosts, err)
+	}
+}
+
 func TestHostGrant(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")
 	if err != nil {

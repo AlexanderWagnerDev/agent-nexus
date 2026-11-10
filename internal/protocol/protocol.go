@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
+func HostSAS(hostID string, publicKey []byte) string {
+	sum := sha256.Sum256(append([]byte(hostID+"|"), publicKey...))
+	n := (uint32(sum[0])<<16 | uint32(sum[1])<<8 | uint32(sum[2])) % 1_000_000
+	return fmt.Sprintf("%03d-%03d", n/1000, n%1000)
+}
+
 const (
 	// Version is the host-link protocol version. The hub accepts the current
 	// major version and reports a mismatch with an upgrade hint.
@@ -213,6 +224,8 @@ type HostView struct {
 	LastSeen time.Time      `json:"last_seen"`
 	Agents   []AgentInfo    `json:"agents"`
 	Policy   *PolicySummary `json:"policy,omitempty"`
+	Pending  bool           `json:"pending,omitempty"`
+	SAS      string         `json:"sas,omitempty"`
 }
 
 // SessionView is the hub-side projection of a native session.

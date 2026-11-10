@@ -2,7 +2,7 @@
 
 A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing, discovery, transcripts, federated search, terminal resume, OpenCode structured mode, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, the Claude structured driver and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, the Claude structured driver and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -20,7 +20,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | --- | --- |
 | **Hub** (`nexus-hub`) | Go binary, SQLite metadata store, embedded web app, health endpoints, structured JSON logs |
 | **First-run setup** | Owner account, Argon2id password hashing, server-side sessions, optional TOTP enrollment |
-| **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, challenge-response over an outbound WebSocket |
+| **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, SAS confirmation, challenge-response over an outbound WebSocket |
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
@@ -140,10 +140,10 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | Phase | Status |
 | --- | --- |
 | 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; spike reports are not yet written |
-| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys available, SAS confirmation and step-up auth pending |
+| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys and host SAS confirmation available, step-up auth pending |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode structured mode, approvals, Web Push and QR device pairing implemented; mobile review and Claude/Codex drivers open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode and Codex structured modes, approvals, Web Push, QR device pairing and host SAS confirmation implemented; mobile review and the Claude driver open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants and the signed GoReleaser/SBOM pipeline implemented; signed commands, PostgreSQL, actual signing credentials and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff implemented; generic ACP and native apps not implemented |
 

@@ -165,6 +165,11 @@ CREATE TABLE IF NOT EXISTS device_pairings (
   expires_at INTEGER NOT NULL,
   used_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS host_confirmations (
+  host_id TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
+  sas TEXT NOT NULL,
+  confirmed_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS passkeys (
   credential_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -474,6 +479,38 @@ func (s *Store) CreateHost(ownerID, name string, publicKey []byte, osName, arch,
 	return id, err
 }
 
+func (s *Store) CreateHostConfirmation(hostID, sas string) error {
+	_, err := s.db.Exec(`INSERT INTO host_confirmations(host_id,sas) VALUES(?,?)
+		ON CONFLICT(host_id) DO UPDATE SET sas=excluded.sas, confirmed_at=NULL`, hostID, sas)
+	return err
+}
+
+func (s *Store) HostConfirmation(hostID string) (sas string, confirmed bool, exists bool, err error) {
+	var at sql.NullInt64
+	err = s.db.QueryRow(`SELECT sas,confirmed_at FROM host_confirmations WHERE host_id=?`, hostID).Scan(&sas, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", true, false, nil
+	}
+	if err != nil {
+		return "", false, false, err
+	}
+	return sas, at.Valid && at.Int64 > 0, true, nil
+}
+
+func (s *Store) ConfirmHost(ownerID, hostID string) error {
+	res, err := s.db.Exec(`UPDATE host_confirmations SET confirmed_at=?
+		WHERE host_id=? AND host_id IN (SELECT id FROM hosts WHERE owner_id=? AND revoked_at IS NULL)`,
+		ms(time.Now()), hostID, ownerID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (s *Store) HostPublicKey(hostID string) ([]byte, error) {
 	var key []byte
 	var revoked sql.NullInt64
@@ -485,13 +522,15 @@ func (s *Store) HostPublicKey(hostID string) ([]byte, error) {
 }
 
 func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) {
-	q := `SELECT id,name,os,arch,version,last_seen,policy FROM hosts h WHERE revoked_at IS NULL`
+	q := `SELECT h.id,h.name,h.os,h.arch,h.version,h.last_seen,h.policy,
+		COALESCE(c.sas,''), c.confirmed_at FROM hosts h
+		LEFT JOIN host_confirmations c ON c.host_id=h.id WHERE h.revoked_at IS NULL`
 	args := []any{}
 	if !all {
 		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
 		args = append(args, userID, userID)
 	}
-	q += ` ORDER BY name`
+	q += ` ORDER BY h.name`
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -500,13 +539,16 @@ func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) 
 	for rows.Next() {
 		var h protocol.HostView
 		var seen int64
-		var policyJSON string
-		if err := rows.Scan(&h.ID, &h.Name, &h.OS, &h.Arch, &h.Version, &seen, &policyJSON); err != nil {
+		var policyJSON, sas string
+		var confirmed sql.NullInt64
+		if err := rows.Scan(&h.ID, &h.Name, &h.OS, &h.Arch, &h.Version, &seen, &policyJSON, &sas, &confirmed); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		h.LastSeen = fromMS(seen)
 		h.Status = "offline"
+		h.SAS = sas
+		h.Pending = sas != "" && (!confirmed.Valid || confirmed.Int64 == 0)
 		h.Agents = []protocol.AgentInfo{}
 		if policyJSON != "" && policyJSON != "{}" {
 			var p protocol.PolicySummary

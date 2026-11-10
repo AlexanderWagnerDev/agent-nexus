@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/hosts", s.requireAuth(s.handleHosts))
 	mux.HandleFunc("POST /api/v1/hosts/pairing-codes", s.requireAuth(s.handlePairingCode))
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.handleRevokeHost))
+	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))
 
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
@@ -183,6 +184,10 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	pub, err := s.store.HostPublicKey(hostID)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "unknown or revoked host")
+		return
+	}
+	if _, confirmed, _, err := s.store.HostConfirmation(hostID); err == nil && !confirmed {
+		writeError(w, http.StatusForbidden, "host awaiting local SAS confirmation")
 		return
 	}
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true, CompressionMode: websocket.CompressionDisabled})

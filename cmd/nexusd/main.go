@@ -94,12 +94,16 @@ func pairCmd(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cfg, err := host.Pair(ctx, *hubURL, *code, *name)
+	cfg, sas, err := host.Pair(ctx, *hubURL, *code, *name)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pairing failed:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Paired with %s as host %s (%s).\nNext: nexusd service install && nexusd status\n", cfg.HubURL, cfg.HostID, cfg.HostName)
+	fmt.Printf("Paired with %s as host %s (%s).\n", cfg.HubURL, cfg.HostID, cfg.HostName)
+	if sas != "" {
+		fmt.Printf("Pairing SAS: %s\nConfirm this code in the hub web UI (Hosts page) before the host can connect.\n", sas)
+	}
+	fmt.Println("Next: nexusd service install && nexusd status")
 }
 
 func runCmd(args []string) {

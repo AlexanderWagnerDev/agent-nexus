@@ -468,9 +468,10 @@ async function pageHosts() {
           <div class="brand-mark" style="width:34px;height:34px;font-size:15px">${esc((h.name || '?').slice(0, 1).toUpperCase())}</div>
           <div><h3>${esc(h.name)}</h3><div class="meta">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')}</div></div>
         </div>
-        ${badge(h.status === 'online' ? 'online' : 'offline', h.status)}
+        ${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'awaiting confirmation' : h.status)}
       </div>
       <div class="mono-small">id ${esc(h.id)}<br>last seen ${esc(fmtTime(h.last_seen))}</div>
+      ${h.pending ? `<div class="notice info mt-1"><strong>Compare this SAS with the daemon output.</strong><div class="secret mt-1">${esc(h.sas)}</div><p class="small muted">Run <code>nexusd pair ...</code> on the host and check that both codes match before confirming. Unconfirmed hosts cannot connect.</p><button class="btn primary small mt-1" data-confirm-host="${esc(h.id)}">Confirm host</button></div>` : ''}
       <div class="agent-chips">
         ${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(a.version)}</span>`).join('') || '<span class="chip">no agents detected</span>'}
       </div>
@@ -481,6 +482,15 @@ async function pageHosts() {
       </div>
     </div>`).join('')}</div>`;
   view.querySelectorAll('[data-new-session]').forEach((b) => b.addEventListener('click', () => newSessionDialog(hosts.find((h) => h.id === b.dataset.newSession))));
+  view.querySelectorAll('[data-confirm-host]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      await api(`/hosts/${b.dataset.confirmHost}/confirm`, { method: 'POST' });
+      toast('Host confirmed');
+      pageHosts();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }));
   view.querySelectorAll('[data-share-host]').forEach((b) => b.addEventListener('click', () => shareHostDialog(hosts.find((h) => h.id === b.dataset.shareHost))));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {
     confirmDanger('Revoking this host closes its connection and fails active runs. The daemon must be paired again.', async () => {
