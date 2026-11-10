@@ -108,7 +108,19 @@ code, pre, .mono { font-family: var(--mono); }
   .topbar { padding: 14px 16px; }
   .grid.cols-2 { grid-template-columns: 1fr; }
 }
-@media (max-width: 560px) { .grid.cols-4 { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+  .grid.cols-4 { grid-template-columns: 1fr; }
+  .topbar { flex-wrap: wrap; }
+  .topbar-actions { width: 100%; }
+  .topbar-actions .btn { flex: 1; justify-content: center; }
+  .card { padding: 14px; }
+  .toolbar .input, .toolbar .select { flex: 1; min-width: 0; }
+  .chat { max-height: calc(100vh - 340px); }
+  .chat-msg { grid-template-columns: 1fr; }
+  .chat-role { display: none; }
+  .chat-tool { margin-left: 0; }
+  .split { flex-wrap: wrap; }
+}
 
 .card {
   background: linear-gradient(180deg, rgba(23, 30, 39, .75), rgba(17, 22, 29, .9));
