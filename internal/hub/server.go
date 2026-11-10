@@ -328,11 +328,17 @@ func (s *Server) registerHost(hc *hostConn) {
 
 func (s *Server) unregisterHost(id string, hc *hostConn) {
 	s.mu.Lock()
-	if s.hosts[id] == hc {
+	wasCurrent := s.hosts[id] == hc
+	if wasCurrent {
 		delete(s.hosts, id)
 	}
 	s.mu.Unlock()
 	hc.close()
+	if !wasCurrent {
+		// A newer connection for the same host already owns the link and its
+		// active runs; do not fail them from the stale connection's defer.
+		return
+	}
 	if runs, err := s.store.ActiveRuns(id); err == nil {
 		for _, r := range runs {
 			s.setRunState(r.ID, protocol.StateFailed)

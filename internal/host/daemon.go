@@ -112,6 +112,9 @@ func (d *Daemon) connect(ctx context.Context) error {
 		d.sendMu.Unlock()
 	}()
 
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+	ctx = connCtx
 	helloCtx, hcancel := context.WithTimeout(ctx, 15*time.Second)
 	defer hcancel()
 	_, data, err := ws.Read(helloCtx)
