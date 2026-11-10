@@ -6,8 +6,7 @@ on:
     tags: ["v*"]
   pull_request:
 
-# Set the repository variable NEXUS_SELF_HOSTED=true to use self-hosted runners.
-# Without it these jobs use GitHub-hosted runners as a safe default.
+# Workflows run on Avrea-hosted runners. Avrea GitHub App access is required.
 
 permissions:
   contents: read
@@ -18,7 +17,7 @@ concurrency:
 
 jobs:
   image:
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
+    runs-on: avrea-ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read

@@ -1,7 +1,6 @@
 name: CI
 
-# Set the repository variable NEXUS_SELF_HOSTED=true to use self-hosted runners.
-# Without it these jobs use GitHub-hosted runners as a safe default.
+# Workflows run on Avrea-hosted runners. Avrea GitHub App access is required.
 
 on:
   push:
@@ -18,15 +17,15 @@ concurrency:
 jobs:
   test:
     name: Test (${{ matrix.os }})
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON(format('["self-hosted","{0}"]', matrix.os)) || matrix.hosted }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: linux, hosted: ubuntu-latest }
-          - { os: windows, hosted: windows-latest }
-          - { os: macOS, hosted: macos-latest }
+          - { os: linux, runner: avrea-ubuntu-26.04 }
+          - { os: windows, runner: avrea-windows-2025-2-vcpu }
+          - { os: macOS, runner: avrea-macos-26-8-vcpu }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -54,7 +53,7 @@ jobs:
 
   race:
     name: Race detector
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
+    runs-on: avrea-ubuntu-26.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -66,7 +65,7 @@ jobs:
 
   build:
     name: Cross-compile
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
+    runs-on: avrea-ubuntu-26.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -98,7 +97,7 @@ jobs:
 
   browser:
     name: Browser E2E
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
+    runs-on: avrea-ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -128,7 +127,7 @@ jobs:
 
   vulnerability:
     name: govulncheck
-    runs-on: ${{ vars.NEXUS_SELF_HOSTED == 'true' && fromJSON('["self-hosted","linux"]') || 'ubuntu-latest' }}
+    runs-on: avrea-ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

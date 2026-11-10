@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - avrea-ubuntu-26.04
+    - avrea-windows-2025-2-vcpu
+    - avrea-macos-26-8-vcpu
