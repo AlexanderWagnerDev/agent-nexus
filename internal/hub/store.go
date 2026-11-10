@@ -598,6 +598,13 @@ func (s *Store) ListSessions(ownerID, hostID, agent, project, state, query strin
 	return out, rows.Err()
 }
 
+// SessionIDForNative maps a host-local native session to its hub ID.
+func (s *Store) SessionIDForNative(hostID, agent, nativeID string) (string, error) {
+	var id string
+	err := s.db.QueryRow(`SELECT id FROM sessions WHERE host_id=? AND agent=? AND native_id=?`, hostID, agent, nativeID).Scan(&id)
+	return id, err
+}
+
 func (s *Store) SessionByID(ownerID, id string) (protocol.SessionView, error) {
 	row := s.db.QueryRow(`SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning

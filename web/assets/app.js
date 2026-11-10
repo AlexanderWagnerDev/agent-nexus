@@ -389,7 +389,6 @@ async function pageOverview() {
     api('/sessions?limit=500'),
   ]);
   const recent = sessions.slice(0, 8);
-  const online = hosts.filter((h) => h.status === 'online').length;
   const attention = sessions.filter((s) => s.state === 'waiting_for_input' || s.state === 'running');
   const agents = new Set();
   hosts.forEach((h) => (h.agents || []).forEach((a) => agents.add(a.name)));
@@ -570,7 +569,6 @@ async function pageSession(id) {
   const view = setPage('Session', 'Read-only transcript fetched on demand from the host.', '<a class="btn small" href="#/sessions">Back</a>');
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const s = await api(`/sessions/${id}`);
-  let running = false;
   setPage(s.title || 'Session', `${s.host_name} · ${s.agent} · ${s.cwd || 'unknown directory'}`, `
     <button class="btn small" id="resume-session">Resume terminal</button>
     ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
@@ -646,11 +644,12 @@ async function pageSearch() {
     const skipped = Object.keys(data.not_searched || {});
     box.innerHTML = `
       ${skipped.length ? `<div class="notice info mb-2">Not searched: ${skipped.map(esc).join(', ')} (offline)</div>` : ''}
-      ${data.results.length ? `<div class="list">${data.results.map((r) => `
-        <div class="list-row" style="cursor:default">
-          <div style="min-width:0"><div class="title">${esc(r.title || 'Untitled session')}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div>
-          <div class="right">${agentBadge(r.agent)}<span class="small muted">${fmtRelative(r.at)}</span></div>
-        </div>`).join('')}</div>` : `<div class="card empty"><strong>No matches</strong>Try another term or check that hosts are online.</div>`}`;
+      ${data.results.length ? `<div class="list">${data.results.map((r) => {
+        const inner = `<div style="min-width:0"><div class="title">${esc(r.title || 'Untitled session')}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div><div class="right">${agentBadge(r.agent)}<span class="small muted">${fmtRelative(r.at)}</span></div>`;
+        return r.session_id
+          ? `<a class="list-row" href="#/sessions/${esc(r.session_id)}">${inner}</a>`
+          : `<div class="list-row" style="cursor:default">${inner}</div>`;
+      }).join('')}</div>` : `<div class="card empty"><strong>No matches</strong>Try another term or check that hosts are online.</div>`}`;
   };
   document.getElementById('search-form').addEventListener('submit', (e) => {
     e.preventDefault();

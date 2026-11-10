@@ -84,11 +84,12 @@ type Transcript struct {
 
 // SearchHit is one federated search result from a host.
 type SearchHit struct {
-	NativeID string    `json:"native_id"`
-	Agent    string    `json:"agent"`
-	Title    string    `json:"title"`
-	Snippet  string    `json:"snippet"`
-	At       time.Time `json:"at"`
+	SessionID string    `json:"session_id,omitempty"`
+	NativeID  string    `json:"native_id"`
+	Agent     string    `json:"agent"`
+	Title     string    `json:"title"`
+	Snippet   string    `json:"snippet"`
+	At        time.Time `json:"at"`
 }
 
 // RunSpec is sent from the hub to the host to start a run.

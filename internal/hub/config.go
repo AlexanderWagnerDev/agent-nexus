@@ -517,8 +517,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type result struct {
-		hits []protocol.SearchHit
-		host string
+		hits   []protocol.SearchHit
+		host   string
+		hostID string
 	}
 	ch := make(chan result, len(hosts))
 	online := 0
@@ -533,12 +534,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			params, _ := json.Marshal(map[string]any{"query": query, "limit": 50})
 			raw, err := s.hostRequest(ctx, hostID, "search", params)
 			if err != nil {
-				ch <- result{host: hostName}
+				ch <- result{host: hostName, hostID: hostID}
 				return
 			}
 			var hits []protocol.SearchHit
 			_ = json.Unmarshal(raw, &hits)
-			ch <- result{hits: hits, host: hostName}
+			ch <- result{hits: hits, host: hostName, hostID: hostID}
 		}(h.ID, h.Name)
 	}
 	all := []protocol.SearchHit{}
@@ -548,13 +549,16 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		res := <-ch
 		if len(res.hits) > 0 {
 			for _, hit := range res.hits {
-				key := res.host + "|" + hit.Agent + "|" + hit.NativeID
+				key := res.hostID + "|" + hit.Agent + "|" + hit.NativeID
 				if seen[key] {
 					continue
 				}
 				seen[key] = true
 				hit.Title = displayTitle(hit.Title)
 				hit.Snippet = strings.TrimSpace(hit.Snippet)
+				if id, err := s.store.SessionIDForNative(res.hostID, hit.Agent, hit.NativeID); err == nil {
+					hit.SessionID = id
+				}
 				all = append(all, hit)
 			}
 		} else {
