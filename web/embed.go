@@ -41,6 +41,8 @@ func Handler() http.Handler {
 		}
 		if strings.HasPrefix(p, "assets/") || strings.HasPrefix(p, "vendor/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = "/" + p
