@@ -57,6 +57,8 @@ func (a *OpenCodeAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	if st, err := os.Stat(a.db); err != nil || st.IsDir() {
 		info.Supported = false
 		info.Capabilities = []string{"terminal"}
+	} else {
+		info.Capabilities = append(info.Capabilities, "structured")
 	}
 	return info, nil
 }

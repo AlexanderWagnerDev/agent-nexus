@@ -679,7 +679,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
 			return
 		}
-		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.stop", RunID: msg.RunID}); err != nil {
+		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.interrupt", RunID: msg.RunID}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
 		}
 	case "resize":
@@ -777,6 +777,9 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	rs.eventSeq++
 	ev.Seq = rs.eventSeq
 	ev.RunID = runID
+	if ev.Type == "run.state" && ev.State != "" {
+		rs.state = ev.State
+	}
 	rs.events = append(rs.events, ev)
 	if len(rs.events) > 500 {
 		rs.events = rs.events[len(rs.events)-500:]

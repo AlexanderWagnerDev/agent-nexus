@@ -361,6 +361,19 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		if r != nil {
 			_ = r.Resize(msg.Cols, msg.Rows)
 		}
+	case "run.interrupt":
+		d.runMu.Lock()
+		r := d.runs[msg.RunID]
+		sr := d.structured[msg.RunID]
+		d.runMu.Unlock()
+		if r != nil {
+			_, _ = r.Write([]byte{3})
+		}
+		if sr != nil {
+			if err := sr.Interrupt(); err != nil {
+				d.log.Warn("structured interrupt failed", "run_id", msg.RunID, "error", err)
+			}
+		}
 	case "run.stop":
 		d.runMu.Lock()
 		r := d.runs[msg.RunID]

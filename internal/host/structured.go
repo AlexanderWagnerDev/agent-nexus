@@ -64,6 +64,10 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("host policy does not allow new sessions")
 		return
 	}
+	if spec.Action == protocol.ActionFork {
+		fail("structured fork is not implemented; use terminal fork")
+		return
+	}
 	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
 		fail("invalid native session id")
 		return
