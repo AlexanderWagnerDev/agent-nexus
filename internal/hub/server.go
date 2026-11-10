@@ -242,6 +242,29 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// adoptHostRuns reconciles runs after a hub restart or host reconnect. The
+// host is authoritative: runs it reports stay active, runs it no longer knows
+// about are marked failed instead of hanging forever in the UI.
+func (s *Server) adoptHostRuns(hostID string, reported []protocol.RunInfo) {
+	seen := map[string]bool{}
+	for _, info := range reported {
+		seen[info.RunID] = true
+		run, _, err := s.store.RunByID(info.RunID)
+		if err != nil || run.HostID != hostID {
+			continue
+		}
+		s.setRunState(info.RunID, protocol.StateRunning)
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: protocol.StateRunning})
+	}
+	active, _ := s.store.ActiveRuns(hostID)
+	for _, run := range active {
+		if !seen[run.ID] {
+			s.setRunState(run.ID, protocol.StateFailed)
+			s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: run.ID, Error: "host no longer reports the run"})
+		}
+	}
+}
+
 func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protocol.Envelope) {
 	switch msg.Type {
 	case "inventory":
@@ -258,6 +281,8 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 		s.log.Info("session snapshot applied", "host_id", hc.id, "upserted", upserted, "deleted", deleted)
 		s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: hc.id})
+	case "active_runs":
+		s.adoptHostRuns(hc.id, msg.Runs)
 	case "result":
 		s.mu.RLock()
 		p := s.pending[msg.RequestID]

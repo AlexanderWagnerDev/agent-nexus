@@ -152,6 +152,9 @@ func (d *Daemon) connect(ctx context.Context) error {
 	if err := d.sendSessions(true); err != nil {
 		d.log.Warn("session snapshot failed", "error", err)
 	}
+	if err := d.sendActiveRuns(); err != nil {
+		d.log.Warn("run snapshot failed", "error", err)
+	}
 
 	// Discovery refresh: rescan on start and every 30 seconds. Change
 	// detection is a hash of the normalized snapshot; the hub only receives
@@ -185,6 +188,18 @@ func (d *Daemon) send(msg protocol.Envelope) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return d.ws.Write(ctx, websocket.MessageText, data)
+}
+
+func (d *Daemon) sendActiveRuns() error {
+	d.runMu.Lock()
+	runs := make([]protocol.RunInfo, 0, len(d.runs))
+	for _, r := range d.runs {
+		runs = append(runs, protocol.RunInfo{
+			RunID: r.id, Agent: r.agent, State: protocol.StateRunning,
+		})
+	}
+	d.runMu.Unlock()
+	return d.send(protocol.Envelope{Type: "active_runs", Runs: runs})
 }
 
 func (d *Daemon) sendInventory() error {
@@ -268,14 +283,24 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 	// Overlay live run state so the hub does not mark a resumed session idle.
 	d.runMu.Lock()
 	active := map[string]string{}
+	ours := map[string]bool{}
 	for _, r := range d.runs {
 		active[r.sessionKey] = protocol.StateRunning
+		ours[r.sessionKey] = true
 	}
 	d.runMu.Unlock()
+	// Best-effort detection of sessions open in a native terminal. This never
+	// affects our own runs and is reported as a hint, not a guarantee.
+	outside := detectActiveElsewhere(ctx, out)
 	for i := range out {
 		key := out[i].Agent + ":" + out[i].NativeID
 		if state, ok := active[key]; ok {
 			out[i].State = state
+			continue
+		}
+		if outside[key] && !ours[key] {
+			out[i].ActiveElsewhere = true
+			out[i].State = protocol.StateRunning
 		}
 	}
 	return out, nil

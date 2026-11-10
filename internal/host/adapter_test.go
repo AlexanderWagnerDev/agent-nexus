@@ -124,3 +124,23 @@ func TestNativeIDValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchActiveSessions(t *testing.T) {
+	sessions := []protocol.Session{
+		{Agent: "claude", NativeID: "abc-123"},
+		{Agent: "codex", NativeID: "01a1b2f4-599b-7c90-830b-e3adcd69fc80"},
+		{Agent: "opencode", NativeID: "ses_f01a2a721ffeYo2Tbq8zIUekXD"},
+	}
+	lines := []string{
+		"/usr/bin/claude --resume abc-123",
+		"C:\\tools\\opencode.cmd --session ses_f01a2a721ffeYo2Tbq8zIUekXD",
+		"grep -R 01a1b2f4-599b-7c90-830b-e3adcd69fc80 .",
+	}
+	active := matchActiveSessions(lines, sessions)
+	if !active["claude:abc-123"] || !active["opencode:ses_f01a2a721ffeYo2Tbq8zIUekXD"] {
+		t.Fatalf("expected two active sessions, got %+v", active)
+	}
+	if active["codex:01a1b2f4-599b-7c90-830b-e3adcd69fc80"] {
+		t.Fatal("a grep command line was misclassified as an active codex session")
+	}
+}

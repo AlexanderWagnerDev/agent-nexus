@@ -104,6 +104,16 @@ type RunSpec struct {
 	Rows      int    `json:"rows"`
 }
 
+// RunInfo is reported by a host after reconnect so the hub can adopt runs
+// that survived a hub restart.
+type RunInfo struct {
+	RunID     string    `json:"run_id"`
+	SessionID string    `json:"session_id,omitempty"`
+	Agent     string    `json:"agent"`
+	State     string    `json:"state"`
+	StartedAt time.Time `json:"started_at"`
+}
+
 // Envelope is the message format of the host link.
 type Envelope struct {
 	Type      string         `json:"type"`
@@ -126,6 +136,7 @@ type Envelope struct {
 	OK        bool           `json:"ok,omitempty"`
 	Error     string         `json:"error,omitempty"`
 	Run       *RunSpec       `json:"run,omitempty"`
+	Runs      []RunInfo      `json:"runs,omitempty"`
 	RunID     string         `json:"run_id,omitempty"`
 	Seq       uint64         `json:"seq,omitempty"`
 	Data      []byte         `json:"data,omitempty"`

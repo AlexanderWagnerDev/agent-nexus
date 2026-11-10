@@ -27,7 +27,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
 | **Search** | Federated search across online hosts; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
-| **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input |
+| **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Operations** | Dockerfile, compose example with Caddy, per-user service install, `nexusd doctor` |

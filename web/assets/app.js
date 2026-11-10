@@ -9,6 +9,7 @@ const state = {
   hubName: 'AgentNexus',
   ws: null,
   wsRetry: 1000,
+  wsGen: 0,
   wsHandlers: new Set(),
   pageCleanup: null,
   run: null,
@@ -154,7 +155,7 @@ function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}/api/v1/ws`);
   state.ws = ws;
-  ws.addEventListener('open', () => { state.wsRetry = 1000; });
+  ws.addEventListener('open', () => { state.wsRetry = 1000; state.wsGen++; });
   ws.addEventListener('message', (event) => {
     let msg;
     try { msg = JSON.parse(event.data); } catch { return; }
@@ -782,7 +783,7 @@ async function pageRun(id) {
   const note = document.getElementById('run-note');
   const setLive = (text) => { status.textContent = text; dot.classList.toggle('live', text === 'connected'); };
   let lastSeq = 0;
-  let subscribed = false;
+  let subscribedGen = 0;
   const input = (data) => {
     if (run.lease_device_id && state.me.device.id && run.lease_device_id !== state.me.device.id) {
       note.textContent = 'Read-only: another device holds the lease.';
@@ -811,7 +812,7 @@ async function pageRun(id) {
   });
 
   const sendSubscribe = () => {
-    if (wsSend({ type: 'subscribe', run_id: id, last_seq: lastSeq })) subscribed = true;
+    if (wsSend({ type: 'subscribe', run_id: id, last_seq: lastSeq })) subscribedGen = state.wsGen;
   };
   const handler = (msg) => {
     if (msg.run_id !== id && msg.type !== 'ready') return;
@@ -841,24 +842,26 @@ async function pageRun(id) {
     }
   };
   state.wsHandlers.add(handler);
+  // The websocket may still be connecting, and it can reconnect later. Keep
+  // re-subscribing on each new socket generation so buffered output is
+  // replayed from lastSeq (FR-27).
+  sendSubscribe();
+  const timer = setInterval(() => {
+    if (!state.me) { clearInterval(timer); return; }
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      if (subscribedGen !== state.wsGen) sendSubscribe();
+      setLive('connected');
+    } else {
+      setLive('reconnecting');
+    }
+  }, 500);
   state.pageCleanup = () => {
+    clearInterval(timer);
     state.wsHandlers.delete(handler);
     window.removeEventListener('resize', onResize);
     ro.disconnect();
     term.dispose();
   };
-  // The websocket may still be connecting; retry until subscribed.
-  sendSubscribe();
-  const timer = setInterval(() => {
-    if (!state.me) { clearInterval(timer); return; }
-    if (state.ws?.readyState === WebSocket.OPEN) {
-      if (!subscribed) sendSubscribe();
-      setLive('connected');
-      clearInterval(timer);
-    } else {
-      setLive('reconnecting');
-    }
-  }, 400);
   document.querySelectorAll('[data-key]').forEach((b) => b.addEventListener('click', () => {
     const keys = { esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C', enter: '\r' };
     input(keys[b.dataset.key] || '');
