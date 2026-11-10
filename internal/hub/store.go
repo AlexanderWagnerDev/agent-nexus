@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	_ "modernc.org/sqlite"
 )
 
@@ -156,6 +157,21 @@ CREATE TABLE IF NOT EXISTS host_grants (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   permissions TEXT NOT NULL DEFAULT 'view',
   PRIMARY KEY (host_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS device_pairings (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS passkeys (
+  credential_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used INTEGER
 );
 `)
 	return err
@@ -928,4 +944,71 @@ func (s *Store) PushSubscriptions(userID string) ([]PushSubscription, error) {
 
 func (s *Store) DeletePushSubscriptionByID(id string) {
 	s.db.Exec(`DELETE FROM push_subscriptions WHERE id=?`, id)
+}
+
+// ---- passkeys ----
+
+func (s *Store) SavePasskey(userID, name string, cred *webauthn.Credential) error {
+	raw, err := json.Marshal(cred)
+	if err != nil {
+		return err
+	}
+	id := base64.RawURLEncoding.EncodeToString(cred.ID)
+	_, err = s.db.Exec(`INSERT INTO passkeys(credential_id,user_id,name,data,created_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(credential_id) DO UPDATE SET name=excluded.name, data=excluded.data`,
+		id, userID, name, string(raw), ms(time.Now()))
+	return err
+}
+
+func (s *Store) Passkeys(userID string) ([]webauthn.Credential, error) {
+	rows, err := s.db.Query(`SELECT data FROM passkeys WHERE user_id=? ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []webauthn.Credential
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var c webauthn.Credential
+		if json.Unmarshal([]byte(raw), &c) == nil {
+			out = append(out, c)
+		}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) PasskeyCount(userID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM passkeys WHERE user_id=?`, userID).Scan(&n)
+	return n, err
+}
+
+func (s *Store) UpdatePasskey(cred *webauthn.Credential) error {
+	raw, err := json.Marshal(cred)
+	if err != nil {
+		return err
+	}
+	id := base64.RawURLEncoding.EncodeToString(cred.ID)
+	_, err = s.db.Exec(`UPDATE passkeys SET data=?, last_used=? WHERE credential_id=?`, string(raw), ms(time.Now()), id)
+	return err
+}
+
+// ---- device pairing ----
+
+func (s *Store) CreateDevicePairing(userID, token string, ttl time.Duration) error {
+	now := time.Now().UTC()
+	_, err := s.db.Exec(`INSERT INTO device_pairings(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)`,
+		hashToken(token), userID, ms(now), ms(now.Add(ttl)))
+	return err
+}
+
+func (s *Store) ConsumeDevicePairing(token string) (string, error) {
+	var userID string
+	now := ms(time.Now())
+	err := s.db.QueryRow(`UPDATE device_pairings SET used_at=? WHERE token_hash=? AND used_at IS NULL AND expires_at>? RETURNING user_id`,
+		now, hashToken(token), now).Scan(&userID)
+	return userID, err
 }

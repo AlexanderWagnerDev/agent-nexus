@@ -326,7 +326,22 @@ function renderAuth(mode, error = '') {
       <label class="label">Password<input class="input" name="password" aria-label="Password" type="password" autocomplete="current-password" required></label>
       <label class="label">Authenticator code <span class="muted">(if enabled)</span><input class="input" name="totp" aria-label="Authenticator code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"></label>
       <button class="btn primary block" type="submit" id="auth-submit">Sign in</button>
+      <button class="btn block" type="button" id="passkey-login">Sign in with a passkey</button>
     </form>`, 'Sign in to your hub');
+
+  document.getElementById('passkey-login')?.addEventListener('click', async () => {
+    const username = document.querySelector('[name=username]')?.value.trim();
+    if (!username) { toast('Enter your username first', true); return; }
+    try {
+      await passkeyLogin(username);
+      state.me = await api('/me');
+      state.hubName = state.me.hub_name || state.hubName;
+      renderShell('overview');
+      await route();
+    } catch (err) {
+      renderAuth('login', err.message);
+    }
+  });
 
   document.getElementById('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -680,7 +695,7 @@ async function pageSearch() {
 
 async function pageDevices() {
   renderShell('devices');
-  const view = setPage('Devices', 'Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.');
+  const view = setPage('Devices', 'Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.', '<button class="btn primary small" id="pair-device">Pair a device</button>');
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const data = await api('/devices');
   view.innerHTML = `
@@ -702,11 +717,16 @@ async function pageDevices() {
       </div>
     </div>
     <div class="card mt-2">
+      <h2 class="mt-0">Passkeys</h2>
+      <p class="hint">Passkeys use WebAuthn and are phishing-resistant. Add one to this device, then use “Sign in with a passkey” on the login page.</p>
+      <div id="passkey-area"><button class="btn" id="add-passkey">Add a passkey</button></div>
+    </div>
+    <div class="card mt-2">
       <h2 class="mt-0">Web Push notifications</h2>
       <p class="hint">Content-free alerts for run completion and approval requests. The payload never contains transcript text, commands or file paths.</p>
       <div id="push-area"><button class="btn" id="enable-push">Enable notifications</button></div>
     </div>
-    <p class="small muted mt-2">Passkeys/WebAuthn are on the roadmap; this release uses Argon2id passwords and optional TOTP. Session cookies are HttpOnly, SameSite=Strict and Secure when TLS is configured.</p>`;
+    <p class="small muted mt-2">Passkey login and Argon2id passwords with optional TOTP are available. Session cookies are HttpOnly, SameSite=Strict and Secure when TLS is configured.</p>`;
   view.querySelectorAll('[data-revoke-device]').forEach((b) => b.addEventListener('click', () => {
     confirmDanger('Revoking this device ends all of its signed-in sessions.', async () => {
       await api(`/devices/${b.dataset.revokeDevice}`, { method: 'DELETE' });
@@ -714,6 +734,28 @@ async function pageDevices() {
       pageDevices();
     });
   }));
+  document.getElementById('pair-device')?.addEventListener('click', async () => {
+    try {
+      const data = await api('/devices/pairing', { method: 'POST' });
+      modal(`
+        <h2>Pair a device</h2>
+        <p class="hint">Scan this code on a new device. It is single-use and expires in two minutes. The new device gets its own revocable session.</p>
+        <div style="text-align:center"><img src="${data.qr}" alt="Device pairing QR code" style="width:min(320px,100%);border-radius:12px;background:#fff;padding:8px"></div>
+        <div class="secret mt-2">${esc(data.url)}</div>
+        <div class="modal-actions">
+          <button class="btn" type="button" id="copy-pair">Copy link</button>
+          <button class="btn primary" type="button" data-close>Done</button>
+        </div>`);
+      document.getElementById('copy-pair').addEventListener('click', () => copyText(data.url));
+    } catch (err) { toast(err.message, true); }
+  });
+  document.getElementById('add-passkey')?.addEventListener('click', async () => {
+    try {
+      await registerPasskey();
+      document.getElementById('passkey-area').innerHTML = badge('passkey added', 'online');
+      toast('Passkey added');
+    } catch (err) { toast(err.message, true); }
+  });
   document.getElementById('enable-push')?.addEventListener('click', async () => {
     try {
       await enablePush();
@@ -1206,6 +1248,33 @@ async function pageRun(id) {
   term.focus();
 }
 
+/* ---------- device pairing ---------- */
+
+function renderDevicePair(token) {
+  authFrame(`
+    <h2 class="mt-0">Pair this device</h2>
+    <p class="hint mb-2">A signed-in device requested this pairing. Give this browser a name and confirm; the link is single-use.</p>
+    <form class="form" id="pair-form">
+      <label class="label">Device name<input class="input" name="name" placeholder="Phone, tablet, second laptop..." required maxlength="80"></label>
+      <button class="btn primary block" type="submit">Pair this device</button>
+    </form>`, 'Device pairing');
+  document.getElementById('pair-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = new FormData(event.target).get('name');
+    try {
+      await api('/auth/device-pair', { method: 'POST', body: { token, name }, allow401: true });
+      state.me = await api('/me');
+      state.hubName = state.me.hub_name || state.hubName;
+      history.replaceState({}, '', '/');
+      renderShell('overview');
+      await route();
+    } catch (err) {
+      renderDevicePair(token);
+      toast(err.message, true);
+    }
+  });
+}
+
 /* ---------- boot ---------- */
 
 function urlBase64ToUint8Array(base64String) {
@@ -1215,6 +1284,85 @@ function urlBase64ToUint8Array(base64String) {
   const output = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
   return output;
+}
+
+function b64urlToBuf(value) {
+  const normalized = String(value).replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const raw = atob(padded);
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function bufToB64url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function prepareCreation(publicKey) {
+  const pk = { ...publicKey };
+  pk.challenge = b64urlToBuf(pk.challenge);
+  if (pk.user) pk.user = { ...pk.user, id: b64urlToBuf(pk.user.id) };
+  if (Array.isArray(pk.excludeCredentials)) {
+    pk.excludeCredentials = pk.excludeCredentials.map((c) => ({ ...c, id: b64urlToBuf(c.id) }));
+  }
+  return pk;
+}
+
+function prepareAssertion(publicKey) {
+  const pk = { ...publicKey };
+  pk.challenge = b64urlToBuf(pk.challenge);
+  if (Array.isArray(pk.allowCredentials)) {
+    pk.allowCredentials = pk.allowCredentials.map((c) => ({ ...c, id: b64urlToBuf(c.id) }));
+  }
+  return pk;
+}
+
+function serializeCredential(cred, kind) {
+  const response = kind === 'create'
+    ? {
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        attestationObject: bufToB64url(cred.response.attestationObject),
+        transports: cred.response.getTransports ? cred.response.getTransports() : undefined,
+      }
+    : {
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        authenticatorData: bufToB64url(cred.response.authenticatorData),
+        signature: bufToB64url(cred.response.signature),
+        userHandle: cred.response.userHandle ? bufToB64url(cred.response.userHandle) : null,
+      };
+  return {
+    id: cred.id,
+    rawId: bufToB64url(cred.rawId),
+    type: cred.type,
+    authenticatorAttachment: cred.authenticatorAttachment || undefined,
+    response,
+    clientExtensionResults: cred.getClientExtensionResults(),
+  };
+}
+
+async function registerPasskey() {
+  if (!window.PublicKeyCredential) throw new Error('WebAuthn is not supported by this browser');
+  const begin = await api('/auth/passkey/register/begin', { method: 'POST' });
+  const cred = await navigator.credentials.create({ publicKey: prepareCreation(begin.publicKey) });
+  if (!cred) throw new Error('Passkey creation was cancelled');
+  await api(`/auth/passkey/register/finish?session=${encodeURIComponent(begin.session_id)}&name=${encodeURIComponent('This device')}`, {
+    method: 'POST',
+    body: serializeCredential(cred, 'create'),
+  });
+}
+
+async function passkeyLogin(username) {
+  if (!window.PublicKeyCredential) throw new Error('WebAuthn is not supported by this browser');
+  const begin = await api('/auth/passkey/begin', { method: 'POST', body: { username }, allow401: true });
+  const cred = await navigator.credentials.get({ publicKey: prepareAssertion(begin.publicKey) });
+  if (!cred) throw new Error('Passkey sign-in was cancelled');
+  await api(`/auth/passkey/finish?session=${encodeURIComponent(begin.session_id)}`, {
+    method: 'POST',
+    body: serializeCredential(cred, 'get'),
+    allow401: true,
+  });
 }
 
 async function enablePush() {
@@ -1238,6 +1386,8 @@ async function enablePush() {
 
 async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const pairToken = new URLSearchParams(location.search).get('pair');
+  if (pairToken) return renderDevicePair(pairToken);
   try {
     const status = await api('/setup/status', { allow401: true });
     state.setupRequired = status.setup_required;

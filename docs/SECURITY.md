@@ -2,7 +2,7 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current 0.1.0-dev build implements password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks and a hash-chained audit log. Passkeys, step-up authentication, SAS confirmation, signed-command mode, remote approvals and multi-user RBAC are **not implemented**. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The current 0.1.0-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode approvals, Web Push and multi-user grants. Step-up authentication, SAS confirmation and signed-command mode are **not implemented**. Nothing here has received an external audit.
 
 ### 0.1.x implementation notes
 
@@ -10,7 +10,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | --- | --- | --- |
 | Password login | Argon2id (m=64 MiB, t=3, p=2), min length 10 | no recovery codes or local admin reset command |
 | Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret stored unencrypted in `hub.db`; not required on non-loopback hubs yet |
-| Passkeys | — | planned; `go-webauthn` is not wired up |
+| Passkeys | WebAuthn registration and username-first login, user verification preferred | no step-up/re-auth gate; credential JSON is stored unencrypted in `hub.db` |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
 | CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
 | Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window | host key is a `0600` file, not OS keystore/DPAPI; no hub identity pinning |

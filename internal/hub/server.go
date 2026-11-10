@@ -44,6 +44,8 @@ type Server struct {
 
 	vapidPublic  string
 	vapidPrivate string
+
+	passkeySessions passkeySessionStore
 }
 
 type pendingRequest struct {
@@ -56,15 +58,16 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		cfg.HubName = "AgentNexus"
 	}
 	s := &Server{
-		cfg:          cfg,
-		store:        store,
-		log:          logger,
-		loginLimiter: newRateLimiter(10, 5*time.Minute),
-		pairLimiter:  newRateLimiter(10, 10*time.Minute),
-		hosts:        map[string]*hostConn{},
-		clients:      map[*clientConn]struct{}{},
-		runs:         map[string]*runState{},
-		pending:      map[string]*pendingRequest{},
+		cfg:             cfg,
+		store:           store,
+		log:             logger,
+		loginLimiter:    newRateLimiter(10, 5*time.Minute),
+		pairLimiter:     newRateLimiter(10, 10*time.Minute),
+		hosts:           map[string]*hostConn{},
+		clients:         map[*clientConn]struct{}{},
+		runs:            map[string]*runState{},
+		pending:         map[string]*pendingRequest{},
+		passkeySessions: passkeySessionStore{data: map[string]passkeySession{}},
 	}
 	s.ensureVAPID()
 	return s
@@ -79,14 +82,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/setup/status", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/v1/auth/passkey/begin", s.handlePasskeyLoginBegin)
+	mux.HandleFunc("POST /api/v1/auth/passkey/finish", s.handlePasskeyLoginFinish)
+	mux.HandleFunc("POST /api/v1/auth/device-pair", s.handleDevicePair)
 	mux.HandleFunc("POST /api/v1/hosts/pair", s.handlePairHost)
 
 	mux.HandleFunc("POST /api/v1/auth/logout", s.requireAuth(s.handleLogout))
 	mux.HandleFunc("GET /api/v1/me", s.requireAuth(s.handleMe))
+	mux.HandleFunc("GET /api/v1/passkeys", s.requireAuth(s.handlePasskeys))
+	mux.HandleFunc("POST /api/v1/auth/passkey/register/begin", s.requireAuth(s.handlePasskeyRegisterBegin))
+	mux.HandleFunc("POST /api/v1/auth/passkey/register/finish", s.requireAuth(s.handlePasskeyRegisterFinish))
 	mux.HandleFunc("POST /api/v1/auth/totp/begin", s.requireAuth(s.handleTOTPBegin))
 	mux.HandleFunc("POST /api/v1/auth/totp/enable", s.requireAuth(s.handleTOTPEnable))
 	mux.HandleFunc("GET /api/v1/devices", s.requireAuth(s.handleDevices))
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.requireAuth(s.handleRevokeDevice))
+	mux.HandleFunc("POST /api/v1/devices/pairing", s.requireAuth(s.handleCreateDevicePairing))
 	mux.HandleFunc("GET /api/v1/push/key", s.requireAuth(s.handlePushKey))
 	mux.HandleFunc("POST /api/v1/push/subscribe", s.requireAuth(s.handlePushSubscribe))
 	mux.HandleFunc("POST /api/v1/push/unsubscribe", s.requireAuth(s.handlePushUnsubscribe))

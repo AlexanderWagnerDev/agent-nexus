@@ -83,6 +83,27 @@ cookies `Secure` when `NEXUS_PUBLIC_URL` starts with `https://` or when
 - Revoking a device deletes its sessions immediately and closes its open
   browser WebSocket.
 
+## Passkeys
+
+Passkeys require a **hostname** and a secure browser context. `localhost` works
+for development; an IP address such as `127.0.0.1` does not satisfy WebAuthn's
+relying-party rules. For production set:
+
+```bash
+nexus-hub --public-url https://nexus.example.com ...
+```
+
+Then register a passkey under **Devices → Passkeys**. Password + optional TOTP
+remains available as fallback. The relying-party ID is the public URL hostname;
+changing the hostname invalidates existing passkey registrations.
+
+## Device pairing
+
+A signed-in device can create a QR/link pairing token under **Devices → Pair a
+device**. Tokens are single-use, expire after two minutes and create a separate
+revocable device session. Anyone who obtains the link during its lifetime can
+pair, so treat it like a temporary password.
+
 ## Structured mode
 
 OpenCode structured runs start a loopback-only `opencode serve` process per

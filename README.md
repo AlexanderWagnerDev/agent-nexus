@@ -2,7 +2,7 @@
 
 A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
 
-> **Status: early implementation (0.1.0-dev).** The hub, host daemon, pairing, discovery, transcript viewer, federated search and terminal-mode native resume are implemented and runnable. Structured chat mode, passkeys, push notifications, multi-user RBAC and signed-command mode are **not** implemented yet. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing, discovery, transcripts, federated search, terminal resume, OpenCode structured mode, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, Claude/Codex structured drivers and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -22,6 +22,8 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **First-run setup** | Owner account, Argon2id password hashing, server-side sessions, optional TOTP enrollment |
 | **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, challenge-response over an outbound WebSocket |
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
+| **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
+| **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
 | **Overview** | Cross-host session list with title, project, agent, state and last activity |
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
@@ -91,7 +93,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS).
 - Security-relevant actions go to a hash-chained audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, use a strong unique password, enable TOTP, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Passkeys/WebAuthn, signed-command mode and multi-user RBAC are not implemented; do not treat this as a 1.0 security posture.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Signed-command mode and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
@@ -138,7 +140,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | Phase | Status |
 | --- | --- |
 | 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; spike reports are not yet written |
-| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, SAS confirmation and step-up auth pending |
+| 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys available, SAS confirmation and step-up auth pending |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
 | 4 — Structured mode, approvals, push | 🟡 OpenCode structured mode, approvals and Web Push implemented; QR device pairing, mobile review and Claude/Codex drivers open |
@@ -157,6 +159,7 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md) | Per-agent session storage and native resume details |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, pairing, permissions, deployment hardening |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Data locations, backup/restore, upgrade, proxy, troubleshooting |
+| [docs/WSL.md](docs/WSL.md) | Running `nexusd` inside WSL as a separate host |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 
 ## Non-goals
