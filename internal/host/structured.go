@@ -57,8 +57,12 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		d.startCodexStructured(parent, spec)
 		return
 	}
+	if command := d.cfg.ACPCommand(spec.Agent); command != "" {
+		d.startACPStructured(parent, spec, command)
+		return
+	}
 	if spec.Agent != "opencode" {
-		fail("structured mode is available for OpenCode and Codex only; use terminal mode")
+		fail("structured mode is available for OpenCode, Codex and configured ACP agents; use terminal mode")
 		return
 	}
 	if !d.policy.AgentAllowed(spec.Agent) {

@@ -602,7 +602,7 @@ async function pageSession(id) {
   setPage(s.title || 'Session', `${s.host_name} · ${s.agent} · ${s.cwd || 'unknown directory'}`, `
     <button class="btn small" id="resume-session">Resume terminal</button>
     <button class="btn small" id="git-session">Git diff</button>
-    ${s.agent === 'opencode' || s.agent === 'codex' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
+    ${s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
     ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
     <a class="btn small ghost" href="#/sessions">Back</a>`);
   document.getElementById('resume-session').addEventListener('click', () => startRun(s, false, 'terminal'));
@@ -912,7 +912,7 @@ async function pageStructuredRun(id, run) {
         <div class="split wrap"><span id="chat-state" class="badge running">running</span>${agentBadge(run.agent || 'agent')}<span class="mono-small">host ${esc(shortId(run.host_id))}</span></div>
         <div class="small muted" id="run-note">Connecting...</div>
       </div>
-      <div class="notice info small">Structured mode drives OpenCode's own local server. Tool approvals are forwarded here; the native session stays resumable in the terminal.</div>
+      <div class="notice info small">Structured mode drives the agent's local server or ACP adapter. Tool approvals are forwarded here; the native session stays resumable in the terminal.</div>
     </div>
     <div id="approval-banner"></div>
     <div class="chat" id="chat"><div class="chat-empty" id="chat-empty">Send a prompt to continue this native session.</div></div>

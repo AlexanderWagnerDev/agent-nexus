@@ -41,9 +41,9 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, outbound link, reconnect, agent detection, per-user service, `doctor` | Step-up auth, Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Claude structured driver, mobile usability review |
+| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Mobile usability review |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
-| 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff | Generic ACP, native apps |
+| 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
 ### Honest limitations of the current build
 
@@ -52,11 +52,13 @@ what is actually implemented and tested versus what is still open.
 - The host link uses JSON envelopes, not Protobuf. See ADR-014.
 - Passkeys and password + optional TOTP are implemented. The TOTP secret and
   VAPID private key are stored in the hub database unencrypted.
-- Structured mode is implemented for OpenCode and Codex; Claude Code still
-  uses terminal mode. Approvals are forwarded for OpenCode permission requests
-  and Codex app-server requests, and default-deny after ten minutes. Web Push
-  requires HTTPS/localhost and browser permission. Device (QR) pairing uses a
-  bearer link; SAS comparison is implemented for host pairing only.
+- Structured mode is implemented for OpenCode and Codex, and for any agent
+  with an ACP adapter configured (`nexusd acp`; `claude-agent-acp` and
+  `claude-code-acp` are detected automatically). Approvals are forwarded for OpenCode permission requests,
+  Codex app-server requests and ACP permission requests, and default-deny
+  after ten minutes. Web Push requires HTTPS/localhost and browser permission.
+  Device (QR) pairing uses a bearer link; SAS comparison is implemented for
+  host pairing only.
 - Session state is derived from AgentNexus runs and cached metadata; an agent
   running outside AgentNexus is not yet detected as `active_elsewhere`.
 - Transcript fallback parsers are tolerant but not yet covered by a per-version
@@ -175,10 +177,10 @@ External dependencies: availability and stability of the agents' interfaces list
 **Work packages:** WP-4.1 … WP-4.7. **Requirements:** FR-17, FR-22, FR-29, FR-31, FR-42.
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
-> **0.1.x implementation:** OpenCode structured mode, the approval broker and
-> Web Push, QR/link device pairing and OpenCode/Codex structured drivers are
-> implemented. The Claude structured driver and the mobile usability review
-> remain open.
+> **0.1.x implementation:** OpenCode and Codex structured modes, generic ACP
+> adapters (Claude Code via `claude-code-acp`), the approval broker and Web
+> Push, QR/link device pairing are implemented. The mobile usability review
+> remains open.
 
 **Acceptance criteria (M4):**
 

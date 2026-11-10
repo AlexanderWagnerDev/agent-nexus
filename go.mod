@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/aymanbagabas/go-pty v0.2.3
+	github.com/coder/acp-go-sdk v0.13.5
 	github.com/coder/websocket v1.8.15
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/klauspost/compress v1.20.4

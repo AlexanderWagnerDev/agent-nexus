@@ -114,3 +114,12 @@ func jsonString(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+func sliceContains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}

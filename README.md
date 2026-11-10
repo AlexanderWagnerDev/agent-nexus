@@ -2,7 +2,7 @@
 
 A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, the Claude structured driver and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -29,7 +29,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
 | **Search** | Federated search across online hosts; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
-| **Structured mode** | OpenCode chat UI with streamed text, tool cards, reasoning, interrupt, and remote approvals |
+| **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-code-acp`) gets the same experience |
 | **Notifications** | Web Push for run completion and approval requests; content-free payloads |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
@@ -43,7 +43,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
-| Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ❌ planned | ✅ | ✅ `--fork-session` |
+| Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
 | Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>` |
 | OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
@@ -69,6 +69,9 @@ make build          # produces bin/nexus-hub and bin/nexusd
 ./bin/nexusd pair --hub http://127.0.0.1:8080 --code XXXX-XXXX --name my-laptop
 ./bin/nexusd service install
 ./bin/nexusd doctor
+# Optional: give Claude Code the structured chat UI through an ACP adapter.
+# claude-agent-acp and claude-code-acp are auto-detected on PATH.
+./bin/nexusd acp --agent claude --command claude-code-acp
 ```
 
 The host connects **outbound only**; no ports need to be opened on your machines.
@@ -143,9 +146,9 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys and host SAS confirmation available, step-up auth pending |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode and Codex structured modes, approvals, Web Push, QR device pairing and host SAS confirmation implemented; mobile review and the Claude driver open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing and host SAS confirmation implemented; mobile review open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants and the signed GoReleaser/SBOM pipeline implemented; signed commands, PostgreSQL, actual signing credentials and external pentest open |
-| 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff implemented; generic ACP and native apps not implemented |
+| 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 
 Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The status table reflects what the code does, not what the roadmap intends.
 

@@ -29,6 +29,8 @@ func main() {
 		doctorCmd()
 	case "discover":
 		discoverCmd(os.Args[2:])
+	case "acp":
+		acpCmd(os.Args[2:])
 	case "status":
 		statusCmd()
 	case "service":
@@ -52,6 +54,7 @@ Usage:
   nexusd run
   nexusd doctor
   nexusd discover [--json]
+  nexusd acp [--agent <name> [--command <adapter>]]
   nexusd status
   nexusd service <install|uninstall|status>
   nexusd version
@@ -181,6 +184,48 @@ func statusCmd() {
 	}
 	fmt.Printf("host:   %s\nid:     %s\nhub:    %s\npolicy: roots=%v agents=%v new=%v fork=%v\n",
 		cfg.HostName, cfg.HostID, cfg.HubURL, cfg.Policy.AllowedRoots, cfg.Policy.AllowedAgents, cfg.Policy.AllowNew, cfg.Policy.AllowFork)
+}
+
+func acpCmd(args []string) {
+	fs := flag.NewFlagSet("acp", flag.ExitOnError)
+	agent := fs.String("agent", "", "agent name, e.g. claude")
+	command := fs.String("command", "", "ACP adapter command line; empty removes the override")
+	fs.Parse(args)
+	cfg, err := host.LoadConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if *agent == "" {
+		if len(cfg.ACPCommands) == 0 {
+			fmt.Println("no ACP adapter overrides configured")
+		}
+		for name, cmd := range cfg.ACPCommands {
+			fmt.Printf("%-9s %s\n", name, cmd)
+		}
+		if detected := cfg.ACPCommand("claude"); detected != "" && cfg.ACPCommands["claude"] == "" {
+			fmt.Printf("%-9s %s (auto-detected)\n", "claude", detected)
+		}
+		return
+	}
+	if *command == "" {
+		effective := cfg.ACPCommand(*agent)
+		if effective == "" {
+			fmt.Printf("%s: no ACP adapter configured\n", *agent)
+			return
+		}
+		fmt.Println(effective)
+		return
+	}
+	if cfg.ACPCommands == nil {
+		cfg.ACPCommands = map[string]string{}
+	}
+	cfg.ACPCommands[*agent] = *command
+	if err := host.SaveConfig(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "save config:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("%s: ACP adapter set to %s\nRestart nexusd to apply.\n", *agent, *command)
 }
 
 func serviceCmd(args []string) {

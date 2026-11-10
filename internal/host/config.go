@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -31,6 +32,27 @@ type Config struct {
 	HostName   string `json:"host_name"`
 	PrivateKey string `json:"private_key"`
 	Policy     Policy `json:"policy"`
+	// ACPCommands maps an agent name to an Agent Client Protocol adapter
+	// command line, for example {"claude": "claude-code-acp"}. When empty the
+	// daemon looks for the claude-agent-acp or claude-code-acp binary on PATH.
+	ACPCommands map[string]string `json:"acp_commands,omitempty"`
+}
+
+// ACPCommand returns the ACP adapter command configured for an agent.
+func (c Config) ACPCommand(agent string) string {
+	if c.ACPCommands != nil {
+		if cmd := strings.TrimSpace(c.ACPCommands[agent]); cmd != "" {
+			return cmd
+		}
+	}
+	if agent == "claude" {
+		for _, name := range []string{"claude-agent-acp", "claude-code-acp"} {
+			if path, err := exec.LookPath(name); err == nil {
+				return path
+			}
+		}
+	}
+	return ""
 }
 
 func ConfigDir() (string, error) {
