@@ -1,11 +1,15 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.27 AS build
+# Build on the native builder platform and cross-compile for the target image.
+# This avoids running the Go compiler under QEMU for linux/arm64.
+FROM --platform=$BUILDPLATFORM golang:1.27 AS build
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/hub.Version=${VERSION}" \
     -o /out/nexus-hub ./cmd/nexus-hub
 
