@@ -117,17 +117,23 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		return
 	}
 	cwd := spec.Cwd
-	if cwd == "" {
-		if a := d.adapter(spec.Agent); a != nil {
-			if sessions, err := a.ListSessions(ctx); err == nil {
-				for _, s := range sessions {
-					if s.NativeID == spec.NativeID {
+	activeElsewhere := false
+	if a := d.adapter(spec.Agent); a != nil {
+		if sessions, err := a.ListSessions(ctx); err == nil {
+			for _, s := range sessions {
+				if s.NativeID == spec.NativeID {
+					if cwd == "" {
 						cwd = s.Cwd
-						break
 					}
+					activeElsewhere = s.ActiveElsewhere
+					break
 				}
 			}
 		}
+	}
+	if activeElsewhere && spec.Action == protocol.ActionResume {
+		fail("session is active in another terminal; close it or fork the session")
+		return
 	}
 	if cwd == "" {
 		fail("session working directory is unknown")
