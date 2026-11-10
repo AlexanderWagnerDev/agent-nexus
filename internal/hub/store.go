@@ -770,8 +770,9 @@ func (s *Store) RunByID(id string) (protocol.RunView, string, error) {
 	var created int64
 	var ended sql.NullInt64
 	var startedBy string
-	err := s.db.QueryRow(`SELECT id,session_id,host_id,mode,state,lease_device_id,created_at,ended_at,started_by FROM runs WHERE id=?`, id).
-		Scan(&r.ID, &r.SessionID, &r.HostID, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy)
+	err := s.db.QueryRow(`SELECT r.id,r.session_id,r.host_id,COALESCE(s.agent,''),r.mode,r.state,r.lease_device_id,r.created_at,r.ended_at,r.started_by
+		FROM runs r LEFT JOIN sessions s ON s.id=r.session_id WHERE r.id=?`, id).
+		Scan(&r.ID, &r.SessionID, &r.HostID, &r.Agent, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy)
 	r.StartedAt = fromMS(created)
 	if ended.Valid {
 		t := fromMS(ended.Int64)

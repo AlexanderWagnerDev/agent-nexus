@@ -29,6 +29,7 @@ type Daemon struct {
 	runMu      sync.Mutex
 	runs       map[string]*Run
 	structured map[string]*StructuredRun
+	codexRuns  map[string]*CodexRun
 
 	sendMu sync.Mutex
 	ws     *websocket.Conn
@@ -44,6 +45,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		log:         logger,
 		runs:        map[string]*Run{},
 		structured:  map[string]*StructuredRun{},
+		codexRuns:   map[string]*CodexRun{},
 		lastByAgent: map[string][]protocol.Session{},
 	}
 	d.adapters = DetectAdapters(logger)
@@ -208,6 +210,11 @@ func (d *Daemon) sendActiveRuns() error {
 			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: protocol.StateRunning,
 		})
 	}
+	for _, r := range d.codexRuns {
+		runs = append(runs, protocol.RunInfo{
+			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: protocol.StateRunning,
+		})
+	}
 	d.runMu.Unlock()
 	return d.send(protocol.Envelope{Type: "active_runs", Runs: runs})
 }
@@ -302,6 +309,10 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 		active[r.sessionKey] = protocol.StateRunning
 		ours[r.sessionKey] = true
 	}
+	for _, r := range d.codexRuns {
+		active[r.sessionKey] = protocol.StateRunning
+		ours[r.sessionKey] = true
+	}
 	d.runMu.Unlock()
 	// Best-effort detection of sessions open in a native terminal. This never
 	// affects our own runs and is reported as a hint, not a guarantee.
@@ -339,7 +350,14 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 	case "run.prompt":
 		d.runMu.Lock()
 		sr := d.structured[msg.RunID]
+		cr := d.codexRuns[msg.RunID]
 		d.runMu.Unlock()
+		if cr != nil {
+			if err := cr.Prompt(msg.Message); err != nil {
+				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
+			}
+			return
+		}
 		if sr != nil {
 			if err := sr.Prompt(msg.Message); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
@@ -348,7 +366,14 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 	case "run.approval":
 		d.runMu.Lock()
 		sr := d.structured[msg.RunID]
+		cr := d.codexRuns[msg.RunID]
 		d.runMu.Unlock()
+		if cr != nil {
+			if err := cr.ReplyApproval(msg.ApprovalID, msg.Decision); err != nil {
+				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
+			}
+			return
+		}
 		if sr != nil {
 			if err := sr.ReplyApproval(msg.ApprovalID, msg.Decision); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
@@ -365,9 +390,13 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		d.runMu.Lock()
 		r := d.runs[msg.RunID]
 		sr := d.structured[msg.RunID]
+		cr := d.codexRuns[msg.RunID]
 		d.runMu.Unlock()
 		if r != nil {
 			_, _ = r.Write([]byte{3})
+		}
+		if cr != nil {
+			_ = cr.Interrupt()
 		}
 		if sr != nil {
 			if err := sr.Interrupt(); err != nil {
@@ -378,9 +407,13 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		d.runMu.Lock()
 		r := d.runs[msg.RunID]
 		sr := d.structured[msg.RunID]
+		cr := d.codexRuns[msg.RunID]
 		d.runMu.Unlock()
 		if r != nil {
 			go r.Stop()
+		}
+		if cr != nil {
+			cr.Stop()
 		}
 		if sr != nil {
 			sr.Stop()

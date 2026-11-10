@@ -238,6 +238,7 @@ type RunView struct {
 	ID            string     `json:"id"`
 	SessionID     string     `json:"session_id,omitempty"`
 	HostID        string     `json:"host_id"`
+	Agent         string     `json:"agent,omitempty"`
 	Mode          string     `json:"mode"`
 	State         string     `json:"state"`
 	LeaseDeviceID string     `json:"-"`

@@ -53,8 +53,12 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		d.log.Warn("structured run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if spec.Agent == "codex" {
+		d.startCodexStructured(parent, spec)
+		return
+	}
 	if spec.Agent != "opencode" {
-		fail("structured mode is currently available for OpenCode only; use terminal mode")
+		fail("structured mode is available for OpenCode and Codex only; use terminal mode")
 		return
 	}
 	if !d.policy.AgentAllowed(spec.Agent) {
@@ -111,6 +115,18 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		}
 	}
 	for _, existing := range d.structured {
+		if existing.sessionKey == sessionKey {
+			d.runMu.Unlock()
+			fail("session is already active in another structured run on this host")
+			return
+		}
+		if existing.id == spec.RunID {
+			d.runMu.Unlock()
+			fail("run already exists")
+			return
+		}
+	}
+	for _, existing := range d.codexRuns {
 		if existing.sessionKey == sessionKey {
 			d.runMu.Unlock()
 			fail("session is already active in another structured run on this host")

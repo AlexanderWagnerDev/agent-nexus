@@ -41,6 +41,8 @@ func (a *CodexAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	if st, err := os.Stat(filepath.Join(a.root, "sessions")); err != nil || !st.IsDir() {
 		info.Supported = false
 		info.Capabilities = []string{"terminal"}
+	} else {
+		info.Capabilities = append(info.Capabilities, "structured")
 	}
 	return info, nil
 }

@@ -41,7 +41,7 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing, outbound link, reconnect, agent detection, per-user service, `doctor` | SAS confirmation, step-up auth, Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | 🟡 partial | OpenCode structured mode (text, reasoning, tool cards, interrupt), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Claude/Codex structured drivers, mobile usability review |
+| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Claude structured driver, mobile usability review |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff | Generic ACP, native apps |
 
@@ -52,11 +52,11 @@ what is actually implemented and tested versus what is still open.
 - The host link uses JSON envelopes, not Protobuf. See ADR-014.
 - Passkeys and password + optional TOTP are implemented. The TOTP secret and
   VAPID private key are stored in the hub database unencrypted.
-- Structured mode is implemented for OpenCode only; Claude Code and Codex
-  still use terminal mode. Approvals are forwarded for OpenCode permission
-  requests and default-deny after ten minutes. Web Push requires
-  HTTPS/localhost and browser permission. Device pairing uses a bearer QR
-  link; SAS comparison is not implemented.
+- Structured mode is implemented for OpenCode and Codex; Claude Code still
+  uses terminal mode. Approvals are forwarded for OpenCode permission requests
+  and Codex app-server requests, and default-deny after ten minutes. Web Push
+  requires HTTPS/localhost and browser permission. Device pairing uses a
+  bearer QR link; SAS comparison is not implemented.
 - Session state is derived from AgentNexus runs and cached metadata; an agent
   running outside AgentNexus is not yet detected as `active_elsewhere`.
 - Transcript fallback parsers are tolerant but not yet covered by a per-version
@@ -176,8 +176,9 @@ External dependencies: availability and stability of the agents' interfaces list
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
 > **0.1.x implementation:** OpenCode structured mode, the approval broker and
-> Web Push and QR/link device pairing are implemented. Claude Code and Codex
-> structured drivers and the mobile usability review remain open.
+> Web Push, QR/link device pairing and OpenCode/Codex structured drivers are
+> implemented. The Claude structured driver and the mobile usability review
+> remain open.
 
 **Acceptance criteria (M4):**
 
