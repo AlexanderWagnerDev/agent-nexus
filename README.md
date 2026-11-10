@@ -38,12 +38,12 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 
 ### Agent support in this release
 
-| Agent | Discovery | Transcript | Terminal resume | New | Fork |
-| --- | --- | --- | --- | --- | --- |
-| Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ | ✅ `--fork-session` |
-| Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ | ✅ `codex fork <id>` |
-| OpenCode | ✅ SQLite store | ✅ | ✅ `opencode --session <id>` | ✅ | ❌ no non-interactive fork in v2 |
-| Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ✅ | ❌ |
+| Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ❌ planned | ✅ | ✅ `--fork-session` |
+| Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ❌ planned (`app-server`) | ✅ | ✅ `codex fork <id>` |
+| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
+| Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
 
 Claude Code discovery/transcript code is fixture-tested; Codex and OpenCode were exercised against real local stores. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
