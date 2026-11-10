@@ -173,12 +173,16 @@ External dependencies: availability and stability of the agents' interfaces list
 **Work packages:** WP-4.1 … WP-4.7. **Requirements:** FR-17, FR-22, FR-29, FR-31, FR-42.
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
+> **0.1.x implementation:** OpenCode structured mode, the approval broker and
+> Web Push are implemented. Claude Code and Codex structured drivers, QR device
+> pairing and the mobile usability review remain open.
+
 **Acceptance criteria (M4):**
 
 - [ ] Structured mode available for Codex CLI (app-server), OpenCode (serve) and Claude Code (ACP adapter or stream-json fallback): streaming text, tool cards, file diffs, interrupt.
 - [ ] A session continued in structured mode remains resumable in the native CLI with all turns, and can be continued again in terminal mode.
 - [ ] Approval requests from all three agents appear in the web app and as Web Push (installed PWA on Android and iOS 16.4+, desktop browsers); allow-once/deny work; timeouts deny by default; decisions are audited.
-- [ ] Push payloads contain no conversation content by default (verified).
+- [x] Push payloads contain no conversation content by default (implemented in `notifyRun`).
 - [ ] Mobile layout passes usability review on a 360 px wide screen; WCAG 2.2 AA checks for non-terminal views pass (NFR-10).
 - [ ] QR pairing of a second device with SAS confirmation works.
 - [ ] If an agent version outside the supported range is detected, structured mode is disabled for it with a visible warning and terminal mode still works (NFR-08).
@@ -188,6 +192,10 @@ External dependencies: availability and stability of the agents' interfaces list
 **Goal:** production-ready, auditable, multi-user capable. **Release 1.0.0.**
 **Work packages:** WP-5.1 … WP-5.6. **Requirements:** FR-43 (multi-user), FR-46, FR-50 (PostgreSQL), FR-54, all NFRs.
 **Depends on:** M4.
+
+> **0.1.x implementation:** roles (`owner`, `admin`, `member`, `viewer`) and
+> per-host grants are implemented. Signed commands, PostgreSQL, signed release
+> artifacts and the external penetration test remain open.
 
 **Acceptance criteria (M5):**
 

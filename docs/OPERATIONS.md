@@ -83,6 +83,31 @@ cookies `Secure` when `NEXUS_PUBLIC_URL` starts with `https://` or when
 - Revoking a device deletes its sessions immediately and closes its open
   browser WebSocket.
 
+## Structured mode
+
+OpenCode structured runs start a loopback-only `opencode serve` process per
+run with a random port and server password. The password is only held in
+memory for that run; the server is killed when the run stops. If a run remains
+after a daemon crash, inspect and terminate the orphaned `opencode serve`
+process before resuming that session.
+
+Claude Code and Codex CLI currently use terminal mode only.
+
+## Web Push
+
+Enable notifications per device under **Devices**. Requirements:
+
+- HTTPS (localhost is treated as a secure context by browsers) and a browser
+  with Push support; iOS requires the PWA to be installed on the home screen.
+- Browser notification permission; if it was previously denied, reset the site
+  permission in the browser first.
+- The hub generates a VAPID key pair on first start and stores it in
+  `hub.db`. Back it up with the database; replacing it invalidates existing
+  subscriptions.
+
+The payload contains only a generic title, a generic body and the run URL. It
+never contains transcript text, commands, paths or approval details.
+
 ## Resource notes
 
 - `nexusd` runs as the logged-in user and must not run as root/SYSTEM.

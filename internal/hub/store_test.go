@@ -70,3 +70,35 @@ func TestPairingCodeSingleUse(t *testing.T) {
 		t.Fatal("pairing code was accepted twice")
 	}
 }
+
+func TestHostGrant(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	owner, _ := s.CreateUser("owner", "hash", "secret")
+	viewer, err := s.CreateUserWithRole("viewer", "hash2", "secret2", "viewer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostID, err := s.CreateHost(owner.ID, "host", make([]byte, 32), "linux", "amd64", "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHostGrant(hostID, viewer.ID, "view,resume"); err != nil {
+		t.Fatal(err)
+	}
+	perms, err := s.HostGrantPermissions(hostID, viewer.ID)
+	if err != nil || perms != "view,resume" {
+		t.Fatalf("unexpected grant: %q %v", perms, err)
+	}
+	hosts, err := s.ListHosts(viewer.ID, false)
+	if err != nil || len(hosts) != 1 {
+		t.Fatalf("granted host not listed: %v %v", hosts, err)
+	}
+	hosts, err = s.ListHosts(viewer.ID, true)
+	if err != nil || len(hosts) != 1 {
+		t.Fatalf("admin host list failed: %v %v", hosts, err)
+	}
+}
