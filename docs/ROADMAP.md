@@ -42,7 +42,7 @@ what is actually implemented and tested versus what is still open.
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
 | 4 | 🟡 partial | OpenCode structured mode (text, reasoning, tool cards, interrupt), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Claude/Codex structured drivers, mobile usability review |
-| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers | Signed commands, PostgreSQL, release signing/SBOM, external pentest, load/soak tests |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff | Generic ACP, native apps |
 
 ### Honest limitations of the current build
@@ -176,8 +176,8 @@ External dependencies: availability and stability of the agents' interfaces list
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
 > **0.1.x implementation:** OpenCode structured mode, the approval broker and
-> Web Push are implemented. Claude Code and Codex structured drivers, QR device
-> pairing and the mobile usability review remain open.
+> Web Push and QR/link device pairing are implemented. Claude Code and Codex
+> structured drivers and the mobile usability review remain open.
 
 **Acceptance criteria (M4):**
 

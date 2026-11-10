@@ -143,8 +143,8 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys available, SAS confirmation and step-up auth pending |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode structured mode, approvals and Web Push implemented; QR device pairing, mobile review and Claude/Codex drivers open |
-| 5 — Hardening, multi-user, 1.0 | 🟡 roles and per-host grants implemented; signed commands, PostgreSQL, release signing/SBOM and external pentest open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode structured mode, approvals, Web Push and QR device pairing implemented; mobile review and Claude/Codex drivers open |
+| 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants and the signed GoReleaser/SBOM pipeline implemented; signed commands, PostgreSQL, actual signing credentials and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff implemented; generic ACP and native apps not implemented |
 
 Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The status table reflects what the code does, not what the roadmap intends.
