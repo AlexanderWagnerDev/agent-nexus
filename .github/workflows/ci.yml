@@ -90,6 +90,36 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o "dist/nexus-hub-${GOOS}-${GOARCH}${ext}" ./cmd/nexus-hub
           go build -trimpath -ldflags="-s -w" -o "dist/nexusd-${GOOS}-${GOARCH}${ext}" ./cmd/nexusd
 
+  browser:
+    name: Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build hub
+        run: |
+          mkdir -p bin
+          CGO_ENABLED=0 go build -trimpath -o bin/nexus-hub ./cmd/nexus-hub
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install browser test dependencies
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run browser smoke test
+        working-directory: web
+        env:
+          E2E_SPAWN_HUB: "1"
+        run: node e2e/smoke.mjs
+
   vulnerability:
     name: govulncheck
     runs-on: [self-hosted, linux]

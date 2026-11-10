@@ -1,0 +1,11 @@
+{
+  "name": "agentnexus-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "node e2e/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
+}
