@@ -38,7 +38,7 @@ what is actually implemented and tested versus what is still open.
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
-| 1 | 🟡 core | Setup, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing, outbound link, reconnect, agent detection, per-user service, `doctor` | Passkeys/WebAuthn, SAS confirmation, step-up auth, Windows per-user service validation |
+| 1 | 🟡 core | Setup, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing, outbound link, reconnect, agent detection, per-user service, `doctor` | Passkeys/WebAuthn, SAS confirmation, step-up auth, Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
 | 4 | ❌ | — | Structured mode, approvals, Web Push, QR device pairing |

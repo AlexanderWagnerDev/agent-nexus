@@ -233,15 +233,34 @@ func launchdService(action, exe string) error {
 }
 
 func windowsService(action, exe string) error {
-	const task = "AgentNexus"
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		return fmt.Errorf("APPDATA is not set")
+	}
+	startup := filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+	launcher := filepath.Join(startup, "AgentNexus.vbs")
 	switch action {
 	case "install":
-		tr := fmt.Sprintf(`\"%s\" run`, exe)
-		return runCmd("schtasks", "/Create", "/SC", "ONLOGON", "/TN", task, "/TR", tr, "/RL", "LIMITED", "/F")
+		if err := os.MkdirAll(startup, 0o755); err != nil {
+			return err
+		}
+		// A per-user Startup launcher needs no administrator rights. It is a
+		// logon launcher, not a Windows service; a hard service can be added
+		// with Task Scheduler/NSSM by administrators who want crash recovery.
+		content := fmt.Sprintf("Set sh = CreateObject(\"WScript.Shell\")\r\nsh.Run Chr(34) & \"%s\" & Chr(34) & \" run\", 0, False\r\n",
+			strings.ReplaceAll(exe, "\"", "\"\""))
+		return os.WriteFile(launcher, []byte(content), 0o644)
 	case "uninstall":
-		return runCmd("schtasks", "/Delete", "/TN", task, "/F")
+		if err := os.Remove(launcher); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
 	case "status":
-		return runCmd("schtasks", "/Query", "/TN", task)
+		if _, err := os.Stat(launcher); err != nil {
+			return fmt.Errorf("not installed at %s", launcher)
+		}
+		fmt.Printf("launcher: %s\n", launcher)
+		return runCmd("tasklist", "/FI", "IMAGENAME eq nexusd.exe")
 	}
 	return fmt.Errorf("unknown service action %q", action)
 }

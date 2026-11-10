@@ -4,6 +4,23 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 
 > **Status:** design plus implemented subset. The current 0.1.0-dev build implements password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks and a hash-chained audit log. Passkeys, step-up authentication, SAS confirmation, signed-command mode, remote approvals and multi-user RBAC are **not implemented**. Nothing here has received an external audit.
 
+### 0.1.x implementation notes
+
+| Control | Implemented | Gap |
+| --- | --- | --- |
+| Password login | Argon2id (m=64 MiB, t=3, p=2), min length 10 | no recovery codes or local admin reset command |
+| Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret stored unencrypted in `hub.db`; not required on non-loopback hubs yet |
+| Passkeys | — | planned; `go-webauthn` is not wired up |
+| Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
+| CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
+| Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window | host key is a `0600` file, not OS keystore/DPAPI; no hub identity pinning |
+| Host policy | allowed roots (symlinks resolved), allowed agents, new/fork switches, forbidden flags; enforced on host | no per-action launch profiles |
+| Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in 0.1.x |
+| Audit | hash-chained append-only table, verification endpoint/UI | no host-local audit file yet |
+| Device revocation | deletes sessions and closes open browser sockets | no push-subscription cleanup (push not implemented) |
+| Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
+
+
 ## Table of contents
 
 1. [Reporting a vulnerability](#1-reporting-a-vulnerability)

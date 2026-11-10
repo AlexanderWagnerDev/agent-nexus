@@ -30,7 +30,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
-| **Operations** | Dockerfile, compose example with Caddy, per-user service install, `nexusd doctor` |
+| **Operations** | Dockerfile, compose example with Caddy, per-user service install (systemd/launchd/Windows Startup launcher), `nexusd doctor` |
 
 ### Agent support in this release
 
@@ -151,6 +151,7 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, priorities, milestones, acceptance criteria |
 | [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md) | Per-agent session storage and native resume details |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, pairing, permissions, deployment hardening |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Data locations, backup/restore, upgrade, proxy, troubleshooting |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 
 ## Non-goals
