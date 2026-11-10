@@ -105,57 +105,84 @@ type RunSpec struct {
 	Rows      int    `json:"rows"`
 }
 
+// RunEvent is a normalized structured-mode event. Terminal runs do not use it.
+type RunEvent struct {
+	Type       string   `json:"type"`
+	RunID      string   `json:"run_id,omitempty"`
+	Seq        uint64   `json:"seq,omitempty"`
+	MessageID  string   `json:"message_id,omitempty"`
+	CallID     string   `json:"call_id,omitempty"`
+	ApprovalID string   `json:"approval_id,omitempty"`
+	Role       string   `json:"role,omitempty"`
+	Text       string   `json:"text,omitempty"`
+	ToolName   string   `json:"tool_name,omitempty"`
+	ToolInput  string   `json:"tool_input,omitempty"`
+	ToolOutput string   `json:"tool_output,omitempty"`
+	Action     string   `json:"action,omitempty"`
+	Resources  []string `json:"resources,omitempty"`
+	Decision   string   `json:"decision,omitempty"`
+	State      string   `json:"state,omitempty"`
+	Error      string   `json:"error,omitempty"`
+}
+
 // RunInfo is reported by a host after reconnect so the hub can adopt runs
 // that survived a hub restart.
 type RunInfo struct {
 	RunID     string    `json:"run_id"`
 	SessionID string    `json:"session_id,omitempty"`
 	Agent     string    `json:"agent"`
+	Mode      string    `json:"mode,omitempty"`
 	State     string    `json:"state"`
 	StartedAt time.Time `json:"started_at"`
 }
 
 // Envelope is the message format of the host link.
 type Envelope struct {
-	Type      string         `json:"type"`
-	Protocol  string         `json:"protocol,omitempty"`
-	HostID    string         `json:"host_id,omitempty"`
-	HostName  string         `json:"host_name,omitempty"`
-	OS        string         `json:"os,omitempty"`
-	Arch      string         `json:"arch,omitempty"`
-	Version   string         `json:"version,omitempty"`
-	Nonce     string         `json:"nonce,omitempty"`
-	Signature string         `json:"signature,omitempty"`
-	Agents    []AgentInfo    `json:"agents,omitempty"`
-	Policy    *PolicySummary `json:"policy,omitempty"`
-	Sessions  []Session      `json:"sessions,omitempty"`
-	Full      bool           `json:"full,omitempty"`
-	RequestID string         `json:"request_id,omitempty"`
-	Method    string         `json:"method,omitempty"`
-	Params    []byte         `json:"params,omitempty"`
-	Result    []byte         `json:"result,omitempty"`
-	OK        bool           `json:"ok,omitempty"`
-	Error     string         `json:"error,omitempty"`
-	Run       *RunSpec       `json:"run,omitempty"`
-	Runs      []RunInfo      `json:"runs,omitempty"`
-	RunID     string         `json:"run_id,omitempty"`
-	Seq       uint64         `json:"seq,omitempty"`
-	Data      []byte         `json:"data,omitempty"`
-	Cols      int            `json:"cols,omitempty"`
-	Rows      int            `json:"rows,omitempty"`
-	Code      int            `json:"code,omitempty"`
-	Reason    string         `json:"reason,omitempty"`
-	Message   string         `json:"message,omitempty"`
+	Type       string         `json:"type"`
+	Protocol   string         `json:"protocol,omitempty"`
+	HostID     string         `json:"host_id,omitempty"`
+	HostName   string         `json:"host_name,omitempty"`
+	OS         string         `json:"os,omitempty"`
+	Arch       string         `json:"arch,omitempty"`
+	Version    string         `json:"version,omitempty"`
+	Nonce      string         `json:"nonce,omitempty"`
+	Signature  string         `json:"signature,omitempty"`
+	Agents     []AgentInfo    `json:"agents,omitempty"`
+	Policy     *PolicySummary `json:"policy,omitempty"`
+	Sessions   []Session      `json:"sessions,omitempty"`
+	Full       bool           `json:"full,omitempty"`
+	RequestID  string         `json:"request_id,omitempty"`
+	Method     string         `json:"method,omitempty"`
+	Params     []byte         `json:"params,omitempty"`
+	Result     []byte         `json:"result,omitempty"`
+	OK         bool           `json:"ok,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Run        *RunSpec       `json:"run,omitempty"`
+	Runs       []RunInfo      `json:"runs,omitempty"`
+	Event      *RunEvent      `json:"event,omitempty"`
+	RunID      string         `json:"run_id,omitempty"`
+	Seq        uint64         `json:"seq,omitempty"`
+	Data       []byte         `json:"data,omitempty"`
+	Cols       int            `json:"cols,omitempty"`
+	Rows       int            `json:"rows,omitempty"`
+	Code       int            `json:"code,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+	Message    string         `json:"message,omitempty"`
+	ApprovalID string         `json:"approval_id,omitempty"`
+	Decision   string         `json:"decision,omitempty"`
 }
 
 // ClientEnvelope is sent by the browser over the client WebSocket.
 type ClientEnvelope struct {
-	Type    string `json:"type"`
-	RunID   string `json:"run_id,omitempty"`
-	LastSeq uint64 `json:"last_seq,omitempty"`
-	Data    []byte `json:"data,omitempty"`
-	Cols    int    `json:"cols,omitempty"`
-	Rows    int    `json:"rows,omitempty"`
+	Type       string `json:"type"`
+	RunID      string `json:"run_id,omitempty"`
+	LastSeq    uint64 `json:"last_seq,omitempty"`
+	Data       []byte `json:"data,omitempty"`
+	Cols       int    `json:"cols,omitempty"`
+	Rows       int    `json:"rows,omitempty"`
+	Text       string `json:"text,omitempty"`
+	ApprovalID string `json:"approval_id,omitempty"`
+	Decision   string `json:"decision,omitempty"`
 }
 
 // ServerEnvelope is sent to the browser over the client WebSocket.
@@ -166,6 +193,7 @@ type ServerEnvelope struct {
 	Session  *SessionView  `json:"session,omitempty"`
 	Sessions []SessionView `json:"sessions,omitempty"`
 	Run      *RunView      `json:"run,omitempty"`
+	Event    *RunEvent     `json:"event,omitempty"`
 	RunID    string        `json:"run_id,omitempty"`
 	Seq      uint64        `json:"seq,omitempty"`
 	State    string        `json:"state,omitempty"`

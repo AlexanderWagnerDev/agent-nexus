@@ -138,6 +138,25 @@ CREATE TABLE IF NOT EXISTS audit (
   prev_hash TEXT NOT NULL,
   hash TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS host_grants (
+  host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  permissions TEXT NOT NULL DEFAULT 'view',
+  PRIMARY KEY (host_id, user_id)
+);
 `)
 	return err
 }
@@ -186,17 +205,45 @@ func (s *Store) UserCount() (int, error) {
 }
 
 func (s *Store) CreateUser(username, passwordHash, totpSecret string) (User, error) {
+	return s.CreateUserWithRole(username, passwordHash, totpSecret, "owner")
+}
+
+func (s *Store) CreateUserWithRole(username, passwordHash, totpSecret, role string) (User, error) {
 	u := User{
 		ID:           newID(),
 		Username:     username,
 		PasswordHash: passwordHash,
 		TOTPSecret:   totpSecret,
-		Role:         "owner",
+		Role:         role,
 		CreatedAt:    time.Now().UTC(),
 	}
-	_, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, created_at) VALUES(?,?,?,?,?)`,
-		u.ID, u.Username, u.PasswordHash, u.TOTPSecret, ms(u.CreatedAt))
+	_, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, role, created_at) VALUES(?,?,?,?,?,?)`,
+		u.ID, u.Username, u.PasswordHash, u.TOTPSecret, u.Role, ms(u.CreatedAt))
 	return u, err
+}
+
+func (s *Store) ListUsers() ([]User, error) {
+	rows, err := s.db.Query(`SELECT id, username, password_hash, totp_secret, totp_enabled, role, created_at FROM users ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []User
+	for rows.Next() {
+		u, err := s.scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		u.PasswordHash = ""
+		u.TOTPSecret = ""
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) SetUserRole(id, role string) error {
+	_, err := s.db.Exec(`UPDATE users SET role=? WHERE id=?`, role, id)
+	return err
 }
 
 func (s *Store) UserByUsername(username string) (User, error) {
@@ -328,8 +375,52 @@ func (s *Store) RevokeDevice(userID, deviceID string) error {
 	if _, err := s.db.Exec(`UPDATE devices SET revoked_at=? WHERE id=? AND user_id=?`, now, deviceID, userID); err != nil {
 		return err
 	}
+	_, _ = s.db.Exec(`DELETE FROM push_subscriptions WHERE device_id=?`, deviceID)
 	_, err := s.db.Exec(`DELETE FROM auth_sessions WHERE device_id=?`, deviceID)
 	return err
+}
+
+// ---- host grants ----
+
+func (s *Store) HostGrantPermissions(hostID, userID string) (string, error) {
+	var perms string
+	err := s.db.QueryRow(`SELECT permissions FROM host_grants WHERE host_id=? AND user_id=?`, hostID, userID).Scan(&perms)
+	return perms, err
+}
+
+func (s *Store) SetHostGrant(hostID, userID, permissions string) error {
+	_, err := s.db.Exec(`INSERT INTO host_grants(host_id,user_id,permissions) VALUES(?,?,?)
+		ON CONFLICT(host_id,user_id) DO UPDATE SET permissions=excluded.permissions`, hostID, userID, permissions)
+	return err
+}
+
+func (s *Store) DeleteHostGrant(hostID, userID string) error {
+	_, err := s.db.Exec(`DELETE FROM host_grants WHERE host_id=? AND user_id=?`, hostID, userID)
+	return err
+}
+
+type HostGrant struct {
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	Permissions string `json:"permissions"`
+}
+
+func (s *Store) ListHostGrants(hostID string) ([]HostGrant, error) {
+	rows, err := s.db.Query(`SELECT g.user_id,u.username,g.permissions
+		FROM host_grants g JOIN users u ON u.id=g.user_id WHERE g.host_id=? ORDER BY u.username`, hostID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HostGrant
+	for rows.Next() {
+		var g HostGrant
+		if err := rows.Scan(&g.UserID, &g.Username, &g.Permissions); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
 }
 
 // ---- pairing ----
@@ -377,8 +468,15 @@ func (s *Store) HostPublicKey(hostID string) ([]byte, error) {
 	return key, err
 }
 
-func (s *Store) ListHosts(ownerID string) ([]protocol.HostView, error) {
-	rows, err := s.db.Query(`SELECT id,name,os,arch,version,last_seen,policy FROM hosts WHERE owner_id=? AND revoked_at IS NULL ORDER BY name`, ownerID)
+func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) {
+	q := `SELECT id,name,os,arch,version,last_seen,policy FROM hosts h WHERE revoked_at IS NULL`
+	args := []any{}
+	if !all {
+		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
+		args = append(args, userID, userID)
+	}
+	q += ` ORDER BY name`
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -494,6 +592,11 @@ func (s *Store) RevokeHost(ownerID, hostID string) error {
 	return err
 }
 
+func (s *Store) RevokeHostByID(hostID string) error {
+	_, err := s.db.Exec(`UPDATE hosts SET revoked_at=? WHERE id=?`, ms(time.Now()), hostID)
+	return err
+}
+
 // ---- sessions ----
 
 func sessionID(hostID, agent, nativeID string) string {
@@ -551,15 +654,19 @@ func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) 
 	return upserted, deleted, tx.Commit()
 }
 
-func (s *Store) ListSessions(ownerID, hostID, agent, project, state, query string, limit int) ([]protocol.SessionView, error) {
+func (s *Store) ListSessions(userID, hostID, agent, project, state, query string, limit int, all bool) ([]protocol.SessionView, error) {
 	if limit <= 0 || limit > 2000 {
 		limit = 500
 	}
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
-		WHERE h.owner_id=? AND h.revoked_at IS NULL`
-	args := []any{ownerID}
+		WHERE h.revoked_at IS NULL`
+	args := []any{}
+	if !all {
+		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
+		args = append(args, userID, userID)
+	}
 	if hostID != "" {
 		q += ` AND s.host_id=?`
 		args = append(args, hostID)
@@ -605,12 +712,17 @@ func (s *Store) SessionIDForNative(hostID, agent, nativeID string) (string, erro
 	return id, err
 }
 
-func (s *Store) SessionByID(ownerID, id string) (protocol.SessionView, error) {
-	row := s.db.QueryRow(`SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
+func (s *Store) SessionByID(userID, id string, all bool) (protocol.SessionView, error) {
+	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
-		WHERE s.id=? AND h.owner_id=?`, id, ownerID)
-	return scanSessionView(row)
+		WHERE s.id=? AND h.revoked_at IS NULL`
+	args := []any{id}
+	if !all {
+		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
+		args = append(args, userID, userID)
+	}
+	return scanSessionView(s.db.QueryRow(q, args...))
 }
 
 func scanSessionView(row rowScanner) (protocol.SessionView, error) {
@@ -760,4 +872,60 @@ func boolInt(v bool) int {
 		return 1
 	}
 	return 0
+}
+
+// ---- settings and push ----
+
+func (s *Store) GetSetting(key string) (string, error) {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v)
+	return v, err
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
+}
+
+type PushSubscription struct {
+	ID       string `json:"id"`
+	UserID   string `json:"-"`
+	DeviceID string `json:"-"`
+	Endpoint string `json:"endpoint"`
+	P256DH   string `json:"p256dh"`
+	Auth     string `json:"auth"`
+}
+
+func (s *Store) SavePushSubscription(userID, deviceID, endpoint, p256dh, auth string) error {
+	_, err := s.db.Exec(`INSERT INTO push_subscriptions(id,user_id,device_id,endpoint,p256dh,auth,created_at)
+		VALUES(?,?,?,?,?,?,?)
+		ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, device_id=excluded.device_id, p256dh=excluded.p256dh, auth=excluded.auth`,
+		newID(), userID, deviceID, endpoint, p256dh, auth, ms(time.Now()))
+	return err
+}
+
+func (s *Store) DeletePushSubscription(userID, endpoint string) error {
+	_, err := s.db.Exec(`DELETE FROM push_subscriptions WHERE user_id=? AND endpoint=?`, userID, endpoint)
+	return err
+}
+
+func (s *Store) PushSubscriptions(userID string) ([]PushSubscription, error) {
+	rows, err := s.db.Query(`SELECT id,user_id,device_id,endpoint,p256dh,auth FROM push_subscriptions WHERE user_id=?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PushSubscription
+	for rows.Next() {
+		var p PushSubscription
+		if err := rows.Scan(&p.ID, &p.UserID, &p.DeviceID, &p.Endpoint, &p.P256DH, &p.Auth); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) DeletePushSubscriptionByID(id string) {
+	s.db.Exec(`DELETE FROM push_subscriptions WHERE id=?`, id)
 }

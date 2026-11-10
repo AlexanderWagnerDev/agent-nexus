@@ -41,8 +41,8 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing, outbound link, reconnect, agent detection, per-user service, `doctor` | Passkeys/WebAuthn, SAS confirmation, step-up auth, Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | ❌ | — | Structured mode, approvals, Web Push, QR device pairing |
-| 5 | ❌ | Hash-chained hub audit log, rate limits, security headers | RBAC, signed commands, PostgreSQL, release signing/SBOM, external pentest, load/soak tests |
+| 4 | 🟡 partial | OpenCode structured mode (text, reasoning, tool cards, interrupt), approval broker, Web Push, content-free payloads, PWA manifest/service worker | Claude/Codex structured drivers, QR device pairing, mobile usability review |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers | Signed commands, PostgreSQL, release signing/SBOM, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume | Generic ACP, native apps, git diff view |
 
 ### Honest limitations of the current build
@@ -52,8 +52,9 @@ what is actually implemented and tested versus what is still open.
 - The host link uses JSON envelopes, not Protobuf. See ADR-014.
 - Passwords + optional TOTP are the only login methods; passkeys are not
   implemented. The TOTP secret is stored in the hub database unencrypted.
-- Structured mode, approvals and push notifications are absent; the `mode`
-  field only accepts `terminal`.
+- Structured mode is implemented for OpenCode only; Claude Code and Codex
+  still use terminal mode. Approvals are forwarded for OpenCode permission
+  requests. Web Push requires HTTPS/localhost and browser permission.
 - Session state is derived from AgentNexus runs and cached metadata; an agent
   running outside AgentNexus is not yet detected as `active_elsewhere`.
 - Transcript fallback parsers are tolerant but not yet covered by a per-version

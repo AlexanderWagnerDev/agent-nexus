@@ -96,8 +96,12 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		d.log.Warn("run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if spec.Mode == protocol.ModeStructured {
+		d.startStructuredRun(ctx, spec)
+		return
+	}
 	if spec.Mode != "" && spec.Mode != protocol.ModeTerminal {
-		fail("structured mode is not implemented on this host")
+		fail("unknown run mode")
 		return
 	}
 	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {

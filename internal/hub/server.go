@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,9 @@ type Server struct {
 	clients map[*clientConn]struct{}
 	runs    map[string]*runState
 	pending map[string]*pendingRequest
+
+	vapidPublic  string
+	vapidPrivate string
 }
 
 type pendingRequest struct {
@@ -51,7 +55,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	if cfg.HubName == "" {
 		cfg.HubName = "AgentNexus"
 	}
-	return &Server{
+	s := &Server{
 		cfg:          cfg,
 		store:        store,
 		log:          logger,
@@ -62,6 +66,8 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		runs:         map[string]*runState{},
 		pending:      map[string]*pendingRequest{},
 	}
+	s.ensureVAPID()
+	return s
 }
 
 func (s *Server) SetAssets(h http.Handler) { s.assets = h }
@@ -81,6 +87,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/totp/enable", s.requireAuth(s.handleTOTPEnable))
 	mux.HandleFunc("GET /api/v1/devices", s.requireAuth(s.handleDevices))
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.requireAuth(s.handleRevokeDevice))
+	mux.HandleFunc("GET /api/v1/push/key", s.requireAuth(s.handlePushKey))
+	mux.HandleFunc("POST /api/v1/push/subscribe", s.requireAuth(s.handlePushSubscribe))
+	mux.HandleFunc("POST /api/v1/push/unsubscribe", s.requireAuth(s.handlePushUnsubscribe))
+	mux.HandleFunc("GET /api/v1/users", s.requireAuth(s.handleUsers))
+	mux.HandleFunc("POST /api/v1/users", s.requireAuth(s.handleCreateUser))
+	mux.HandleFunc("PATCH /api/v1/users/{id}", s.requireAuth(s.handleUpdateUser))
+	mux.HandleFunc("GET /api/v1/hosts/{id}/grants", s.requireAuth(s.handleHostGrants))
+	mux.HandleFunc("PUT /api/v1/hosts/{id}/grants/{userID}", s.requireAuth(s.handleSetHostGrant))
+	mux.HandleFunc("DELETE /api/v1/hosts/{id}/grants/{userID}", s.requireAuth(s.handleDeleteHostGrant))
 
 	mux.HandleFunc("GET /api/v1/hosts", s.requireAuth(s.handleHosts))
 	mux.HandleFunc("POST /api/v1/hosts/pairing-codes", s.requireAuth(s.handlePairingCode))
@@ -298,6 +313,13 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning})
 	case "run.output":
 		s.appendRunOutput(msg.RunID, msg.Seq, msg.Data)
+	case "run.event":
+		if msg.Event != nil {
+			s.appendRunEvent(msg.RunID, *msg.Event)
+			if msg.Event.Type == "approval.requested" {
+				go s.notifyRun(msg.RunID, "Approval needed", "An agent is waiting for your approval.")
+			}
+		}
 	case "run.exit":
 		state := protocol.StateExited
 		if msg.Code != 0 {
@@ -306,6 +328,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.setRunState(msg.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.exit", RunID: msg.RunID, State: state, Message: msg.Reason})
 		s.log.Info("run exited", "run_id", msg.RunID, "code", msg.Code, "reason", msg.Reason)
+		go s.notifyRun(msg.RunID, "Agent run finished", "A run finished. Open AgentNexus for details.")
 	case "run.error":
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
@@ -557,7 +580,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			return
 		}
 		run, startedBy, err := s.store.RunByID(msg.RunID)
-		if err != nil || startedBy != c.user.ID {
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
 			return
 		}
@@ -567,6 +590,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		rs := s.runState(msg.RunID)
 		state := run.State
 		var chunks []protocol.ServerEnvelope
+		var events []protocol.ServerEnvelope
 		if rs != nil {
 			rs.mu.Lock()
 			state = rs.state
@@ -575,11 +599,20 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 					chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
 				}
 			}
+			for i := range rs.events {
+				ev := rs.events[i]
+				if ev.Seq > msg.LastSeq {
+					events = append(events, protocol.ServerEnvelope{Type: "run.event", RunID: msg.RunID, Seq: ev.Seq, Event: &ev})
+				}
+			}
 			rs.mu.Unlock()
 		}
 		c.push(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: state})
 		for _, ch := range chunks {
 			c.push(ch)
+		}
+		for _, ev := range events {
+			c.push(ev)
 		}
 	case "unsubscribe":
 		c.mu.Lock()
@@ -587,7 +620,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		c.mu.Unlock()
 	case "input":
 		run, startedBy, err := s.store.RunByID(msg.RunID)
-		if err != nil || startedBy != c.user.ID {
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
 			return
 		}
@@ -598,9 +631,60 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.input", RunID: msg.RunID, Data: msg.Data}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
 		}
+	case "prompt":
+		run, startedBy, err := s.store.RunByID(msg.RunID)
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
+			return
+		}
+		if run.Mode != protocol.ModeStructured {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run is not in structured mode"})
+			return
+		}
+		if run.LeaseDeviceID != c.device.ID {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
+			return
+		}
+		if strings.TrimSpace(msg.Text) == "" {
+			return
+		}
+		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.prompt", RunID: msg.RunID, Message: msg.Text}); err != nil {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
+		}
+	case "approval":
+		run, startedBy, err := s.store.RunByID(msg.RunID)
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
+			return
+		}
+		if run.LeaseDeviceID != c.device.ID {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
+			return
+		}
+		if msg.Decision != "once" && msg.Decision != "reject" {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "invalid approval decision"})
+			return
+		}
+		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.approval", RunID: msg.RunID, ApprovalID: msg.ApprovalID, Decision: msg.Decision}); err != nil {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
+		}
+		s.audit(c.user.Username, "approval.answered", map[string]string{"run_id": msg.RunID, "approval_id": msg.ApprovalID, "decision": msg.Decision})
+	case "interrupt":
+		run, startedBy, err := s.store.RunByID(msg.RunID)
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
+			return
+		}
+		if run.LeaseDeviceID != c.device.ID {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
+			return
+		}
+		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.stop", RunID: msg.RunID}); err != nil {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
+		}
 	case "resize":
 		run, startedBy, err := s.store.RunByID(msg.RunID)
-		if err != nil || startedBy != c.user.ID {
+		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
 			return
 		}
 		_ = s.sendHost(run.HostID, protocol.Envelope{Type: "run.resize", RunID: msg.RunID, Cols: msg.Cols, Rows: msg.Rows})
@@ -620,7 +704,7 @@ func (c *clientConn) push(msg protocol.ServerEnvelope) {
 }
 
 func (s *Server) broadcast(msg protocol.ServerEnvelope) {
-	if msg.RunID != "" && msg.Type == "run.output" {
+	if msg.RunID != "" && (msg.Type == "run.output" || msg.Type == "run.event") {
 		s.mu.RLock()
 		clients := make([]*clientConn, 0, len(s.clients))
 		for c := range s.clients {
@@ -653,10 +737,12 @@ type runChunk struct {
 }
 
 type runState struct {
-	mu     sync.Mutex
-	state  string
-	chunks []runChunk
-	bytes  int
+	mu       sync.Mutex
+	state    string
+	chunks   []runChunk
+	bytes    int
+	events   []protocol.RunEvent
+	eventSeq uint64
 }
 
 func (s *Server) runState(id string) *runState {
@@ -683,6 +769,32 @@ func (s *Server) setRunState(id, state string) {
 			s.store.SetSessionState(sess.SessionID, protocol.StateIdle)
 		}
 	}
+}
+
+func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
+	rs := s.runState(runID)
+	rs.mu.Lock()
+	rs.eventSeq++
+	ev.Seq = rs.eventSeq
+	ev.RunID = runID
+	rs.events = append(rs.events, ev)
+	if len(rs.events) > 500 {
+		rs.events = rs.events[len(rs.events)-500:]
+	}
+	rs.mu.Unlock()
+
+	if ev.Type == "run.state" && ev.State != "" {
+		s.store.UpdateRunState(runID, ev.State)
+		if run, _, err := s.store.RunByID(runID); err == nil && run.SessionID != "" {
+			switch ev.State {
+			case protocol.StateRunning, protocol.StateWaiting:
+				s.store.SetSessionState(run.SessionID, protocol.StateRunning)
+			case protocol.StateIdle, protocol.StateCompleted, protocol.StateExited, protocol.StateFailed:
+				s.store.SetSessionState(run.SessionID, protocol.StateIdle)
+			}
+		}
+	}
+	s.broadcast(protocol.ServerEnvelope{Type: "run.event", RunID: runID, Seq: ev.Seq, Event: &ev})
 }
 
 func (s *Server) appendRunOutput(runID string, seq uint64, data []byte) {

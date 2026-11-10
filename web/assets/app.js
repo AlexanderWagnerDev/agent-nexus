@@ -198,6 +198,7 @@ const navItems = [
   ['#/sessions', 'Sessions', '▦', 'sessions'],
   ['#/search', 'Search', '⌕', 'search'],
   ['#/devices', 'Devices', '◉', 'devices'],
+  ['#/users', 'Users', '♟', 'users'],
   ['#/audit', 'Audit', '☰', 'audit'],
 ];
 
@@ -247,6 +248,7 @@ function activeFromHash() {
   if (h.startsWith('#/sessions') || h.startsWith('#/runs')) return 'sessions';
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/devices')) return 'devices';
+  if (h.startsWith('#/users')) return 'users';
   if (h.startsWith('#/audit')) return 'audit';
   return 'overview';
 }
@@ -371,6 +373,7 @@ async function route() {
     if (hash.startsWith('#/runs/')) return await pageRun(hash.split('/')[2]);
     if (hash.startsWith('#/search')) return await pageSearch();
     if (hash.startsWith('#/devices')) return await pageDevices();
+    if (hash.startsWith('#/users')) return await pageUsers();
     if (hash.startsWith('#/audit')) return await pageAudit();
     return await pageOverview();
   } catch (err) {
@@ -458,10 +461,12 @@ async function pageHosts() {
       </div>
       <div class="split wrap">
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>New session</button>
+        <button class="btn small" data-share-host="${esc(h.id)}">Share</button>
         <button class="btn small danger" data-revoke-host="${esc(h.id)}">Revoke</button>
       </div>
     </div>`).join('')}</div>`;
   view.querySelectorAll('[data-new-session]').forEach((b) => b.addEventListener('click', () => newSessionDialog(hosts.find((h) => h.id === b.dataset.newSession))));
+  view.querySelectorAll('[data-share-host]').forEach((b) => b.addEventListener('click', () => shareHostDialog(hosts.find((h) => h.id === b.dataset.shareHost))));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {
     confirmDanger('Revoking this host closes its connection and fails active runs. The daemon must be paired again.', async () => {
       await api(`/hosts/${b.dataset.revokeHost}`, { method: 'DELETE' });
@@ -571,10 +576,12 @@ async function pageSession(id) {
   const s = await api(`/sessions/${id}`);
   setPage(s.title || 'Session', `${s.host_name} · ${s.agent} · ${s.cwd || 'unknown directory'}`, `
     <button class="btn small" id="resume-session">Resume terminal</button>
+    ${s.agent === 'opencode' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
     ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
     <a class="btn small ghost" href="#/sessions">Back</a>`);
-  document.getElementById('resume-session').addEventListener('click', () => startRun(s, false));
-  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true));
+  document.getElementById('resume-session').addEventListener('click', () => startRun(s, false, 'terminal'));
+  document.getElementById('structured-session')?.addEventListener('click', () => startRun(s, false, 'structured'));
+  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
   view.innerHTML = `
     <div class="card mb-2">
       <div class="split wrap">
@@ -613,10 +620,10 @@ function renderMessage(m) {
   return `<div class="msg ${esc(m.role)}"><div class="role">${esc(m.role)}</div><div class="body">${esc(m.text || '')}</div></div>`;
 }
 
-async function startRun(session, fork) {
+async function startRun(session, fork, mode = 'terminal') {
   try {
     const run = await api(`/sessions/${session.id}/runs`, { method: 'POST', body: {
-      mode: 'terminal', fork: Boolean(fork), cols: 120, rows: 32,
+      mode, fork: Boolean(fork), cols: 120, rows: 32,
     } });
     location.hash = `#/runs/${run.id}`;
   } catch (err) {
@@ -681,6 +688,11 @@ async function pageDevices() {
         ${state.me.totp_enabled ? badge('enabled', 'online') : '<button class="btn" id="totp-begin">Set up authenticator</button>'}
       </div>
     </div>
+    <div class="card mt-2">
+      <h2 class="mt-0">Web Push notifications</h2>
+      <p class="hint">Content-free alerts for run completion and approval requests. The payload never contains transcript text, commands or file paths.</p>
+      <div id="push-area"><button class="btn" id="enable-push">Enable notifications</button></div>
+    </div>
     <p class="small muted mt-2">Passkeys/WebAuthn are on the roadmap; this release uses Argon2id passwords and optional TOTP. Session cookies are HttpOnly, SameSite=Strict and Secure when TLS is configured.</p>`;
   view.querySelectorAll('[data-revoke-device]').forEach((b) => b.addEventListener('click', () => {
     confirmDanger('Revoking this device ends all of its signed-in sessions.', async () => {
@@ -689,6 +701,15 @@ async function pageDevices() {
       pageDevices();
     });
   }));
+  document.getElementById('enable-push')?.addEventListener('click', async () => {
+    try {
+      await enablePush();
+      document.getElementById('push-area').innerHTML = badge('enabled on this device', 'online');
+      toast('Push notifications enabled');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
   document.getElementById('totp-begin')?.addEventListener('click', async () => {
     try {
       const data = await api('/auth/totp/begin', { method: 'POST' });
@@ -715,6 +736,91 @@ async function pageDevices() {
   });
 }
 
+async function pageUsers() {
+  renderShell('users');
+  const view = setPage('Users', 'Hub roles and per-host permissions. Per-host grants are the unit of least privilege; host policy is still enforced separately.');
+  const data = await api('/users');
+  const isOwner = state.me.role === 'owner';
+  view.innerHTML = `
+    <div class="table-wrap">
+      <table><thead><tr><th>User</th><th>Role</th><th>Created</th></tr></thead><tbody>
+      ${data.users.map((u) => `<tr>
+        <td><b>${esc(u.username)}</b>${u.id === state.me.id ? ' <span class="badge online">you</span>' : ''}<div class="mono-small">${esc(shortId(u.id))}</div></td>
+        <td>${isOwner && u.id !== state.me.id ? `<select class="select" data-role-user="${esc(u.id)}">${['admin','member','viewer'].map((r) => `<option ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select>` : esc(u.role || '—')}</td>
+        <td>${esc(fmtTime(u.created_at))}</td>
+      </tr>`).join('')}</tbody></table>
+    </div>
+    ${isOwner ? `<div class="card mt-3">
+      <h2 class="mt-0">Add a user</h2>
+      <p class="hint">The new user signs in with this password and can change roles only through an owner. TOTP can be enrolled after their first login.</p>
+      <form class="form" id="create-user-form">
+        <div class="form-row">
+          <label class="label">Username<input class="input" name="username" required minlength="3"></label>
+          <label class="label">Password<input class="input" name="password" type="password" required minlength="10"></label>
+          <label class="label">Role<select class="select" name="role"><option>member</option><option>viewer</option><option>admin</option></select></label>
+        </div>
+        <div><button class="btn primary" type="submit">Create user</button></div>
+      </form>
+    </div>` : ''}`;
+  view.querySelectorAll('[data-role-user]').forEach((sel) => sel.addEventListener('change', async () => {
+    try {
+      await api(`/users/${sel.dataset.roleUser}`, { method: 'PATCH', body: { role: sel.value } });
+      toast('Role updated');
+    } catch (err) { toast(err.message, true); pageUsers(); }
+  }));
+  document.getElementById('create-user-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    try {
+      await api('/users', { method: 'POST', body: {
+        username: form.get('username'), password: form.get('password'), role: form.get('role'),
+      } });
+      toast('User created');
+      pageUsers();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+async function shareHostDialog(host) {
+  const [users, grants] = await Promise.all([api('/users'), api(`/hosts/${host.id}/grants`)]);
+  const byUser = new Map(grants.grants.map((g) => [g.user_id, g.permissions.split(',')]));
+  const permissions = ['view','read_transcript','resume','create','fork','terminal_input','approve','manage'];
+  modal(`
+    <h2>Share ${esc(host.name)}</h2>
+    <p class="hint">The hub grant is only one gate; the host policy still decides which agents, roots and actions are allowed.</p>
+    <div class="form">
+      <label class="label">User<select class="select" id="share-user">${users.users.map((u) => `<option value="${esc(u.id)}">${esc(u.username)}${u.id === state.me.id ? ' (you)' : ''}</option>`).join('')}</select></label>
+      <div class="grid cols-2">${permissions.map((p) => `<label class="split small"><input type="checkbox" data-perm="${p}"> ${p.replaceAll('_',' ')}</label>`).join('')}</div>
+      <div class="modal-actions">
+        <button class="btn danger" type="button" id="remove-grant">Remove access</button>
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" type="button" id="save-grant">Save grant</button>
+      </div>
+    </div>`);
+  const select = document.getElementById('share-user');
+  const setChecks = () => {
+    const current = byUser.get(select.value) || [];
+    document.querySelectorAll('[data-perm]').forEach((cb) => { cb.checked = current.includes(cb.dataset.perm); });
+  };
+  select.addEventListener('change', setChecks);
+  setChecks();
+  document.getElementById('save-grant').addEventListener('click', async () => {
+    const selected = [...document.querySelectorAll('[data-perm]:checked')].map((cb) => cb.dataset.perm);
+    try {
+      await api(`/hosts/${host.id}/grants/${select.value}`, { method: 'PUT', body: { permissions: selected } });
+      toast('Grant saved');
+      closeModal();
+    } catch (err) { toast(err.message, true); }
+  });
+  document.getElementById('remove-grant').addEventListener('click', async () => {
+    try {
+      await api(`/hosts/${host.id}/grants/${select.value}`, { method: 'DELETE' });
+      toast('Grant removed');
+      closeModal();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
 async function pageAudit() {
   renderShell('audit');
   const view = setPage('Audit log', 'Append-only, hash-chained security events stored on the hub.');
@@ -732,10 +838,228 @@ async function pageAudit() {
     </table></div>`;
 }
 
+async function pageStructuredRun(id, run) {
+  setPage('Structured chat', `run ${shortId(run.id)} · ${run.mode} mode`, `<button class="btn small danger" id="stop-run">Stop run</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="card mb-2">
+      <div class="run-head">
+        <div class="split wrap"><span id="chat-state" class="badge running">running</span>${agentBadge(run.agent || 'opencode')}<span class="mono-small">host ${esc(shortId(run.host_id))}</span></div>
+        <div class="small muted" id="run-note">Connecting...</div>
+      </div>
+      <div class="notice info small">Structured mode drives OpenCode's own local server. Tool approvals are forwarded here; the native session stays resumable in the terminal.</div>
+    </div>
+    <div id="approval-banner"></div>
+    <div class="chat" id="chat"><div class="chat-empty" id="chat-empty">Send a prompt to continue this native session.</div></div>
+    <form class="prompt-bar" id="prompt-form">
+      <textarea class="input" id="prompt-text" rows="2" placeholder="Ask the agent to continue... (Ctrl+Enter to send)"></textarea>
+      <div class="prompt-actions">
+        <button class="btn primary" type="submit" id="send-prompt">Send</button>
+        <button class="btn" type="button" id="interrupt-run">Interrupt</button>
+      </div>
+    </form>`;
+  const chat = document.getElementById('chat');
+  const empty = document.getElementById('chat-empty');
+  const stateBadge = document.getElementById('chat-state');
+  const note = document.getElementById('run-note');
+  const banner = document.getElementById('approval-banner');
+  const form = document.getElementById('prompt-form');
+  const textarea = document.getElementById('prompt-text');
+  const assistantBodies = new Map();
+  const toolCards = new Map();
+  let lastSeq = 0;
+  let subscribedGen = 0;
+  let currentAssistant = '';
+
+  const scroll = () => { chat.scrollTop = chat.scrollHeight; };
+  const setState = (state) => {
+    run.state = state;
+    stateBadge.textContent = (state || 'unknown').replaceAll('_', ' ');
+    stateBadge.className = 'badge ' + (state || 'unknown');
+  };
+  const appendUser = (text) => {
+    empty?.remove();
+    const node = document.createElement('div');
+    node.className = 'chat-msg user';
+    node.innerHTML = '<div class="chat-role">you</div><div class="chat-body"></div>';
+    node.querySelector('.chat-body').textContent = text;
+    chat.appendChild(node);
+    scroll();
+  };
+  const assistantBody = (messageID) => {
+    const key = messageID || 'assistant';
+    if (assistantBodies.has(key)) return assistantBodies.get(key);
+    empty?.remove();
+    const node = document.createElement('div');
+    node.className = 'chat-msg assistant';
+    node.innerHTML = '<div class="chat-role">agent</div><div class="chat-body"></div>';
+    chat.appendChild(node);
+    const body = node.querySelector('.chat-body');
+    assistantBodies.set(key, body);
+    return body;
+  };
+  const appendAssistantText = (messageID, text, replace = false) => {
+    const body = assistantBody(messageID);
+    if (replace) body.textContent = text;
+    else body.textContent += text;
+    scroll();
+  };
+  const toolCard = (callID, name, input) => {
+    const key = callID || ('tool-' + Math.random());
+    if (toolCards.has(key)) return toolCards.get(key);
+    empty?.remove();
+    const details = document.createElement('details');
+    details.className = 'tool chat-tool';
+    details.open = true;
+    details.innerHTML = `<summary><strong>${esc(name || 'tool')}</strong><span class="muted">${esc((input || '').slice(0, 120))}</span></summary><pre class="tool-input"></pre><pre class="tool-output"></pre>`;
+    details.querySelector('.tool-input').textContent = input || '';
+    chat.appendChild(details);
+    const rec = { node: details, input: details.querySelector('.tool-input'), output: details.querySelector('.tool-output') };
+    toolCards.set(key, rec);
+    scroll();
+    return rec;
+  };
+  const showApproval = (ev) => {
+    const resources = (ev.resources || []).join('\n');
+    banner.innerHTML = `<div class="approval-card">
+      <div class="split"><strong>Approval needed</strong><span class="badge waiting_for_input">${esc(ev.action || 'permission')}</span></div>
+      <pre>${esc(resources || ev.text || '')}</pre>
+      <div class="split"><button class="btn primary small" id="approve-once">Allow once</button><button class="btn danger small" id="deny-once">Deny</button></div>
+    </div>`;
+    document.getElementById('approve-once').onclick = () => {
+      wsSend({ type: 'approval', run_id: id, approval_id: ev.approval_id, decision: 'once' });
+      banner.innerHTML = '';
+    };
+    document.getElementById('deny-once').onclick = () => {
+      wsSend({ type: 'approval', run_id: id, approval_id: ev.approval_id, decision: 'reject' });
+      banner.innerHTML = '';
+    };
+    note.textContent = 'Waiting for your approval';
+    scroll();
+  };
+  const handleEvent = (ev) => {
+    if (!ev || (ev.seq && ev.seq <= lastSeq)) return;
+    if (ev.seq) lastSeq = Math.max(lastSeq, ev.seq);
+    switch (ev.type) {
+      case 'message.started':
+        currentAssistant = ev.message_id || currentAssistant;
+        assistantBody(ev.message_id);
+        break;
+      case 'message.delta':
+        currentAssistant = ev.message_id || currentAssistant;
+        appendAssistantText(ev.message_id, ev.text || '');
+        break;
+      case 'message.completed':
+        appendAssistantText(ev.message_id, ev.text || '', true);
+        break;
+      case 'reasoning':
+        if (ev.text) {
+          const details = document.createElement('details');
+          details.className = 'tool chat-tool';
+          details.innerHTML = `<summary><strong>reasoning</strong></summary><pre></pre>`;
+          details.querySelector('pre').textContent = ev.text;
+          chat.appendChild(details);
+          scroll();
+        }
+        break;
+      case 'tool.started': {
+        const rec = toolCard(ev.call_id, ev.tool_name, ev.tool_input);
+        if (ev.tool_input) rec.input.textContent = ev.tool_input;
+        break;
+      }
+      case 'tool.input': {
+        const rec = toolCard(ev.call_id, ev.tool_name, '');
+        rec.input.textContent = ev.tool_input || '';
+        break;
+      }
+      case 'tool.completed': {
+        const rec = toolCard(ev.call_id, 'tool', '');
+        rec.output.textContent = ev.error ? ('error: ' + ev.error) : (ev.tool_output || '');
+        rec.node.querySelector('summary').innerHTML = `<strong>${esc(ev.error ? 'tool failed' : 'tool completed')}</strong>`;
+        break;
+      }
+      case 'approval.requested':
+        showApproval(ev);
+        break;
+      case 'approval.resolved':
+        banner.innerHTML = '';
+        note.textContent = 'Approval resolved: ' + (ev.decision || '');
+        break;
+      case 'run.state':
+        setState(ev.state);
+        note.textContent = ev.state === 'idle' ? 'Agent is idle — you can send another prompt.' : `state: ${ev.state}`;
+        break;
+      case 'run.error':
+        setState('failed');
+        note.textContent = ev.error || 'run failed';
+        break;
+    }
+  };
+
+  const handler = (msg) => {
+    if (msg.run_id !== id && msg.type !== 'ready') return;
+    if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
+    if (msg.type === 'run.state') setState(msg.state);
+    if (msg.type === 'run.exit') {
+      setState(msg.state || 'exited');
+      note.textContent = msg.message || 'run exited';
+    }
+    if (msg.type === 'error') toast(msg.error || 'error', true);
+  };
+  state.wsHandlers.add(handler);
+  const sendSubscribe = () => {
+    if (wsSend({ type: 'subscribe', run_id: id, last_seq: lastSeq })) subscribedGen = state.wsGen;
+  };
+  sendSubscribe();
+  const timer = setInterval(() => {
+    if (!state.me) { clearInterval(timer); return; }
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      if (subscribedGen !== state.wsGen) sendSubscribe();
+      note.textContent = note.textContent === 'Connecting...' ? 'Connected. Send a prompt.' : note.textContent;
+    }
+  }, 500);
+
+  api(`/runs/${id}/lease`, { method: 'POST' }).catch((err) => { note.textContent = 'Read-only: ' + err.message; });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const text = textarea.value.trim();
+    if (!text) return;
+    if (!wsSend({ type: 'prompt', run_id: id, text })) {
+      toast('WebSocket is reconnecting; try again in a moment', true);
+      return;
+    }
+    appendUser(text);
+    textarea.value = '';
+    setState('running');
+  });
+  textarea.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  document.getElementById('interrupt-run').addEventListener('click', () => {
+    wsSend({ type: 'interrupt', run_id: id });
+    note.textContent = 'Interrupt requested';
+  });
+  document.getElementById('stop-run').addEventListener('click', async () => {
+    try { await api(`/runs/${id}/stop`, { method: 'POST' }); toast('Stopping run'); }
+    catch (err) { toast(err.message, true); }
+  });
+
+  state.pageCleanup = () => {
+    clearInterval(timer);
+    state.wsHandlers.delete(handler);
+  };
+  textarea.focus();
+}
+
 async function pageRun(id) {
   renderShell('sessions');
   const run = await api(`/runs/${id}`);
   state.run = run;
+  if (run.mode === 'structured') return pageStructuredRun(id, run);
   setPage('Terminal', `run ${shortId(run.id)} · ${run.mode} mode`, `<button class="btn small danger" id="stop-run">Stop run</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
   const view = document.getElementById('view');
   view.innerHTML = `
@@ -871,7 +1195,36 @@ async function pageRun(id) {
 
 /* ---------- boot ---------- */
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+async function enablePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    throw new Error('Push is not supported by this browser');
+  }
+  const registration = await navigator.serviceWorker.register('/sw.js');
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Notification permission was not granted');
+  const key = await api('/push/key');
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(key.public_key),
+  });
+  const json = subscription.toJSON();
+  await api('/push/subscribe', { method: 'POST', body: {
+    endpoint: json.endpoint,
+    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+  } });
+}
+
 async function boot() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   try {
     const status = await api('/setup/status', { allow401: true });
     state.setupRequired = status.setup_required;

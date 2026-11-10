@@ -126,7 +126,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		if s.cookieSecure() {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
@@ -364,7 +364,7 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
-	hosts, err := s.store.ListHosts(u.ID)
+	hosts, err := s.store.ListHosts(u.ID, isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -440,7 +440,11 @@ func (s *Server) handlePairHost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	id := r.PathValue("id")
-	if err := s.store.RevokeHost(u.ID, id); err != nil {
+	if !s.hostPermission(u, id, "manage") {
+		writeError(w, http.StatusForbidden, "host manage permission required")
+		return
+	}
+	if err := s.store.RevokeHostByID(id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -454,7 +458,7 @@ func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	q := r.URL.Query()
-	sessions, err := s.store.ListSessions(u.ID, q.Get("host"), q.Get("agent"), q.Get("project"), q.Get("state"), q.Get("q"), atoiOr(q.Get("limit"), 100))
+	sessions, err := s.store.ListSessions(u.ID, q.Get("host"), q.Get("agent"), q.Get("project"), q.Get("state"), q.Get("q"), atoiOr(q.Get("limit"), 100), isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -464,9 +468,13 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
-	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"))
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
 		return
 	}
 	writeJSON(w, http.StatusOK, sess)
@@ -474,9 +482,13 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
-	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"))
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "read_transcript") {
+		writeError(w, http.StatusForbidden, "read_transcript permission required")
 		return
 	}
 	if !s.hostOnline(sess.HostID) {
@@ -511,7 +523,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "query must be at least 2 characters")
 		return
 	}
-	hosts, err := s.store.ListHosts(u.ID)
+	hosts, err := s.store.ListHosts(u.ID, isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -585,9 +597,13 @@ type runRequest struct {
 
 func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
-	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"))
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "resume") {
+		writeError(w, http.StatusForbidden, "resume permission required")
 		return
 	}
 	if !s.hostOnline(sess.HostID) {
@@ -599,11 +615,15 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
+	if req.Fork && !s.sessionPermission(u, sess, "fork") {
+		writeError(w, http.StatusForbidden, "fork permission required")
+		return
+	}
 	if req.Mode == "" {
 		req.Mode = protocol.ModeTerminal
 	}
-	if req.Mode != protocol.ModeTerminal {
-		writeError(w, http.StatusNotImplemented, "structured mode is not available in this release")
+	if req.Mode != protocol.ModeTerminal && req.Mode != protocol.ModeStructured {
+		writeError(w, http.StatusBadRequest, "unknown run mode")
 		return
 	}
 	if req.Cols <= 0 {
@@ -629,6 +649,10 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "host not found")
 		return
 	}
+	if !s.hostPermission(u, hostID, "create") {
+		writeError(w, http.StatusForbidden, "create permission required")
+		return
+	}
 	if !s.hostOnline(hostID) {
 		writeError(w, http.StatusServiceUnavailable, "host is offline")
 		return
@@ -645,8 +669,8 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	if req.Mode == "" {
 		req.Mode = protocol.ModeTerminal
 	}
-	if req.Mode != protocol.ModeTerminal {
-		writeError(w, http.StatusNotImplemented, "structured mode is not available in this release")
+	if req.Mode != protocol.ModeTerminal && req.Mode != protocol.ModeStructured {
+		writeError(w, http.StatusBadRequest, "unknown run mode")
 		return
 	}
 	if req.Cols <= 0 {
@@ -692,7 +716,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "run not found")
 		return
 	}
-	if startedBy != u.ID {
+	if startedBy != u.ID && !isAdminRole(u.Role) {
 		writeError(w, http.StatusForbidden, "not your run")
 		return
 	}
@@ -702,7 +726,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
-	if err != nil || startedBy != u.ID {
+	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
 		writeError(w, http.StatusNotFound, "run not found")
 		return
 	}
@@ -718,7 +742,7 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLease(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
-	if err != nil || startedBy != u.ID {
+	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
 		writeError(w, http.StatusNotFound, "run not found")
 		return
 	}
@@ -747,6 +771,10 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	broken, _ := s.store.VerifyAudit()
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "broken_seq": broken})
+}
+
+func isAdminRole(role string) bool {
+	return role == "owner" || role == "admin"
 }
 
 func displayTitle(title string) string {

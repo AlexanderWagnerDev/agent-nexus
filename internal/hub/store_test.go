@@ -29,7 +29,7 @@ func TestStoreSessionsAndAudit(t *testing.T) {
 	if err != nil || n != 2 || del != 0 {
 		t.Fatalf("unexpected snapshot result: %d %d %v", n, del, err)
 	}
-	sessions, err := s.ListSessions(u.ID, "", "", "", "", "", 10)
+	sessions, err := s.ListSessions(u.ID, "", "", "", "", "", 10, true)
 	if err != nil {
 		t.Fatal(err)
 	}

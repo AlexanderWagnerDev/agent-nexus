@@ -19,6 +19,8 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Audit | hash-chained append-only table, verification endpoint/UI | no host-local audit file yet |
 | Device revocation | deletes sessions and closes open browser sockets | no push-subscription cleanup (push not implemented) |
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
+| RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
+| Web Push | VAPID, content-free payloads, subscriptions bound to user and device | VAPID private key is stored in `hub.db`; permission is browser-controlled |
 
 
 ## Table of contents

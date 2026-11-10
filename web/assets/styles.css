@@ -256,6 +256,21 @@ details.tool pre { margin: 0; padding: 10px 12px; border-top: 1px solid var(--li
 .keybar button { min-width: 38px; }
 @media (max-width: 900px) { .terminal { height: calc(100vh - 300px); } }
 
+.chat { display: grid; gap: 12px; min-height: 320px; max-height: calc(100vh - 380px); overflow: auto; padding: 4px 2px 12px; }
+.chat-empty { color: var(--muted); text-align: center; padding: 50px 10px; }
+.chat-msg { display: grid; grid-template-columns: 54px 1fr; gap: 12px; }
+.chat-role { color: var(--muted-2); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 6px; text-align: right; }
+.chat-msg.user .chat-role { color: var(--accent); }
+.chat-msg.assistant .chat-role { color: var(--blue); }
+.chat-body { background: var(--bg-elev); border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 20px; }
+.chat-msg.user .chat-body { background: rgba(94, 234, 212, .045); border-color: rgba(94, 234, 212, .16); }
+.chat-tool { margin-left: 66px; }
+.prompt-bar { display: block; margin-top: 12px; }
+.prompt-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.approval-card { border: 1px solid rgba(251, 191, 36, .4); background: rgba(251, 191, 36, .08); border-radius: 12px; padding: 14px; margin-bottom: 14px; display: grid; gap: 10px; }
+.approval-card pre { margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11.5px; color: #f7d27a; }
+@media (max-width: 900px) { .chat { max-height: calc(100vh - 420px); } .chat-msg { grid-template-columns: 42px 1fr; } .chat-tool { margin-left: 54px; } }
+
 .toast-root { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: grid; gap: 8px; }
 .toast { background: var(--bg-elev-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 9px; padding: 10px 14px; box-shadow: var(--shadow); font-size: 12.5px; max-width: 360px; animation: toast-in .18s ease; }
 .toast.error { border-left-color: var(--red); }
