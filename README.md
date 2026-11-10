@@ -2,7 +2,7 @@
 
 A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys with step-up confirmation, Web Push, transcript export, a live multi-run dashboard and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.1.0-rc.1 pre-release.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys with step-up confirmation, Web Push, transcript export, a live multi-run dashboard and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -13,6 +13,24 @@ Developers increasingly run several terminal-based coding agents — Claude Code
 - *How do I continue that exact conversation from my phone or another computer — without breaking it for the native CLI?*
 
 AgentNexus answers these questions with a **self-hosted hub** and a lightweight **host daemon** on each machine. It does not replace the agents and it does not copy or rewrite their histories: it discovers the sessions the agents already store and continues them through each agent's **native resume mechanism**, so every session stays fully usable in the original CLI.
+
+## Screenshots
+
+| Dark | Light |
+| --- | --- |
+| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) |
+| ![Structured chat in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat in light mode](docs/screenshots/chat-light.png) |
+
+| Feature | Preview |
+| --- | --- |
+| Multi-agent dashboard | ![Active runs dashboard](docs/screenshots/multi-agent-dashboard.png) |
+| Settings and themes | ![Settings in light mode](docs/screenshots/settings-light.png) |
+| Mobile | ![Mobile dashboard](docs/screenshots/mobile-dashboard.png) |
+| Sign in | ![Login screen](docs/screenshots/login-light.png) |
+
+The screenshots were captured from a running hub with a paired Windows host and
+a real Codex structured session. They are not mockups. The same UI is used on
+desktop, tablet and phone; the theme is stored per user on the hub.
 
 ## What works today
 
@@ -26,10 +44,12 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
 | **Overview** | Cross-host session list with title, project, agent, state and last activity |
+| **Themes** | Dark, light and system mode; the choice is stored per user on the hub and follows every device |
+| **Sidebar** | Navigation plus live host and recent-chat shortcuts |
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
 | **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
 | **Runs dashboard** | Live view of every active terminal/structured run the user can see, with state updates over the WebSocket |
-| **Search** | Federated search across online hosts; offline hosts are reported, not silently skipped |
+| **Search** | Federated search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
 | **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-agent-acp`) gets the same experience |
 | **Notifications** | Web Push for approvals, completion, failures and host disconnects; content-free payloads |
@@ -53,6 +73,17 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
+
+### Install a release (no build)
+
+Download the latest release binaries or use the multi-arch image:
+
+```bash
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.1.0-rc.1
+```
+
+See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
+Linux and macOS host-client installation. The steps below build from source.
 
 Requirements: Go 1.27+ and Node.js only for the JavaScript syntax check (the browser client is embedded and has no build step).
 
@@ -166,6 +197,8 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 
 | Document | Content |
 | --- | --- |
+| [docs/INSTALL.md](docs/INSTALL.md) | Beginner installation: Docker/Portainer, host clients, pairing, first chat |
+| [docs/ADMIN.md](docs/ADMIN.md) | Day-2 administration: users, grants, host policy, audit, updates, limitations |
 | [docs/PLAN.md](docs/PLAN.md) | Requirements, technical decisions (ADRs), work packages |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, protocols, data model, diagrams |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, priorities, milestones, acceptance criteria |

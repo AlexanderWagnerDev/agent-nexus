@@ -72,6 +72,11 @@ what is actually implemented and tested versus what is still open.
 - Host policy includes `allowed_agents` for new and resumed runs in terminal,
   OpenCode, Codex and ACP modes. Regression tests cover the policy helper; a
   malicious hub cannot bypass it because the check runs on the host.
+- The browser client has dark, light and system themes persisted in
+  `user_settings` on the hub. A Playwright smoke test covers login, themes,
+  navigation and a 390 px mobile viewport in CI.
+- Screenshots in `docs/screenshots/` were captured from a running hub with a
+  real Windows host and Codex structured session; they are not mockups.
 
 
 ## Priorities
