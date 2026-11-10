@@ -94,11 +94,15 @@ func TestCodexAdapter(t *testing.T) {
 
 func TestPolicy(t *testing.T) {
 	root := t.TempDir()
+	inside := filepath.Join(root, "project")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	p := Policy{
 		AllowedRoots:  []string{root},
 		ForbiddenArgs: DefaultForbiddenArgs(),
 	}
-	if !p.WithinRoots(filepath.Join(root, "project")) {
+	if !p.WithinRoots(inside) {
 		t.Fatal("path inside root was rejected")
 	}
 	if p.WithinRoots(filepath.Dir(root)) {
