@@ -29,6 +29,37 @@ flowchart LR
 | [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** 1.0 | **1.0.0** |
 | [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | 1.x |
 
+## Implementation status (2026-11-10)
+
+The repository now contains a runnable 0.1.0 development implementation. The
+acceptance criteria below remain the definition of done; this table records
+what is actually implemented and tested versus what is still open.
+
+| Phase | Status | Implemented | Notable gaps |
+| --- | --- | --- | --- |
+| 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
+| 1 | 🟡 core | Setup, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing, outbound link, reconnect, agent detection, per-user service, `doctor` | Passkeys/WebAuthn, SAS confirmation, step-up auth, Windows per-user service validation |
+| 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, fail-soft parsers | Native-process `active_elsewhere` detection, FTS5 cache, 10k-session performance proof |
+| 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
+| 4 | ❌ | — | Structured mode, approvals, Web Push, QR device pairing |
+| 5 | ❌ | Hash-chained hub audit log, rate limits, security headers | RBAC, signed commands, PostgreSQL, release signing/SBOM, external pentest, load/soak tests |
+| 6 | 🟡 partial | Best-effort Gemini discovery/resume | Generic ACP, native apps, git diff view |
+
+### Honest limitations of the current build
+
+- The browser client is dependency-free ES modules plus vendored xterm.js, not
+  the React app described in ADR-011. See ADR-014.
+- The host link uses JSON envelopes, not Protobuf. See ADR-014.
+- Passwords + optional TOTP are the only login methods; passkeys are not
+  implemented. The TOTP secret is stored in the hub database unencrypted.
+- Structured mode, approvals and push notifications are absent; the `mode`
+  field only accepts `terminal`.
+- Session state is derived from AgentNexus runs and cached metadata; an agent
+  running outside AgentNexus is not yet detected as `active_elsewhere`.
+- Transcript fallback parsers are tolerant but not yet covered by a per-version
+  fixture matrix.
+
+
 ## Priorities
 
 1. **P1 — Native resume of existing sessions (terminal mode)** for Claude Code, Codex CLI and OpenCode on Windows, Linux and macOS — the core value; delivered with MVP 0.1.

@@ -36,6 +36,27 @@ Technical analysis of how AgentNexus discovers existing sessions of each coding 
 
 **Key insight:** All three first-release agents support resuming by native session ID from the command line. This makes **terminal mode** (ADR-003) a robust, vendor-neutral baseline for native continuation that does not depend on any experimental protocol. Structured mode adds a richer UI but relies on interfaces that are partly experimental — hence it is layered on top, not the foundation.
 
+### 1.1 Implementation notes (0.1.0-dev)
+
+Observed against local stores on Windows (2026-11-10), in addition to the
+vendor documentation above:
+
+- **Codex CLI 0.156.x** writes compressed `.jsonl.zst` rollouts. The adapter
+  decompresses them with `klauspost/compress/zstd`; plain `.jsonl` remains
+  supported. Titles are taken from the first meaningful user message, skipping
+  desktop-injected `<recommended_plugins>` blocks.
+- **OpenCode 2.2.x** stores sessions in a SQLite database at the path reported
+  by `opencode debug paths` (`db` line). The adapter opens it read-only and
+  reads `session`, `message` and `part` rows. `opencode session list` is
+  project-scoped, so it is not used for cross-project discovery. The v2 CLI has
+  no `--fork` flag; terminal fork is therefore not offered for OpenCode.
+- **Claude Code** is parsed from `projects/*/*.jsonl` with a tolerant parser;
+  it was fixture-tested rather than exercised against a local installation.
+- **Gemini CLI** discovery is best effort: `~/.gemini/tmp/*/chats/*.json` is
+  project-hash scoped, so the adapter warns that the working directory must be
+  verified before resuming.
+
+
 ## 2. Common adapter contract
 
 ### 2.1 Detection
