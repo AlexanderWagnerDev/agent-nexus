@@ -173,6 +173,11 @@ CREATE TABLE IF NOT EXISTS device_pairings (
   expires_at INTEGER NOT NULL,
   used_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  theme TEXT NOT NULL DEFAULT 'system',
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS host_confirmations (
   host_id TEXT PRIMARY KEY REFERENCES hosts(id) ON DELETE CASCADE,
   sas TEXT NOT NULL,
@@ -500,6 +505,22 @@ func (s *Store) CreateHost(ownerID, name string, publicKey []byte, osName, arch,
 func (s *Store) CreateHostConfirmation(hostID, sas string) error {
 	_, err := s.db.Exec(`INSERT INTO host_confirmations(host_id,sas) VALUES(?,?)
 		ON CONFLICT(host_id) DO UPDATE SET sas=excluded.sas, confirmed_at=NULL`, hostID, sas)
+	return err
+}
+
+func (s *Store) UserTheme(userID string) (string, error) {
+	var theme string
+	err := s.db.QueryRow(`SELECT theme FROM user_settings WHERE user_id=?`, userID).Scan(&theme)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "system", nil
+	}
+	return theme, err
+}
+
+func (s *Store) SetUserTheme(userID, theme string) error {
+	_, err := s.db.Exec(`INSERT INTO user_settings(user_id,theme,updated_at) VALUES(?,?,?)
+		ON CONFLICT(user_id) DO UPDATE SET theme=excluded.theme, updated_at=excluded.updated_at`,
+		userID, theme, ms(time.Now()))
 	return err
 }
 

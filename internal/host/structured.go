@@ -41,6 +41,7 @@ type StructuredRun struct {
 	approvals map[string]*time.Timer
 	closed    bool
 	readyOnce *sync.Once
+	state     string
 }
 
 type toolState struct {
@@ -155,8 +156,8 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	}
 	sr := &StructuredRun{
 		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
-		sessionKey: sessionKey,
-		cmd:        cmd, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
+		sessionKey: sessionKey, state: protocol.StateIdle,
+		cmd: cmd, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
 		client:    &http.Client{Timeout: 30 * time.Second},
 		readyOnce: new(sync.Once),
 	}
@@ -424,8 +425,22 @@ func (r *StructuredRun) streamEvents(ctx context.Context) {
 	}
 }
 
+func (r *StructuredRun) currentState() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state == "" {
+		return protocol.StateIdle
+	}
+	return r.state
+}
+
 func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
 	send := func(ev protocol.RunEvent) {
+		if ev.Type == "run.state" {
+			r.mu.Lock()
+			r.state = ev.State
+			r.mu.Unlock()
+		}
 		ev.RunID = r.id
 		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 	}

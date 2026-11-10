@@ -306,6 +306,39 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"username": user.Username, "role": user.Role})
 }
 
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	theme, err := s.store.UserTheme(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"theme": theme})
+}
+
+func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	var req struct {
+		Theme string `json:"theme"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	switch req.Theme {
+	case "system", "dark", "light":
+	default:
+		writeError(w, http.StatusBadRequest, "theme must be system, dark or light")
+		return
+	}
+	if err := s.store.SetUserTheme(u.ID, req.Theme); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "user.settings_updated", map[string]string{"theme": req.Theme})
+	writeJSON(w, http.StatusOK, map[string]string{"theme": req.Theme})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if token := tokenFrom(r); token != "" {
 		_ = s.store.RevokeSession(token)
@@ -655,6 +688,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				seen[key] = true
+				hit.HostID = res.hostID
+				hit.HostName = res.host
 				hit.Title = displayTitle(hit.Title)
 				hit.Snippet = strings.TrimSpace(hit.Snippet)
 				if id, err := s.store.SessionIDForNative(res.hostID, hit.Agent, hit.NativeID); err == nil {

@@ -38,6 +38,7 @@ type ACPRun struct {
 	turnID        string
 	thought       strings.Builder
 	lastMessageID string
+	state         string
 	active        bool
 	closed        bool
 }
@@ -146,7 +147,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	ar := &ACPRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, cwd: cwd,
 		daemon: d, cmd: cmd, stdin: stdin, cancel: cancel,
-		approvals: map[string]chan string{},
+		approvals: map[string]chan string{}, state: protocol.StateIdle,
 	}
 	ar.conn = acp.NewClientSideConnection(ar, stdin, stdout)
 	go func() {
@@ -218,7 +219,21 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	}()
 }
 
+func (r *ACPRun) currentState() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state == "" {
+		return protocol.StateIdle
+	}
+	return r.state
+}
+
 func (r *ACPRun) send(ev protocol.RunEvent) {
+	if ev.Type == "run.state" {
+		r.mu.Lock()
+		r.state = ev.State
+		r.mu.Unlock()
+	}
 	ev.RunID = r.id
 	_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 }

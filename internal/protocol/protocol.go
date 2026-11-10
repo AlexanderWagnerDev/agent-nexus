@@ -96,6 +96,8 @@ type Transcript struct {
 // SearchHit is one federated search result from a host.
 type SearchHit struct {
 	SessionID string    `json:"session_id,omitempty"`
+	HostID    string    `json:"host_id,omitempty"`
+	HostName  string    `json:"host_name,omitempty"`
 	NativeID  string    `json:"native_id"`
 	Agent     string    `json:"agent"`
 	Title     string    `json:"title"`

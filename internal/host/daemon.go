@@ -221,17 +221,17 @@ func (d *Daemon) sendActiveRuns() error {
 	}
 	for _, r := range d.structured {
 		runs = append(runs, protocol.RunInfo{
-			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: protocol.StateRunning,
+			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: r.currentState(),
 		})
 	}
 	for _, r := range d.codexRuns {
 		runs = append(runs, protocol.RunInfo{
-			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: protocol.StateRunning,
+			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: r.currentState(),
 		})
 	}
 	for _, r := range d.acpRuns {
 		runs = append(runs, protocol.RunInfo{
-			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: protocol.StateRunning,
+			RunID: r.id, Agent: r.agent, Mode: protocol.ModeStructured, State: r.currentState(),
 		})
 	}
 	d.runMu.Unlock()

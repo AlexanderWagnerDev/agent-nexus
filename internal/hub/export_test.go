@@ -7,6 +7,25 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+func TestUserTheme(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	theme, err := s.UserTheme(u.ID)
+	if err != nil || theme != "system" {
+		t.Fatalf("default theme = %q %v", theme, err)
+	}
+	if err := s.SetUserTheme(u.ID, "light"); err != nil {
+		t.Fatal(err)
+	}
+	if theme, err = s.UserTheme(u.ID); err != nil || theme != "light" {
+		t.Fatalf("stored theme = %q %v", theme, err)
+	}
+}
+
 func TestActiveRunsForUser(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")
 	if err != nil {

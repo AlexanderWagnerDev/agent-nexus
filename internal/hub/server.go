@@ -93,6 +93,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("POST /api/v1/auth/logout", s.requireAuth(s.handleLogout))
 	mux.HandleFunc("GET /api/v1/me", s.requireAuth(s.handleMe))
+	mux.HandleFunc("GET /api/v1/me/settings", s.requireAuth(s.handleGetSettings))
+	mux.HandleFunc("PUT /api/v1/me/settings", s.requireAuth(s.handlePutSettings))
 	mux.HandleFunc("GET /api/v1/auth/step-up", s.requireAuth(s.handleStepUpStatus))
 	mux.HandleFunc("POST /api/v1/auth/step-up/begin", s.requireAuth(s.handleStepUpBegin))
 	mux.HandleFunc("POST /api/v1/auth/step-up/passkey", s.requireAuth(s.handleStepUpPasskeyFinish))
@@ -294,8 +296,12 @@ func (s *Server) adoptHostRuns(hostID string, reported []protocol.RunInfo) {
 		if err != nil || run.HostID != hostID {
 			continue
 		}
-		s.setRunState(info.RunID, protocol.StateRunning)
-		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: protocol.StateRunning})
+		state := info.State
+		if state == "" {
+			state = protocol.StateRunning
+		}
+		s.setRunState(info.RunID, state)
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: state})
 	}
 	active, _ := s.store.ActiveRuns(hostID)
 	for _, run := range active {

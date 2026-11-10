@@ -35,6 +35,7 @@ type CodexRun struct {
 	approvals map[int64]string
 	nextID    int64
 	closed    bool
+	state     string
 }
 
 type codexEvent struct {
@@ -150,7 +151,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	cr := &CodexRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: "codex", cwd: cwd,
 		daemon: d, cmd: cmd, stdin: stdin, cancel: cancel,
-		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{},
+		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, state: protocol.StateIdle,
 	}
 	go cr.readLoop(stdout)
 	go func() {
@@ -402,11 +403,25 @@ func (r *CodexRun) handleServerRequest(id int64, method string, params json.RawM
 	_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 }
 
+func (r *CodexRun) currentState() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state == "" {
+		return protocol.StateIdle
+	}
+	return r.state
+}
+
 func (r *CodexRun) handleNotification(method string, params json.RawMessage) {
 	r.daemon.log.Debug("codex event", "run_id", r.id, "type", method)
 	var p map[string]any
 	_ = json.Unmarshal(params, &p)
 	send := func(ev protocol.RunEvent) {
+		if ev.Type == "run.state" {
+			r.mu.Lock()
+			r.state = ev.State
+			r.mu.Unlock()
+		}
 		ev.RunID = r.id
 		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 	}

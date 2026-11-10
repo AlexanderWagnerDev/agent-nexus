@@ -7,6 +7,7 @@ const state = {
   me: null,
   setupRequired: false,
   hubName: 'AgentNexus',
+  settings: { theme: 'system' },
   ws: null,
   wsRetry: 1000,
   wsGen: 0,
@@ -210,9 +211,7 @@ const navItems = [
   ['#/sessions', 'Sessions', '▦', 'sessions'],
   ['#/runs', 'Runs', '▶', 'runs'],
   ['#/search', 'Search', '⌕', 'search'],
-  ['#/devices', 'Devices', '◉', 'devices'],
-  ['#/users', 'Users', '♟', 'users'],
-  ['#/audit', 'Audit', '☰', 'audit'],
+  ['#/settings', 'Settings', '⚙', 'settings'],
 ];
 
 function renderShell(active = 'overview') {
@@ -231,9 +230,13 @@ function renderShell(active = 'overview') {
               <span class="icon" aria-hidden="true">${icon}</span><span>${label}</span>
             </a>`).join('')}
         </nav>
+        <div class="sidebar-extra" id="sidebar-extra"></div>
         <div class="sidebar-foot">
           <div class="user-chip"><span class="avatar">${esc(initials)}</span><span>${esc(state.me.username)}</span></div>
-          <button class="btn ghost small" id="logout">Sign out</button>
+          <div class="split">
+            <button class="btn ghost small" id="theme-toggle" title="Switch theme" aria-label="Switch theme">${themeButtonLabel()}</button>
+            <button class="btn ghost small" id="logout">Sign out</button>
+          </div>
         </div>
       </aside>
       <main class="main">
@@ -245,7 +248,56 @@ function renderShell(active = 'overview') {
       </main>
     </div>`;
   document.getElementById('logout').addEventListener('click', logout);
+  loadSidebar().catch(() => {});
+  state.wsHandlers.add((msg) => {
+    if (msg.type === 'host.updated' || msg.type === 'sessions.changed') loadSidebar().catch(() => {});
+  });
+  document.getElementById('theme-toggle')?.addEventListener('click', async () => {
+    const order = ['system', 'dark', 'light'];
+    const current = state.settings.theme || 'system';
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    try {
+      await saveTheme(next);
+      toast(`Theme: ${next}`);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
   connectWS();
+}
+
+async function loadSidebar() {
+  const box = document.getElementById('sidebar-extra');
+  if (!box) return;
+  try {
+    const [{ hosts }, { sessions }] = await Promise.all([api('/hosts'), api('/sessions?limit=6')]);
+    const hostRows = hosts.slice(0, 6).map((h) => `<a class="side-row" href="#/hosts" title="${esc(h.name)}"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span><span class="truncate">${esc(h.name)}</span></a>`).join('');
+    const chatRows = sessions.slice(0, 6).map((s) => `<a class="side-row" href="#/sessions/${esc(s.id)}" title="${esc(s.title || '')}"><span class="side-agent">${esc((s.agent || '?').slice(0, 1))}</span><span class="truncate">${esc(s.title || 'Untitled session')}</span></a>`).join('');
+    box.innerHTML = `
+      <div class="side-section"><div class="side-head"><span>Hosts</span></div>${hostRows || '<div class="side-empty">No hosts yet</div>'}</div>
+      <div class="side-section"><div class="side-head"><span>Recent chats</span></div>${chatRows || '<div class="side-empty">No sessions yet</div>'}</div>`;
+  } catch { box.innerHTML = ''; }
+}
+
+function themeButtonLabel() {
+  const mode = state.settings.theme || 'system';
+  const icon = mode === 'dark' ? '\u263e' : mode === 'light' ? '\u2600' : '\u25d0';
+  return `${icon} ${mode[0].toUpperCase() + mode.slice(1)}`;
+}
+
+async function saveTheme(theme) {
+  const saved = await api('/me/settings', { method: 'PUT', body: { theme } });
+  state.settings = { ...state.settings, theme: saved.theme };
+  window.NexusTheme?.apply(saved.theme);
+  const button = document.getElementById('theme-toggle');
+  if (button) button.innerHTML = themeButtonLabel();
+}
+
+async function loadUserTheme() {
+  try {
+    state.settings = await api('/me/settings');
+    window.NexusTheme?.apply(state.settings.theme || 'system');
+  } catch { /* keep the local/system theme */ }
 }
 
 function setPage(title, sub = '', actions = '') {
@@ -261,9 +313,8 @@ function activeFromHash() {
   if (h.startsWith('#/sessions')) return 'sessions';
   if (h.startsWith('#/runs')) return 'runs';
   if (h.startsWith('#/search')) return 'search';
-  if (h.startsWith('#/devices')) return 'devices';
-  if (h.startsWith('#/users')) return 'users';
-  if (h.startsWith('#/audit')) return 'audit';
+  if (h.startsWith('#/settings')) return 'settings';
+  if (h.startsWith('#/devices') || h.startsWith('#/users') || h.startsWith('#/audit')) return 'settings';
   return 'overview';
 }
 
@@ -309,6 +360,7 @@ function renderAuth(mode, error = '') {
         }, allow401: true });
         state.me = await api('/me');
         state.hubName = state.me.hub_name || state.hubName;
+      await loadUserTheme();
         renderShell('overview');
         await route();
         if (data.totp_secret) {
@@ -350,6 +402,7 @@ function renderAuth(mode, error = '') {
       await passkeyLogin(username);
       state.me = await api('/me');
       state.hubName = state.me.hub_name || state.hubName;
+      await loadUserTheme();
       renderShell('overview');
       await route();
     } catch (err) {
@@ -369,6 +422,7 @@ function renderAuth(mode, error = '') {
       }, allow401: true });
       state.me = await api('/me');
       state.hubName = state.me.hub_name || state.hubName;
+      await loadUserTheme();
       renderShell('overview');
       await route();
     } catch (err) {
@@ -402,6 +456,7 @@ async function route() {
     if (hash === '#/runs') return await pageRuns();
     if (hash.startsWith('#/runs/')) return await pageRun(hash.split('/')[2]);
     if (hash.startsWith('#/search')) return await pageSearch();
+    if (hash.startsWith('#/settings')) return await pageSettings();
     if (hash.startsWith('#/devices')) return await pageDevices();
     if (hash.startsWith('#/users')) return await pageUsers();
     if (hash.startsWith('#/audit')) return await pageAudit();
@@ -415,12 +470,13 @@ async function route() {
 
 async function pageOverview() {
   renderShell('overview');
-  const view = setPage('Overview', 'All of your coding agents, across every paired machine.', '<a class="btn small" href="#/sessions">All sessions</a>');
+  const view = setPage('Overview', 'All of your coding agents, across every paired machine.', '<button class="btn primary small" id="overview-new">New session</button><a class="btn small" href="#/sessions">All sessions</a>');
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const [{ hosts }, { sessions }] = await Promise.all([
     api('/hosts'),
     api('/sessions?limit=500'),
   ]);
+  document.getElementById('overview-new').addEventListener('click', newSessionPicker);
   const recent = sessions.slice(0, 8);
   const attention = sessions.filter((s) => s.state === 'waiting_for_input' || s.state === 'running');
   const agents = new Set();
@@ -550,14 +606,48 @@ async function pairHostDialog() {
   });
 }
 
+async function newSessionPicker() {
+  try {
+    const { hosts } = await api('/hosts');
+    const online = hosts.filter((h) => h.status === 'online');
+    if (!online.length) {
+      toast('No online host. Pair a host first.', true);
+      return;
+    }
+    if (online.length === 1) {
+      await newSessionDialog(online[0]);
+      return;
+    }
+    modal(`
+      <h2>New session</h2>
+      <p class="hint">Choose the machine that should run the agent.</p>
+      <form class="form" id="host-picker-form">
+        <label class="label">Host<select class="select" name="host">${online.map((h) => `<option value="${esc(h.id)}">${esc(h.name)} ? ${esc(h.os)}/${esc(h.arch)}</option>`).join('')}</select></label>
+        <div class="modal-actions"><button class="btn ghost" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Continue</button></div>
+      </form>`);
+    document.getElementById('host-picker-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const id = new FormData(event.target).get('host');
+      const host = online.find((h) => h.id === id);
+      closeModal();
+      if (host) newSessionDialog(host);
+    });
+  } catch (err) { toast(err.message, true); }
+}
+
 async function newSessionDialog(host) {
   const agents = (host?.agents || []).filter((a) => a.supported);
+  let projects = [];
+  try {
+    const { sessions } = await api(`/sessions?host=${encodeURIComponent(host.id)}&limit=200`);
+    projects = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))].slice(0, 40);
+  } catch { /* the free-text field still works */ }
   modal(`
     <h2>New session on ${esc(host?.name || 'host')}</h2>
     <p class="hint">The agent starts in a directory permitted by the host policy. Permission-bypass flags are rejected on the host.</p>
     <form class="form" id="new-session-form">
       <label class="label">Agent<select class="select" name="agent">${agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)} — ${esc(a.version)}</option>`).join('')}</select></label>
-      <label class="label">Working directory<input class="input" name="cwd" placeholder="C:\\Users\\me\\project or /home/me/project" required></label>
+      <label class="label">Working directory<input class="input" name="cwd" list="project-options" placeholder="C:\\Users\\me\\project or /home/me/project" required><datalist id="project-options">${projects.map((p) => `<option value="${esc(p)}"></option>`).join('')}</datalist></label>
       <div class="notice info">The host enforces its own <code>allowed_roots</code>; a path outside them is rejected even if this form accepts it.</div>
       <div class="modal-actions">
         <button class="btn ghost" type="button" data-close>Cancel</button>
@@ -694,35 +784,115 @@ async function startRun(session, fork, mode = 'terminal') {
 async function pageSearch() {
   renderShell('search');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
-  const q = params.get('q') || '';
+  const initial = params.get('q') || '';
   const view = setPage('Search', 'Federated transcript search runs on each online host. Content is never indexed on the hub.');
   view.innerHTML = `
     <form class="toolbar" id="search-form">
-      <input class="input grow" id="search-q" placeholder="Search all transcripts, e.g. rate limiter" value="${esc(q)}" autofocus>
+      <input class="input grow" id="search-q" placeholder="Search all transcripts, e.g. rate limiter" value="${esc(initial)}" autofocus>
+      <select class="select" id="search-agent" aria-label="Filter by agent"><option value="">All agents</option></select>
+      <select class="select" id="search-host" aria-label="Filter by host"><option value="">All hosts</option></select>
       <button class="btn primary" type="submit">Search</button>
     </form>
-    <div id="search-results">${q ? '<div class="empty"><span class="spinner"></span></div>' : '<div class="card empty"><strong>Search across hosts</strong>Results come from the agent stores; offline hosts are reported, not silently skipped.</div>'}</div>`;
+    <div id="search-results">${initial ? '<div class="empty"><span class="spinner"></span></div>' : '<div class="card empty"><strong>Search across hosts</strong>Results come from the agent stores; offline hosts are reported, not silently skipped.</div>'}</div>`;
+  let data = { results: [], not_searched: {} };
+  const render = () => {
+    const box = document.getElementById('search-results');
+    if (!box) return;
+    const agent = document.getElementById('search-agent').value;
+    const host = document.getElementById('search-host').value;
+    const results = data.results.filter((r) => (!agent || r.agent === agent) && (!host || r.host_name === host));
+    const skipped = Object.keys(data.not_searched || {});
+    box.innerHTML = `
+      ${skipped.length ? `<div class="notice info mb-2">Not searched: ${skipped.map(esc).join(', ')} (offline)</div>` : ''}
+      ${results.length ? `<div class="list">${results.map((r) => {
+        const inner = `<div style="min-width:0"><div class="title">${esc(r.title || 'Untitled session')}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div><div class="right">${agentBadge(r.agent)}${r.host_name ? `<span class="small muted">${esc(r.host_name)}</span>` : ''}<span class="small muted">${fmtRelative(r.at)}</span></div>`;
+        return r.session_id
+          ? `<a class="list-row" href="#/sessions/${esc(r.session_id)}">${inner}</a>`
+          : `<div class="list-row" style="cursor:default">${inner}</div>`;
+      }).join('')}</div>` : `<div class="card empty"><strong>No matches</strong>Try another term, another filter, or check that hosts are online.</div>`}`;
+  };
   const run = async (query) => {
     if (query.length < 2) return;
     history.replaceState(null, '', `#/search?q=${encodeURIComponent(query)}`);
     const box = document.getElementById('search-results');
     box.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-    const data = await api('/search?q=' + encodeURIComponent(query));
-    const skipped = Object.keys(data.not_searched || {});
-    box.innerHTML = `
-      ${skipped.length ? `<div class="notice info mb-2">Not searched: ${skipped.map(esc).join(', ')} (offline)</div>` : ''}
-      ${data.results.length ? `<div class="list">${data.results.map((r) => {
-        const inner = `<div style="min-width:0"><div class="title">${esc(r.title || 'Untitled session')}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div><div class="right">${agentBadge(r.agent)}<span class="small muted">${fmtRelative(r.at)}</span></div>`;
-        return r.session_id
-          ? `<a class="list-row" href="#/sessions/${esc(r.session_id)}">${inner}</a>`
-          : `<div class="list-row" style="cursor:default">${inner}</div>`;
-      }).join('')}</div>` : `<div class="card empty"><strong>No matches</strong>Try another term or check that hosts are online.</div>`}`;
+    data = await api('/search?q=' + encodeURIComponent(query));
+    const agents = [...new Set((data.results || []).map((r) => r.agent).filter(Boolean))].sort();
+    const hosts = [...new Set((data.results || []).map((r) => r.host_name).filter(Boolean))].sort();
+    const agentSelect = document.getElementById('search-agent');
+    const hostSelect = document.getElementById('search-host');
+    const agentValue = agentSelect.value;
+    const hostValue = hostSelect.value;
+    agentSelect.innerHTML = '<option value="">All agents</option>' + agents.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    hostSelect.innerHTML = '<option value="">All hosts</option>' + hosts.map((h) => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
+    agentSelect.value = agents.includes(agentValue) ? agentValue : '';
+    hostSelect.value = hosts.includes(hostValue) ? hostValue : '';
+    render();
   };
+  document.getElementById('search-agent').addEventListener('change', render);
+  document.getElementById('search-host').addEventListener('change', render);
   document.getElementById('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
     run(document.getElementById('search-q').value.trim()).catch((err) => toast(err.message, true));
   });
-  if (q) run(q).catch((err) => toast(err.message, true));
+  if (initial) run(initial).catch((err) => toast(err.message, true));
+}
+
+async function pageSettings() {
+  renderShell('settings');
+  const view = setPage('Settings', 'Appearance, account, notifications and administration.');
+  const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
+  view.innerHTML = `
+    <div class="grid cols-2">
+      <section class="card">
+        <h2 class="mt-0">Appearance</h2>
+        <p class="hint">The theme is stored on the hub for your user and follows you across devices.</p>
+        <div class="theme-choices" role="group" aria-label="Theme">
+          ${[['system', '◐', 'System', 'Follow the operating system'], ['dark', '☾', 'Dark', 'Always dark'], ['light', '☀', 'Light', 'Always light']].map(([value, icon, label, hint]) => `
+            <button type="button" class="theme-choice ${state.settings.theme === value ? 'active' : ''}" data-theme-choice="${value}" aria-pressed="${state.settings.theme === value}">
+              <span class="theme-icon" aria-hidden="true">${icon}</span>
+              <span><strong>${label}</strong><small>${hint}</small></span>
+            </button>`).join('')}
+        </div>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">Account</h2>
+        <div class="list">
+          <div class="list-row"><div><div class="title">${esc(state.me.username)}</div><div class="sub"><span>${esc(state.me.role)}</span><span>${state.me.totp_enabled ? 'TOTP enabled' : 'TOTP not enabled'}</span></div></div></div>
+        </div>
+        <div class="split wrap mt-2">
+          <a class="btn small" href="#/devices">Devices & passkeys</a>
+          <button class="btn small ghost" id="settings-signout">Sign out</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">Notifications</h2>
+        <p class="hint">Content-free Web Push for approvals, completed runs, failures and host disconnects.</p>
+        <div id="settings-push-area"><button class="btn" id="settings-push">Enable on this device</button></div>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${isAdmin ? 'Administration' : 'About'}</h2>
+        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">Users & roles</a><a class="btn small" href="#/audit">Audit log</a><a class="btn small" href="#/devices">All devices</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)}. Sessions stay on your hosts; the hub stores metadata.</p>`}
+      </section>
+    </div>`;
+  view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {
+    try {
+      await saveTheme(button.dataset.themeChoice);
+      view.querySelectorAll('[data-theme-choice]').forEach((other) => {
+        const active = other.dataset.themeChoice === button.dataset.themeChoice;
+        other.classList.toggle('active', active);
+        other.setAttribute('aria-pressed', String(active));
+      });
+    } catch (err) { toast(err.message, true); }
+  }));
+  document.getElementById('settings-signout').addEventListener('click', logout);
+  document.getElementById('settings-push')?.addEventListener('click', async () => {
+    try {
+      await enablePush();
+      document.getElementById('settings-push-area').innerHTML = badge('enabled on this device', 'online');
+      toast('Push notifications enabled');
+    } catch (err) { toast(err.message, true); }
+  });
 }
 
 async function pageDevices() {
@@ -941,7 +1111,7 @@ async function pageStructuredRun(id, run) {
     <div id="approval-banner"></div>
     <div class="chat" id="chat"><div class="chat-empty" id="chat-empty">Send a prompt to continue this native session.</div></div>
     <form class="prompt-bar" id="prompt-form">
-      <textarea class="input" id="prompt-text" rows="2" placeholder="Ask the agent to continue... (Ctrl+Enter to send)"></textarea>
+      <textarea class="input" id="prompt-text" rows="2" enterkeyhint="send" autocomplete="off" placeholder="Ask the agent to continue... (Ctrl+Enter to send)"></textarea>
       <div class="prompt-actions">
         <button class="btn primary" type="submit" id="send-prompt">Send</button>
         <button class="btn" type="button" id="interrupt-run">Interrupt</button>
@@ -966,6 +1136,7 @@ async function pageStructuredRun(id, run) {
     stateBadge.textContent = (state || 'unknown').replaceAll('_', ' ');
     stateBadge.className = 'badge ' + (state || 'unknown');
   };
+  setState(run.state || 'starting');
   const appendUser = (text) => {
     empty?.remove();
     const node = document.createElement('div');
@@ -1008,8 +1179,45 @@ async function pageStructuredRun(id, run) {
     scroll();
     return rec;
   };
-  const showApproval = (ev) => {
-    const resources = (ev.resources || []).join('\n');
+  const loadHistory = async () => {
+    if (!run.session_id) return;
+    if (chat.querySelector('.chat-msg, .tool')) return;
+    try {
+      const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
+      const total = head.total || 0;
+      if (!total) return;
+      const limit = Math.min(500, total);
+      const offset = Math.max(0, total - limit);
+      const tr = total > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
+      if (chat.querySelector('.chat-msg, .tool')) return;
+      if (total > limit) {
+        const noteNode = document.createElement('div');
+        noteNode.className = 'notice info small';
+        noteNode.textContent = `Showing the latest ${limit} of ${total} messages from the native session.`;
+        chat.appendChild(noteNode);
+      }
+      let index = 0;
+      for (const message of tr.messages || []) {
+        const key = `history-${index++}`;
+        if (message.kind === 'tool_call' || message.kind === 'tool_result') {
+          const rec = toolCard(key, message.tool_name || 'tool', message.tool_input || '');
+          if (message.tool_output) rec.output.textContent = message.tool_output;
+          rec.node.querySelector('summary').innerHTML = `<strong>${esc(message.tool_name || 'tool')}</strong>`;
+        } else if (message.role === 'user') {
+          const text = message.text || '';
+          if (!/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(text)) {
+            appendUser(text);
+          }
+        } else if ((message.text || '').trim()) {
+          appendAssistantText(key, message.text, true);
+        }
+      }
+      scroll();
+    } catch { /* history is optional; live events still work */ }
+  };
+  setTimeout(loadHistory, 900);
+
+  const showApproval = (ev) => {    const resources = (ev.resources || []).join('\n');
     banner.innerHTML = `<div class="approval-card">
       <div class="split"><strong>Approval needed</strong><span class="badge waiting_for_input">${esc(ev.action || 'permission')}</span></div>
       <pre>${esc(resources || ev.text || '')}</pre>
@@ -1336,6 +1544,7 @@ function renderDevicePair(token) {
       await api('/auth/device-pair', { method: 'POST', body: { token, name }, allow401: true });
       state.me = await api('/me');
       state.hubName = state.me.hub_name || state.hubName;
+      await loadUserTheme();
       history.replaceState({}, '', '/');
       renderShell('overview');
       await route();
@@ -1524,6 +1733,7 @@ async function boot() {
     if (status.setup_required) return renderAuth('setup');
     try {
       state.me = await api('/me', { allow401: true });
+      await loadUserTheme();
       renderShell('overview');
       await route();
     } catch {
