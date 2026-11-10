@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "32 3 * * 1"
 
@@ -26,4 +27,16 @@ jobs:
           languages: ${{ matrix.language }}
           queries: security-and-quality
       - uses: github/codeql-action/autobuild@v4
+      # Code scanning uploads need GitHub Advanced Security on private repos.
+      # Results are kept as a workflow artifact instead. Set upload: always
+      # (and drop the artifact step) once code scanning is enabled.
       - uses: github/codeql-action/analyze@v4
+        with:
+          upload: never
+          output: sarif-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: sarif-results
+          if-no-files-found: warn
