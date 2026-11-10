@@ -38,11 +38,11 @@ what is actually implemented and tested versus what is still open.
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
-| 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user service, `doctor` | Windows Task Scheduler/NSSM service option |
+| 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker, 360 px mobile layout review | WCAG 2.2 AA audit for non-terminal views |
-| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
+| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push (approval/completion/error/disconnect), transcript export (Markdown/JSON), live runs dashboard, QR/link device pairing, PWA manifest/service worker, 360 px mobile layout review | WCAG 2.2 AA audit for non-terminal views; Claude ACP path not exercised against a real Claude session |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
 ### Honest limitations of the current build
@@ -59,10 +59,19 @@ what is actually implemented and tested versus what is still open.
   after ten minutes. Web Push requires HTTPS/localhost and browser permission.
   Device (QR) pairing uses a bearer link; SAS comparison is implemented for
   host pairing only.
-- Session state is derived from AgentNexus runs and cached metadata; an agent
-  running outside AgentNexus is not yet detected as `active_elsewhere`.
+- Session state is derived from AgentNexus runs and cached metadata; sessions
+  opened outside AgentNexus are detected on a best-effort basis and can be
+  missed when a wrapper hides the agent name or native ID.
 - Transcript fallback parsers are tolerant but not yet covered by a per-version
   fixture matrix.
+- The Windows Task Scheduler service was tested on Windows 11 (10.0.26100) with
+  a non-elevated user. Windows Server 2025 uses the same schema but was not
+  available for testing. The Docker image build and GHCR workflow could not be
+  run locally because no Docker daemon was available on the development host;
+  CI builds it.
+- Host policy includes `allowed_agents` for new and resumed runs in terminal,
+  OpenCode, Codex and ACP modes. Regression tests cover the policy helper; a
+  malicious hub cannot bypass it because the check runs on the host.
 
 
 ## Priorities

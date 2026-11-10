@@ -2,7 +2,7 @@
 
 A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys, Web Push and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.1.0-dev implementation.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys with step-up confirmation, Web Push, transcript export, a live multi-run dashboard and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -27,17 +27,19 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
 | **Overview** | Cross-host session list with title, project, agent, state and last activity |
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
+| **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
+| **Runs dashboard** | Live view of every active terminal/structured run the user can see, with state updates over the WebSocket |
 | **Search** | Federated search across online hosts; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
 | **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-agent-acp`) gets the same experience |
-| **Notifications** | Web Push for run completion and approval requests; content-free payloads |
+| **Notifications** | Web Push for approvals, completion, failures and host disconnects; content-free payloads |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
 | **Git view** | Read-only `git status` and diff of a session's project directory, executed on the host |
-| **Operations** | Dockerfile, compose example with Caddy, per-user service install (systemd/launchd/Windows Startup launcher), `nexusd doctor` |
+| **Operations** | Multi-arch GHCR image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
 ### Agent support in this release
 
@@ -48,7 +50,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
 
-Claude Code discovery/transcript code is fixture-tested; Codex and OpenCode were exercised against real local stores. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
+Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
 
@@ -67,6 +69,8 @@ make build          # produces bin/nexus-hub and bin/nexusd
 # 4. In the web UI: Hosts -> "Pair a host" -> copy the command.
 # 5. On the machine that runs your agents:
 ./bin/nexusd pair --hub http://127.0.0.1:8080 --code XXXX-XXXX --name my-laptop
+# Compare the printed Pairing SAS with the code shown on the Hosts page,
+# then click "Confirm host" there.
 ./bin/nexusd service install
 ./bin/nexusd doctor
 # Optional: give Claude Code the structured chat UI through an ACP adapter.
@@ -83,7 +87,7 @@ cp .env.example .env      # set HUB_DOMAIN and HUB_NAME
 docker compose up -d --build
 ```
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile).
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Prebuilt multi-arch images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Security
 
@@ -93,12 +97,18 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Host identity is an Ed25519 key generated at pairing; every connection is authenticated with a challenge-response.
 - Host policy is configured **on the host** and cannot be overridden by the hub. Permission-bypass flags are rejected locally.
 - The hub stores metadata only. Transcript content is fetched on demand and is not persisted on the hub.
-- Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS).
-- Security-relevant actions go to a hash-chained audit log.
+- Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
+- Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
 **Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Signed-command mode and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+
+CodeQL runs on every push and pull request. GitHub does not allow SARIF upload
+to code scanning for this private repository without GitHub Advanced Security,
+so the workflow keeps the SARIF results as 14-day workflow artifacts instead of
+the Security tab. Enable code scanning and switch `upload: never` to
+`upload: always` in `.github/workflows/codeql.yml` once GHAS is available.
 
 ## Architecture at a glance
 

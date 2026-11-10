@@ -5,6 +5,23 @@ This document is the single source of truth for **what** AgentNexus must do (req
 - **Status:** Implementation in progress — 0.1.0-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-10)
 - **Last reviewed:** 2026-11-10
 
+### Implementation snapshot (0.1.0-dev)
+
+- **Implemented:** hub/daemon, SAS host pairing, discovery/transcripts for
+  Claude/Codex/OpenCode (Gemini best effort), terminal resume, OpenCode/Codex
+  structured modes, generic ACP adapters, approvals, Web Push, transcript
+  export, live runs dashboard, multi-user grants, step-up confirmation and
+  per-user services on Linux/macOS/Windows.
+- **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
+  (CI), cross-compilation for six targets, CodeQL (SARIF artifact because the
+  private repository has no GHAS), Windows Task Scheduler install/status/
+  uninstall on Windows 11, live Codex `app-server` and OpenCode `serve`/ACP
+  runs on Windows 11, transcript export against a 1,000+ message session.
+- **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
+  Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
+  (no Docker daemon on the development host), signed-command mode, PostgreSQL,
+  native apps, WCAG 2.2 AA and external penetration testing.
+
 ## Table of contents
 
 1. [Scope and vision](#1-scope-and-vision)

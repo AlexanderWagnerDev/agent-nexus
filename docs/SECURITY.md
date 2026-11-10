@@ -11,6 +11,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Password login | Argon2id (m=64 MiB, t=3, p=2), min length 10 | no recovery codes or local admin reset command |
 | Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret stored unencrypted in `hub.db`; not required on non-loopback hubs yet |
 | Passkeys | WebAuthn registration and username-first login, user verification required for step-up | credential JSON is stored unencrypted in `hub.db` |
+| Step-up | Sensitive actions require a fresh passkey or password + TOTP confirmation; the window is five minutes and is bound to the session | no per-action confirmation list is configurable yet |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
 | CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
 | Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window | host key is a `0600` file, not OS keystore/DPAPI; no hub identity pinning |
@@ -21,6 +22,25 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
 | Web Push | VAPID, content-free payloads, subscriptions bound to user and device | VAPID private key is stored in `hub.db`; permission is browser-controlled |
+| Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
+| Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
+| Role limits | viewers cannot create host pairing codes | viewers can still read every host explicitly shared with them |
+| Windows autostart | per-user Task Scheduler task, logon trigger, least privilege, restart on failure | Server 2025 untested; no boot-time task by design |
+
+**Hardening changes in this build (2026-11-10):**
+
+- `allowed_agents` is now enforced for new terminal sessions and for every
+  structured mode; previously only resumed actions were checked.
+- One shared session-conflict guard covers terminal, OpenCode, Codex and ACP
+  runs, preventing concurrent writers to the same native session.
+- The hub rejects `run.*` messages from a host that does not own the run.
+- Search and git diff require `read_transcript`; a view-only grant no longer
+  exposes transcript snippets or file diffs.
+- Terminal resize now requires the controller lease, matching input/prompt.
+- Viewers can no longer create host pairing codes.
+- The Windows Startup launcher was replaced by a Task Scheduler task with
+  crash restart and no administrator rights.
+
 
 
 ## Table of contents
@@ -248,6 +268,7 @@ Owners of a host implicitly have all permissions on it. Grants are stored on the
 An action is executed only if **all** of the following allow it:
 
 1. Hub: authenticated user + valid, non-revoked device + (step-up if required).
+   Search and git diff require `read_transcript`, not just `view`.
 2. Hub: role and per-host permission.
 3. Host: host policy (cannot be overridden by the hub).
 4. Host (signed-command mode only): valid device signature from a device key trusted by the host.
@@ -255,43 +276,38 @@ An action is executed only if **all** of the following allow it:
 
 ## Host policy
 
-Configured in `nexusd.toml` on the host. The hub receives a read-only summary for display. Changes require local file access and are audited locally.
+Configured in `<config-dir>/AgentNexus/nexusd.json` on the host. The hub receives
+a read-only summary for display. Changes require local file access, are read at
+daemon start, and are audited locally.
 
-```toml
-# Illustrative — final schema defined in WP-3.5
-[hub]
-url = "https://nexus.example.com"
-# pinned_identity_key is written at pairing time
-
-[policy]
-# Directories in which sessions may be resumed or created (canonicalized, symlinks resolved)
-allowed_roots = ["~/code", "~/work"]
-allowed_agents = ["claude", "codex", "opencode"]
-
-# Subset of: view, read_transcript, resume, create, fork, terminal_input, approve
-allowed_actions = ["view", "read_transcript", "resume", "create", "fork", "terminal_input", "approve"]
-
-# Never pass permission-bypass flags or modes, even if requested
-forbid_permission_bypass = true
-
-# Allow "always allow" answers to approval requests (otherwise only allow-once/deny)
-allow_persistent_approvals = false
-
-max_concurrent_runs = 4
-transcript_search_index = true
-
-# Optional: require confirmation on the host itself (tray app / CLI) for these actions
-require_local_confirmation = []
-
-# Signed-command mode (Phase 5)
-require_signed_commands = false
-
-[agents.claude]
-config_dirs = ["~/.claude"]
-# launch profiles may add flags such as --mcp-config; bypass flags are rejected
+```json
+{
+  "policy": {
+    "allowed_roots": ["/home/me/code", "/home/me/work"],
+    "allowed_agents": ["claude", "codex", "opencode"],
+    "allow_new_sessions": true,
+    "allow_fork": true,
+    "forbidden_args": [
+      "--dangerously-skip-permissions",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--yolo",
+      "--auto-approve"
+    ]
+  }
+}
 ```
 
-Defaults on first start are restrictive: only `view` and `read_transcript` until the user enables more during `nexusd pair` or by editing the file.
+- `allowed_roots` is checked on the host after path canonicalization (symlinks
+  resolved) for terminal, structured, ACP and git actions.
+- `allowed_agents` is enforced for **new** and resumed sessions in every mode,
+  including OpenCode, Codex and ACP structured runs.
+- `forbidden_args` rejects permission-bypass flags even if a future hub or
+  adapter tries to add them.
+- The host never trusts a policy summary sent by the hub. The hub cannot widen
+  the local policy.
+
+Defaults on first start: the user's home directory, all detected agents, new
+sessions and fork enabled, and the forbidden-argument list above.
 
 ## 11. Remote approvals
 

@@ -134,24 +134,28 @@ The hub is a modular monolith: one process, packages with explicit interfaces. A
 
 ### 3.3 Client API (REST, OpenAPI 3.1)
 
-Representative endpoints (final definitions in `api/openapi.yaml`):
+Representative endpoints (implemented in `internal/hub`; there is no generated
+OpenAPI document yet):
 
 | Method & path | Purpose |
 | --- | --- |
-| `POST /api/v1/auth/webauthn/login/begin`, `…/finish` | Passkey login |
+| `POST /api/v1/auth/passkey/begin`, `/api/v1/auth/passkey/finish` | Passkey login |
+| `POST /api/v1/auth/step-up/begin`, `/passkey`, `/password` | Fresh confirmation for sensitive actions |
 | `GET /api/v1/hosts` | Hosts with state and agent inventory |
 | `POST /api/v1/hosts/pairing-codes` | Create a one-time pairing code |
 | `DELETE /api/v1/hosts/{hostId}` | Revoke host |
 | `GET /api/v1/sessions?host=&agent=&project=&state=&q=&cursor=` | List session records |
-| `GET /api/v1/sessions/{sessionId}/transcript?cursor=` | Paged transcript (fetched from host) |
+| `GET /api/v1/sessions/{sessionId}/transcript?offset=&limit=` | Paged transcript (fetched from host) |
+| `GET /api/v1/sessions/{sessionId}/export?format=markdown|json` | Full transcript export, bounded at 10,000 messages |
 | `POST /api/v1/sessions/{sessionId}/runs` | Resume (`mode=terminal|structured`, `fork=false|true`) |
-| `POST /api/v1/hosts/{hostId}/agents/{agent}/runs` | Start new session |
+| `POST /api/v1/hosts/{hostId}/runs` | Start a new session (`agent`, `cwd`, `mode`) |
+| `GET /api/v1/runs` | Active runs visible to the user (dashboard) |
 | `POST /api/v1/runs/{runId}/lease` | Acquire/transfer controller lease |
 | `POST /api/v1/runs/{runId}/stop` | Stop run |
-| `POST /api/v1/approvals/{approvalId}` | Answer an approval request |
+| WebSocket `approval` message | Answer an approval request through the run lease |
 | `GET /api/v1/search?q=` | Federated full-text search |
 | `GET /api/v1/devices`, `DELETE /api/v1/devices/{id}` | Device management |
-| `GET /api/v1/audit` | Audit log (admin) |
+| `GET /api/v1/audit` | Audit log (verified chain) |
 
 `sessionId` is the hub's opaque ID; the tuple `(hostId, agent, nativeSessionId)` is unique.
 
@@ -190,12 +194,12 @@ flowchart TB
 | Module | Responsibility |
 | --- | --- |
 | Hub link client | Challenge–response authentication with the host key, heartbeat (default 20 s), reconnect with exponential backoff (1 s → 60 s, full jitter), channel multiplexing, flow control. |
-| Policy engine | Loads `nexusd.toml` (see [SECURITY.md — Host policy](SECURITY.md#host-policy)); every incoming request is checked before execution. The hub only receives a read-only summary. |
-| Discovery & indexer | Runs adapter discovery on start, then incrementally (filesystem events debounced 500 ms + periodic full rescan, default 10 min). Writes normalized records to the local cache and sends a change feed (upserts/deletes with per-host monotonic revision) to the hub. |
+| Policy engine | Loads `nexusd.json` (see [SECURITY.md — Host policy](SECURITY.md#host-policy)); every incoming request is checked before execution. The hub only receives a read-only summary. |
+| Discovery & indexer | Runs adapter discovery on start, then a full rescan every 30 seconds; a SHA-256 hash of the normalized snapshot suppresses unchanged uploads. A parser failure reuses the last successful per-agent snapshot instead of deleting sessions. |
 | Process inspector | Maps running agent processes to native sessions (agent-specific signals, see [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md#2-common-adapter-contract)) to set `active_elsewhere`. |
-| Run manager | Creates runs (terminal or structured), owns per-session locks, keeps a scrollback ring buffer (default 2 MiB per run) for replay, terminates process trees on stop. |
+| Run manager | Creates runs (terminal or structured), enforces one active run per native session across all four run maps, keeps a bounded output buffer for replay, and stops the child process on request. Full process-tree guarantees are still a roadmap item. |
 | Approval broker | Receives approval requests from structured drivers, applies policy (auto-deny forbidden actions), forwards to hub, enforces timeouts (default 10 min → deny). |
-| Search service | Maintains an FTS5 index of transcript text (configurable; can be disabled) and answers federated search queries. |
+| Search service | Performs a tolerant linear scan over the agents' JSONL/SQLite stores and answers federated search queries. An FTS5 cache is a roadmap item. |
 | PTY layer | Cross-platform PTY with resize, UTF-8 handling, signal delivery and process-tree termination (process groups on Unix, Job Objects on Windows). |
 
 ### 4.1 Process model
@@ -528,7 +532,7 @@ The cache is disposable: deleting it triggers a full re-index from native stores
 
 > **Implementation note (0.1.x):** the embedded client is dependency-free ES modules plus vendored xterm.js and has no build step. The route and state model below is the target; a React migration remains an option (ADR-014).
 
-- **Routes:** `/` (overview: attention-needed queue, recent sessions), `/hosts`, `/hosts/:id`, `/sessions` (global list), `/sessions/:id` (detail + transcript), `/runs/:id` (terminal or chat), `/search`, `/settings/{devices,security,notifications,users}`, `/audit`.
+- **Routes:** `/` (overview), `/hosts`, `/sessions` (global list), `/sessions/:id` (detail + transcript + export), `/runs` (live multi-run dashboard), `/runs/:id` (terminal or chat), `/search`, `/devices`, `/users`, `/audit`.
 - **State:** server state via TanStack Query; live updates from the client WebSocket patch the query cache; no global client store beyond UI preferences.
 - **Terminal view:** xterm.js with fit and web-links add-ons; WebGL renderer where available; mobile accessory key bar (Esc, Tab, Ctrl, arrows); OSC 52 clipboard writes disabled by default (see [SECURITY.md](SECURITY.md#terminal-and-content-safety)).
 - **Chat view:** virtualized message list, markdown rendering with sanitization, collapsible tool cards, side-by-side/unified diff, approval sheet pinned to the bottom on mobile.
@@ -593,11 +597,11 @@ flowchart LR
 
 | Topic | Linux | macOS | Windows |
 | --- | --- | --- | --- |
-| Service | `systemd --user` unit; `loginctl enable-linger` to run without login | LaunchAgent in `~/Library/LaunchAgents` | Per-user scheduled task at logon (Task Scheduler); optional tray app |
+| Service | `systemd --user` unit; `loginctl enable-linger` to run without login | LaunchAgent in `~/Library/LaunchAgents` with `RunAtLoad`/`KeepAlive` | Per-user Task Scheduler task at logon, least privilege, restart on failure; no boot-time task by design |
 | PTY | Unix PTY (`creack/pty`) | Unix PTY | ConPTY (Windows 10 1809+) |
-| Process-tree stop | Process group + `SIGINT` → `SIGTERM` → `SIGKILL` | Same | `CTRL_C` event via ConPTY → Job Object termination |
+| Process stop | `SIGINT` via PTY, then kill after 1.5 s | Same | `CTRL_C` via ConPTY, then kill; process-tree termination is best effort |
 | Executable resolution | `PATH` | `PATH` (note: launchd has a minimal `PATH`; daemon loads the user's login shell environment once at start) | `PATH` + `PATHEXT`; npm-installed CLIs are `.cmd` shims that must be launched correctly |
-| Secret storage for host key | Secret Service (libsecret) if available, else file `0600` | Keychain | DPAPI-protected file / Credential Manager |
+| Secret storage for host key | file `0600` (OS keystore is a roadmap item) | file `0600` (Keychain is a roadmap item) | file `0600` (DPAPI is a roadmap item) |
 | Config/data dirs | XDG (`~/.config/agentnexus`, `~/.local/share/agentnexus`) | `~/Library/Application Support/AgentNexus` | `%APPDATA%\AgentNexus`, `%LOCALAPPDATA%\AgentNexus` |
 | Special issues | Headless servers without a user session (linger) | TCC privacy prompts for `~/Documents`, `~/Desktop`, iCloud Drive (risk R-06) | Path casing, long paths, CRLF; ConPTY rendering quirks (risk R-05) |
 | WSL | — | — | Agents installed inside WSL keep their sessions inside the distribution's filesystem; run a separate `nexusd` inside each distribution (appears as its own host). Windows-side `nexusd` does not read WSL session stores. |

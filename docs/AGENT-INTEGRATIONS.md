@@ -55,6 +55,21 @@ vendor documentation above:
 - **Gemini CLI** discovery is best effort: `~/.gemini/tmp/*/chats/*.json` is
   project-hash scoped, so the adapter warns that the working directory must be
   verified before resuming.
+- **OpenCode v2 storage:** `session_v2` and `session_message` are preferred when
+  present; the legacy `session`/`message`/`part` tables remain as a fallback.
+  A fixture test builds the v2 schema, verifies discovery, transcript, search
+  and the `--session` resume command.
+- **Structured mode:** OpenCode uses `opencode serve`, Codex uses
+  `codex app-server --stdio`, and any ACP adapter can be configured with
+  `nexusd acp`. Codex `thread/resume` and ACP `session/load` are used for
+  existing sessions when the agent advertises `loadSession`.
+- **Concurrency:** one shared guard rejects a second run for the same
+  `agent:native_id` across terminal, OpenCode, Codex and ACP maps. Per-session
+  locks are therefore consistent across modes.
+- **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
+  concurrency guards have unit tests. Real Codex and OpenCode runs were
+  exercised on Windows 11; real Claude sessions were not available. Linux and
+  macOS are covered by CI build/tests only.
 
 
 ## 2. Common adapter contract
