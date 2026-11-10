@@ -516,6 +516,37 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tr)
 }
 
+func (s *Server) handleSessionGit(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	if !s.hostOnline(sess.HostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	params, _ := json.Marshal(map[string]string{"cwd": sess.Cwd})
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, sess.HostID, "git", params)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var view map[string]any
+	if err := json.Unmarshal(raw, &view); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	query := strings.TrimSpace(r.URL.Query().Get("q"))

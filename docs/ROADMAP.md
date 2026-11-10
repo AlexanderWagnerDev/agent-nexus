@@ -43,7 +43,7 @@ what is actually implemented and tested versus what is still open.
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
 | 4 | 🟡 partial | OpenCode structured mode (text, reasoning, tool cards, interrupt), approval broker, Web Push, content-free payloads, PWA manifest/service worker | Claude/Codex structured drivers, QR device pairing, mobile usability review |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers | Signed commands, PostgreSQL, release signing/SBOM, external pentest, load/soak tests |
-| 6 | 🟡 partial | Best-effort Gemini discovery/resume | Generic ACP, native apps, git diff view |
+| 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff | Generic ACP, native apps |
 
 ### Honest limitations of the current build
 
@@ -216,7 +216,7 @@ Independent items, prioritized by user demand (Q-04). Each item has its own mile
 | **M6.1 Gemini CLI** (Tier 2) | WP-6.1 | Sessions of all known projects discovered; terminal resume via `gemini --resume <id>`; ACP structured mode; contract tests nightly. |
 | **M6.2 Generic ACP agents** (Tier 2/3) | WP-6.2 | Any agent configured with an ACP launch command works for new sessions; discovery and resume work where the agent advertises `session/list` and `session/load`/`session/resume`; capability-driven UI. |
 | **M6.3 Native apps** (optional) | WP-6.3 | Desktop (Windows, macOS, Linux) and mobile (iOS, Android) apps with OS-keystore device keys, native notifications, bundled UI (not loaded from the hub) for full signed-command protection. |
-| **M6.4 Git status/diff view** (Could) | WP-6.4 | Read-only `git status` and diff of a session's project directory within `allowed_roots`. |
+| **M6.4 Git status/diff view** (Could) | WP-6.4 | ✅ Read-only `git status` and diff of a session's project directory within `allowed_roots`. |
 
 ## Milestone tracking
 

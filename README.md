@@ -34,6 +34,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
+| **Git view** | Read-only `git status` and diff of a session's project directory, executed on the host |
 | **Operations** | Dockerfile, compose example with Caddy, per-user service install (systemd/launchd/Windows Startup launcher), `nexusd doctor` |
 
 ### Agent support in this release
@@ -142,7 +143,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
 | 4 — Structured mode, approvals, push | 🟡 OpenCode structured mode, approvals and Web Push implemented; QR device pairing, mobile review and Claude/Codex drivers open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles and per-host grants implemented; signed commands, PostgreSQL, release signing/SBOM and external pentest open |
-| 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; generic ACP and native apps not implemented |
+| 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff implemented; generic ACP and native apps not implemented |
 
 Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The status table reflects what the code does, not what the roadmap intends.
 

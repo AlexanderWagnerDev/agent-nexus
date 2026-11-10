@@ -435,6 +435,14 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		return hits, nil
 	case "rescan":
 		return map[string]string{"status": "ok"}, d.sendSessions(true)
+	case "git":
+		var p struct {
+			Cwd string `json:"cwd"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return d.gitView(context.Background(), p.Cwd)
 	default:
 		return nil, fmt.Errorf("unknown method %q", method)
 	}

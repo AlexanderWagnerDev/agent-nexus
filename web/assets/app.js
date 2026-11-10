@@ -576,10 +576,23 @@ async function pageSession(id) {
   const s = await api(`/sessions/${id}`);
   setPage(s.title || 'Session', `${s.host_name} · ${s.agent} · ${s.cwd || 'unknown directory'}`, `
     <button class="btn small" id="resume-session">Resume terminal</button>
+    <button class="btn small" id="git-session">Git diff</button>
     ${s.agent === 'opencode' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
     ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
     <a class="btn small ghost" href="#/sessions">Back</a>`);
   document.getElementById('resume-session').addEventListener('click', () => startRun(s, false, 'terminal'));
+  document.getElementById('git-session').addEventListener('click', async () => {
+    try {
+      const g = await api(`/sessions/${s.id}/git`);
+      modal(`
+        <h2>Git status — ${esc(s.cwd)}</h2>
+        <p class="hint">Read-only status and diff from the host. No files are modified.</p>
+        <h3>Status</h3><pre class="secret">${esc(g.status || '(clean)')}</pre>
+        <h3 class="mt-2">Diff stat</h3><pre class="secret">${esc(g.stat || '(none)')}</pre>
+        <h3 class="mt-2">Diff</h3><pre class="secret" style="max-height:45vh;overflow:auto">${esc(g.diff || '(none)')}</pre>
+        <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`);
+    } catch (err) { toast(err.message, true); }
+  });
   document.getElementById('structured-session')?.addEventListener('click', () => startRun(s, false, 'structured'));
   document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
   view.innerHTML = `

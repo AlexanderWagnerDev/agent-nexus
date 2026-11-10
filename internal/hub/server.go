@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.requireAuth(s.handleSession))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/transcript", s.requireAuth(s.handleTranscript))
+	mux.HandleFunc("GET /api/v1/sessions/{id}/git", s.requireAuth(s.handleSessionGit))
 	mux.HandleFunc("POST /api/v1/sessions/{id}/runs", s.requireAuth(s.handleCreateRun))
 	mux.HandleFunc("GET /api/v1/search", s.requireAuth(s.handleSearch))
 	mux.HandleFunc("GET /api/v1/audit", s.requireAuth(s.handleAudit))

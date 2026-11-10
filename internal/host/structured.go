@@ -38,6 +38,7 @@ type StructuredRun struct {
 
 	mu        sync.Mutex
 	calls     map[string]string
+	approvals map[string]*time.Timer
 	closed    bool
 	readyOnce *sync.Once
 }
@@ -164,7 +165,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	sr := &StructuredRun{
 		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
 		sessionKey: sessionKey,
-		cmd:        cmd, cancel: cancel, calls: map[string]string{},
+		cmd:        cmd, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
 		client:    &http.Client{Timeout: 30 * time.Second},
 		readyOnce: new(sync.Once),
 	}
@@ -352,6 +353,12 @@ func (r *StructuredRun) Interrupt() error {
 }
 
 func (r *StructuredRun) ReplyApproval(id, decision string) error {
+	r.mu.Lock()
+	if timer := r.approvals[id]; timer != nil {
+		timer.Stop()
+		delete(r.approvals, id)
+	}
+	r.mu.Unlock()
 	reply := "once"
 	if decision == "reject" {
 		reply = "reject"
@@ -369,6 +376,10 @@ func (r *StructuredRun) Stop() {
 		return
 	}
 	r.closed = true
+	for id, timer := range r.approvals {
+		timer.Stop()
+		delete(r.approvals, id)
+	}
 	r.mu.Unlock()
 	r.cancel()
 	if r.cmd != nil && r.cmd.Process != nil {
@@ -461,13 +472,31 @@ func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
 		}
 		send(ev)
 	case "permission.asked":
+		id := str(data["id"])
+		// Default-deny if the user does not answer within ten minutes.
+		r.mu.Lock()
+		if old := r.approvals[id]; old != nil {
+			old.Stop()
+		}
+		r.approvals[id] = time.AfterFunc(10*time.Minute, func() {
+			_ = r.ReplyApproval(id, "reject")
+			send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: id, Decision: "reject", Text: "approval timed out"})
+		})
+		r.mu.Unlock()
 		send(protocol.RunEvent{
-			Type: "approval.requested", ApprovalID: str(data["id"]),
+			Type: "approval.requested", ApprovalID: id,
 			Action: str(data["action"]), Resources: stringSlice(data["resources"]),
 			Text: str(data["message"]),
 		})
 	case "permission.replied":
-		send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: str(data["requestID"]), Decision: str(data["reply"])})
+		id := str(data["requestID"])
+		r.mu.Lock()
+		if timer := r.approvals[id]; timer != nil {
+			timer.Stop()
+			delete(r.approvals, id)
+		}
+		r.mu.Unlock()
+		send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: id, Decision: str(data["reply"])})
 	case "session.execution.started":
 		send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
 	case "session.execution.succeeded", "session.idle", "session.execution.interrupted":
