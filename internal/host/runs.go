@@ -212,6 +212,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: spec.Action})
 	d.log.Info("run started", "run_id", spec.RunID, "agent", spec.Agent, "cwd", cwd, "action", spec.Action)
+	hostAudit("run.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd, "action": spec.Action})
 	_ = d.sendSessions(true)
 
 	go func() {
@@ -248,6 +249,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		r.terminate()
 		_ = d.send(protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: code, Reason: reason})
 		d.log.Info("run finished", "run_id", spec.RunID, "code", code, "reason", reason)
+		hostAudit("run.exited", map[string]any{"run_id": spec.RunID, "code": code, "reason": reason})
 		_ = d.sendSessions(true)
 	}()
 }

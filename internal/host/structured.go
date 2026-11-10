@@ -212,6 +212,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured"})
 	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
+	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
 		Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt",
 	}})
@@ -231,6 +232,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		}
 		_ = d.send(protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: code, Reason: reason})
 		d.log.Info("structured run exited", "run_id", spec.RunID, "code", code)
+		hostAudit("structured.exited", map[string]any{"run_id": spec.RunID, "code": code})
 	}()
 }
 
@@ -343,6 +345,7 @@ func (r *StructuredRun) Prompt(text string) error {
 		r.daemon.log.Warn("structured prompt failed", "run_id", r.id, "session", r.sessionID, "error", err)
 	} else {
 		r.daemon.log.Info("structured prompt sent", "run_id", r.id, "session", r.sessionID)
+		hostAudit("structured.prompt", map[string]any{"run_id": r.id})
 	}
 	return err
 }
