@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        if: runner.os != 'Windows'
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: tests
+        run: go test ./...
+      - name: JavaScript syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check web/assets/app.js
+
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...
+
+  build:
+    name: Cross-compile
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build hub and daemon
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          go build -trimpath -ldflags="-s -w" -o "dist/nexus-hub-${GOOS}-${GOARCH}${ext}" ./cmd/nexus-hub
+          go build -trimpath -ldflags="-s -w" -o "dist/nexusd-${GOOS}-${GOARCH}${ext}" ./cmd/nexusd
+
+  vulnerability:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
