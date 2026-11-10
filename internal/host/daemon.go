@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -26,29 +27,34 @@ type Daemon struct {
 	log      *slog.Logger
 	adapters []Adapter
 
-	runMu      sync.Mutex
-	runs       map[string]*Run
-	structured map[string]*StructuredRun
-	codexRuns  map[string]*CodexRun
-	acpRuns    map[string]*ACPRun
+	runMu        sync.Mutex
+	runs         map[string]*Run
+	structured   map[string]*StructuredRun
+	codexRuns    map[string]*CodexRun
+	acpRuns      map[string]*ACPRun
+	starting     map[string]bool
+	startingRuns map[string]bool
 
 	sendMu sync.Mutex
 	ws     *websocket.Conn
 
 	lastSnapshot string
 	lastByAgent  map[string][]protocol.Session
+	connectedAt  atomic.Int64
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 	d := &Daemon{
-		cfg:         cfg,
-		policy:      cfg.Policy,
-		log:         logger,
-		runs:        map[string]*Run{},
-		structured:  map[string]*StructuredRun{},
-		codexRuns:   map[string]*CodexRun{},
-		acpRuns:     map[string]*ACPRun{},
-		lastByAgent: map[string][]protocol.Session{},
+		cfg:          cfg,
+		policy:       cfg.Policy,
+		log:          logger,
+		runs:         map[string]*Run{},
+		structured:   map[string]*StructuredRun{},
+		codexRuns:    map[string]*CodexRun{},
+		acpRuns:      map[string]*ACPRun{},
+		starting:     map[string]bool{},
+		startingRuns: map[string]bool{},
+		lastByAgent:  map[string][]protocol.Session{},
 	}
 	d.adapters = DetectAdapters(logger)
 	return d
@@ -68,6 +74,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 		err := d.connect(ctx)
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if d.connectedAt.Swap(0) != 0 {
+			// A previous connection was established, so this was a normal
+			// interruption rather than a failed first dial.
+			backoff = time.Second
 		}
 		d.log.Warn("hub connection ended; reconnecting", "error", err, "backoff", backoff)
 		select {
@@ -154,6 +165,7 @@ func (d *Daemon) connect(ctx context.Context) error {
 		return errors.New("host authentication rejected")
 	}
 
+	d.connectedAt.Store(time.Now().UnixNano())
 	d.log.Info("connected to hub", "hub", d.cfg.HubURL, "host_id", d.cfg.HostID)
 	if err := d.sendInventory(); err != nil {
 		d.log.Warn("inventory send failed", "error", err)
@@ -522,6 +534,89 @@ func (d *Daemon) adapter(name string) Adapter {
 		if a.Name() == name {
 			return a
 		}
+	}
+	return nil
+}
+
+// sessionActiveLocked reports whether any execution mode currently owns the
+// session key. Callers must hold runMu.
+func (d *Daemon) sessionActiveLocked(key string) bool {
+	for _, r := range d.runs {
+		if r.sessionKey == key {
+			return true
+		}
+	}
+	for _, r := range d.structured {
+		if r.sessionKey == key {
+			return true
+		}
+	}
+	for _, r := range d.codexRuns {
+		if r.sessionKey == key {
+			return true
+		}
+	}
+	for _, r := range d.acpRuns {
+		if r.sessionKey == key {
+			return true
+		}
+	}
+	return false
+}
+
+// reserveRunLocked claims a session and run id for the short window between
+// validation and process registration. Callers must hold runMu.
+func (d *Daemon) reserveRunLocked(sessionKey, runID string) bool {
+	if d.sessionActiveLocked(sessionKey) || d.starting[sessionKey] ||
+		d.runActiveLocked(runID) || d.startingRuns[runID] {
+		return false
+	}
+	d.starting[sessionKey] = true
+	d.startingRuns[runID] = true
+	return true
+}
+
+func (d *Daemon) releaseRunLocked(sessionKey, runID string) {
+	delete(d.starting, sessionKey)
+	delete(d.startingRuns, runID)
+}
+
+// runActiveLocked reports whether a run id already exists. Callers must hold
+// runMu.
+func (d *Daemon) runActiveLocked(id string) bool {
+	if _, ok := d.runs[id]; ok {
+		return true
+	}
+	if _, ok := d.structured[id]; ok {
+		return true
+	}
+	if _, ok := d.codexRuns[id]; ok {
+		return true
+	}
+	_, ok := d.acpRuns[id]
+	return ok
+}
+
+// validateRunPolicy applies the local policy to every terminal action before
+// any process is started. It is deliberately independent of the hub: a
+// compromised hub must not be able to bypass host policy.
+func (d *Daemon) validateRunPolicy(spec protocol.RunSpec) error {
+	switch spec.Action {
+	case protocol.ActionNew, protocol.ActionResume, protocol.ActionFork, "":
+	default:
+		return fmt.Errorf("unknown run action %q", spec.Action)
+	}
+	if !d.policy.AgentAllowed(spec.Agent) {
+		return fmt.Errorf("agent %q is not allowed by host policy", spec.Agent)
+	}
+	if spec.Action == protocol.ActionNew && !d.policy.AllowNew {
+		return errors.New("host policy does not allow new sessions")
+	}
+	if spec.Action == protocol.ActionFork && !d.policy.AllowFork {
+		return errors.New("host policy does not allow forking")
+	}
+	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
+		return errors.New("invalid native session id")
 	}
 	return nil
 }

@@ -31,3 +31,11 @@ func TestACPCommandOverride(t *testing.T) {
 		t.Fatalf("missing agent = %q", got)
 	}
 }
+
+func TestSplitCommandLine(t *testing.T) {
+	got := splitCommandLine(`"C:\Program Files\ACP\adapter.exe" --stdio`)
+	want := []string{`C:\Program Files\ACP\adapter.exe`, "--stdio"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("split = %#v", got)
+	}
+}

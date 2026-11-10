@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -33,8 +34,7 @@ func openCodeDBPath(bin string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	name, args := commandFor(bin, []string{"debug", "paths"})
-	out, err := execFor(name, args...).Output()
-	_ = ctx
+	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
 			fields := strings.Fields(line)

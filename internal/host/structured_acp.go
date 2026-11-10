@@ -93,37 +93,19 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		sessionKey = spec.Agent + ":new:" + randomRunKey()
 	}
 	d.runMu.Lock()
-	for _, existing := range d.runs {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another run on this host")
-			return
-		}
-	}
-	for _, existing := range d.structured {
-		if existing.sessionKey == sessionKey || existing.id == spec.RunID {
-			d.runMu.Unlock()
-			fail("session is already active in another structured run on this host")
-			return
-		}
-	}
-	for _, existing := range d.codexRuns {
-		if existing.sessionKey == sessionKey || existing.id == spec.RunID {
-			d.runMu.Unlock()
-			fail("session is already active in another structured run on this host")
-			return
-		}
-	}
-	for _, existing := range d.acpRuns {
-		if existing.sessionKey == sessionKey || existing.id == spec.RunID {
-			d.runMu.Unlock()
-			fail("session is already active in another structured run on this host")
-			return
-		}
-	}
+	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
 	d.runMu.Unlock()
+	if !reserved {
+		fail("session is already active in another run on this host")
+		return
+	}
+	defer func() {
+		d.runMu.Lock()
+		d.releaseRunLocked(sessionKey, spec.RunID)
+		d.runMu.Unlock()
+	}()
 
-	parts := strings.Fields(command)
+	parts := splitCommandLine(command)
 	if len(parts) == 0 {
 		fail("ACP adapter command is empty")
 		return

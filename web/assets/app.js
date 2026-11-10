@@ -208,6 +208,7 @@ const navItems = [
   ['#/', 'Overview', '◈', 'overview'],
   ['#/hosts', 'Hosts', '▤', 'hosts'],
   ['#/sessions', 'Sessions', '▦', 'sessions'],
+  ['#/runs', 'Runs', '▶', 'runs'],
   ['#/search', 'Search', '⌕', 'search'],
   ['#/devices', 'Devices', '◉', 'devices'],
   ['#/users', 'Users', '♟', 'users'],
@@ -257,7 +258,8 @@ function setPage(title, sub = '', actions = '') {
 function activeFromHash() {
   const h = location.hash || '#/';
   if (h.startsWith('#/hosts')) return 'hosts';
-  if (h.startsWith('#/sessions') || h.startsWith('#/runs')) return 'sessions';
+  if (h.startsWith('#/sessions')) return 'sessions';
+  if (h.startsWith('#/runs')) return 'runs';
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/devices')) return 'devices';
   if (h.startsWith('#/users')) return 'users';
@@ -397,6 +399,7 @@ async function route() {
     if (hash.startsWith('#/hosts')) return await pageHosts();
     if (hash.startsWith('#/sessions/')) return await pageSession(hash.split('/')[2]);
     if (hash.startsWith('#/sessions')) return await pageSessions();
+    if (hash === '#/runs') return await pageRuns();
     if (hash.startsWith('#/runs/')) return await pageRun(hash.split('/')[2]);
     if (hash.startsWith('#/search')) return await pageSearch();
     if (hash.startsWith('#/devices')) return await pageDevices();
@@ -621,6 +624,8 @@ async function pageSession(id) {
     <button class="btn small" id="git-session">Git diff</button>
     ${s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
     ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
+    <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=markdown">Export MD</a>
+    <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=json">JSON</a>
     <a class="btn small ghost" href="#/sessions">Back</a>`);
   document.getElementById('resume-session').addEventListener('click', () => startRun(s, false, 'terminal'));
   document.getElementById('git-session').addEventListener('click', async () => {
@@ -1137,6 +1142,43 @@ async function pageStructuredRun(id, run) {
     state.wsHandlers.delete(handler);
   };
   textarea.focus();
+}
+
+async function pageRuns() {
+  renderShell('runs');
+  const view = setPage('Active runs', 'Live terminal and structured runs across every host you can see.', '<a class="btn small" href="#/sessions">All sessions</a>');
+  view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  let timer = null;
+  const load = async () => {
+    const { runs } = await api('/runs');
+    const box = document.getElementById('runs-list');
+    if (!box) return;
+    box.innerHTML = runs.length ? `<div class="grid cols-2">${runs.map((run) => `
+      <div class="card host-card">
+        <div class="host-head">
+          <div class="host-title">
+            <div class="brand-mark" style="width:34px;height:34px;font-size:15px">${esc((run.session_title || run.agent || '?').slice(0, 1).toUpperCase())}</div>
+            <div><h3>${esc(run.session_title || 'Untitled session')}</h3><div class="meta">${esc(run.host_name || run.host_id)} · ${esc(run.mode)} · ${esc(fmtRelative(run.started_at))}</div></div>
+          </div>
+          ${stateBadge(run.state)}
+        </div>
+        <div class="agent-chips">${agentBadge(run.agent || 'agent')}<span class="chip">run ${esc(shortId(run.id))}</span></div>
+        <div class="split wrap">
+          <a class="btn small primary" href="#/runs/${esc(run.id)}">Open live view</a>
+          ${run.session_id ? `<a class="btn small" href="#/sessions/${esc(run.session_id)}">Session</a>` : ''}
+        </div>
+      </div>`).join('')}</div>` : '<div class="card empty"><strong>No active runs</strong>Resume a session or start a new one on an online host.</div>';
+  };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => load().catch(() => {}), 400);
+  };
+  state.wsHandlers.add((msg) => {
+    if (msg.type === 'run.state' || msg.type === 'run.exit' || msg.type === 'run.error' ||
+        msg.type === 'sessions.changed' || msg.type === 'host.updated') schedule();
+  });
+  view.innerHTML = '<div id="runs-list"><div class="empty"><span class="spinner"></span></div></div>';
+  await load();
 }
 
 async function pageRun(id) {

@@ -96,14 +96,17 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		sessionKey = "codex:new:" + randomRunKey()
 	}
 	d.runMu.Lock()
-	for _, existing := range d.codexRuns {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another run on this host")
-			return
-		}
-	}
+	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
 	d.runMu.Unlock()
+	if !reserved {
+		fail("session is already active in another run on this host")
+		return
+	}
+	defer func() {
+		d.runMu.Lock()
+		d.releaseRunLocked(sessionKey, spec.RunID)
+		d.runMu.Unlock()
+	}()
 
 	bin := ""
 	for _, a := range d.adapters {

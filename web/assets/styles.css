@@ -102,7 +102,7 @@ code, pre, .mono { font-family: var(--mono); }
   .sidebar { position: fixed; bottom: 0; top: auto; height: 62px; width: 100%; z-index: 50; flex-direction: row; align-items: center; padding: 0 8px; border-right: 0; border-top: 1px solid var(--line); }
   .brand, .sidebar-foot { display: none; }
   .nav { display: flex; width: 100%; justify-content: space-around; gap: 0; }
-  .nav a { flex-direction: column; gap: 3px; font-size: 10px; padding: 7px 8px; }
+  .nav a { flex: 1; min-width: 0; flex-direction: column; gap: 3px; font-size: 9px; padding: 7px 2px; text-align: center; white-space: nowrap; }
   .nav .icon { font-size: 16px; }
   .view { padding: 18px 16px 90px; }
   .topbar { padding: 14px 16px; }
@@ -307,3 +307,8 @@ details.tool pre { margin: 0; padding: 10px 12px; border-top: 1px solid var(--li
 .small { font-size: 12px; }
 .nowrap { white-space: nowrap; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .list-row { grid-template-columns: 1fr; gap: 6px; }
+  .list-row .right { margin-left: 0; justify-content: flex-start; }
+}

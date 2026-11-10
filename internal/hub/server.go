@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	Version              = "0.1.0"
 	ed25519PublicKeySize = 32
 	hostReadLimit        = 16 << 20
 	clientReadLimit      = 4 << 20
@@ -24,6 +23,9 @@ const (
 	hostSendQueue        = 256
 	clientSendQueue      = 512
 )
+
+// Version is overridden at build time for release images and binaries.
+var Version = "0.1.0"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -36,11 +38,12 @@ type Server struct {
 	loginLimiter *rateLimiter
 	pairLimiter  *rateLimiter
 
-	mu      sync.RWMutex
-	hosts   map[string]*hostConn
-	clients map[*clientConn]struct{}
-	runs    map[string]*runState
-	pending map[string]*pendingRequest
+	mu       sync.RWMutex
+	hosts    map[string]*hostConn
+	clients  map[*clientConn]struct{}
+	runs     map[string]*runState
+	runHosts map[string]string
+	pending  map[string]*pendingRequest
 
 	vapidPublic  string
 	vapidPrivate string
@@ -66,6 +69,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		hosts:           map[string]*hostConn{},
 		clients:         map[*clientConn]struct{}{},
 		runs:            map[string]*runState{},
+		runHosts:        map[string]string{},
 		pending:         map[string]*pendingRequest{},
 		passkeySessions: passkeySessionStore{data: map[string]passkeySession{}},
 	}
@@ -120,11 +124,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.requireAuth(s.handleSession))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/transcript", s.requireAuth(s.handleTranscript))
+	mux.HandleFunc("GET /api/v1/sessions/{id}/export", s.requireAuth(s.handleExport))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/git", s.requireAuth(s.handleSessionGit))
 	mux.HandleFunc("POST /api/v1/sessions/{id}/runs", s.requireAuth(s.handleCreateRun))
 	mux.HandleFunc("GET /api/v1/search", s.requireAuth(s.handleSearch))
 	mux.HandleFunc("GET /api/v1/audit", s.requireAuth(s.handleAudit))
 
+	mux.HandleFunc("GET /api/v1/runs", s.requireAuth(s.handleActiveRuns))
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.requireAuth(s.handleRun))
 	mux.HandleFunc("POST /api/v1/runs/{id}/stop", s.requireAuth(s.handleStopRun))
 	mux.HandleFunc("POST /api/v1/runs/{id}/lease", s.requireAuth(s.handleLease))
@@ -300,7 +306,37 @@ func (s *Server) adoptHostRuns(hostID string, reported []protocol.RunInfo) {
 	}
 }
 
+// hostOwnsRun prevents a paired host from injecting output, events or state
+// for a run that belongs to a different machine.
+func (s *Server) hostOwnsRun(hostID, runID string) bool {
+	if runID == "" {
+		return false
+	}
+	s.mu.RLock()
+	cached, ok := s.runHosts[runID]
+	s.mu.RUnlock()
+	if ok {
+		return cached == hostID
+	}
+	run, _, err := s.store.RunByID(runID)
+	if err != nil || run.HostID != hostID {
+		return false
+	}
+	s.mu.Lock()
+	s.runHosts[runID] = hostID
+	s.mu.Unlock()
+	return true
+}
+
 func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protocol.Envelope) {
+	if msg.Type == "run.started" || msg.Type == "run.output" || msg.Type == "run.event" ||
+		msg.Type == "run.exit" || msg.Type == "run.error" {
+		if !s.hostOwnsRun(hc.id, msg.RunID) {
+			s.log.Warn("host attempted to update a run it does not own",
+				"host_id", hc.id, "run_id", msg.RunID, "type", msg.Type)
+			return
+		}
+	}
 	switch msg.Type {
 	case "inventory":
 		if err := s.store.SetHostInventory(hc.id, msg.Version, msg.Agents, msg.Policy); err != nil {
@@ -353,6 +389,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
 		s.audit("host:"+hc.id, "run.failed", map[string]string{"run_id": msg.RunID, "error": msg.Error})
+		go s.notifyRun(msg.RunID, "Agent error", "A run failed. Open AgentNexus for details.")
 	case "pong", "pong ":
 	default:
 		s.log.Debug("unknown host message", "type", msg.Type, "host_id", hc.id)
@@ -386,6 +423,7 @@ func (s *Server) unregisterHost(id string, hc *hostConn) {
 		for _, r := range runs {
 			s.setRunState(r.ID, protocol.StateFailed)
 			s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: r.ID, Error: "host disconnected"})
+			go s.notifyRun(r.ID, "Agent disconnected", "The host disconnected while the run was active.")
 		}
 	}
 	s.broadcastHostUpdate(id)
@@ -528,8 +566,7 @@ func (c *clientConn) runWriter(ctx context.Context) {
 
 func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 	if origin := r.Header.Get("Origin"); origin != "" {
-		host := trimScheme(origin)
-		if host != r.Host {
+		if !s.originAllowed(origin, r.Host) {
 			writeError(w, http.StatusForbidden, "origin mismatch")
 			return
 		}
@@ -705,6 +742,9 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 	case "resize":
 		run, startedBy, err := s.store.RunByID(msg.RunID)
 		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
+			return
+		}
+		if run.LeaseDeviceID != c.device.ID {
 			return
 		}
 		_ = s.sendHost(run.HostID, protocol.Envelope{Type: "run.resize", RunID: msg.RunID, Cols: msg.Cols, Rows: msg.Rows})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,17 +17,38 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/web"
 )
 
+func runHealthcheck(addr string) int {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
+}
+
 func main() {
 	var (
-		addr      = flag.String("addr", envOr("NEXUS_ADDR", "127.0.0.1:8080"), "listen address")
-		dataDir   = flag.String("data-dir", envOr("NEXUS_DATA_DIR", ""), "data directory")
-		publicURL = flag.String("public-url", envOr("NEXUS_PUBLIC_URL", ""), "public hub URL (https://...)")
-		tlsCert   = flag.String("tls-cert", envOr("NEXUS_TLS_CERT", ""), "TLS certificate file")
-		tlsKey    = flag.String("tls-key", envOr("NEXUS_TLS_KEY", ""), "TLS private key file")
-		hubName   = flag.String("name", envOr("NEXUS_HUB_NAME", "AgentNexus"), "hub display name")
-		logLevel  = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
+		addr        = flag.String("addr", envOr("NEXUS_ADDR", "127.0.0.1:8080"), "listen address")
+		dataDir     = flag.String("data-dir", envOr("NEXUS_DATA_DIR", ""), "data directory")
+		publicURL   = flag.String("public-url", envOr("NEXUS_PUBLIC_URL", ""), "public hub URL (https://...)")
+		tlsCert     = flag.String("tls-cert", envOr("NEXUS_TLS_CERT", ""), "TLS certificate file")
+		tlsKey      = flag.String("tls-key", envOr("NEXUS_TLS_KEY", ""), "TLS private key file")
+		hubName     = flag.String("name", envOr("NEXUS_HUB_NAME", "AgentNexus"), "hub display name")
+		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
+		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
 	)
 	flag.Parse()
+	if *healthcheck {
+		os.Exit(runHealthcheck(*addr))
+	}
 
 	logger := newLogger(*logLevel)
 	if *dataDir == "" {

@@ -164,14 +164,27 @@ func (s *Server) csrfGuard(next http.Handler) http.Handler {
 			return
 		}
 		if origin := r.Header.Get("Origin"); origin != "" {
-			host := strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")
-			if host != r.Host {
+			if !s.originAllowed(origin, r.Host) {
 				writeError(w, http.StatusForbidden, "origin mismatch")
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// originAllowed accepts the request host and, when configured, the public URL.
+// Reverse proxies that rewrite Host still work without weakening the check.
+func (s *Server) originAllowed(origin, host string) bool {
+	got := strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")
+	if got == host {
+		return true
+	}
+	if s.cfg.PublicURL != "" {
+		want := strings.TrimPrefix(strings.TrimPrefix(strings.TrimRight(s.cfg.PublicURL, "/"), "http://"), "https://")
+		return got == want
+	}
+	return false
 }
 
 func (s *Server) audit(actor, action string, details any) {
@@ -395,6 +408,10 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePairingCode(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
+	if u.Role == "viewer" {
+		writeError(w, http.StatusForbidden, "viewer role cannot add hosts")
+		return
+	}
 	code := newPairingCode()
 	if err := s.store.CreatePairingCode(u.ID, code, 10*time.Minute); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -561,8 +578,8 @@ func (s *Server) handleSessionGit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
-	if !s.sessionPermission(u, sess, "view") {
-		writeError(w, http.StatusForbidden, "view permission required")
+	if !s.sessionPermission(u, sess, "read_transcript") {
+		writeError(w, http.StatusForbidden, "read_transcript permission required")
 		return
 	}
 	if !s.hostOnline(sess.HostID) {
@@ -588,8 +605,8 @@ func (s *Server) handleSessionGit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len(query) < 2 {
-		writeError(w, http.StatusBadRequest, "query must be at least 2 characters")
+	if len(query) < 2 || len(query) > 200 {
+		writeError(w, http.StatusBadRequest, "query must be 2-200 characters")
 		return
 	}
 	hosts, err := s.store.ListHosts(u.ID, isAdminRole(u.Role))
@@ -605,6 +622,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan result, len(hosts))
 	online := 0
 	for _, h := range hosts {
+		if !s.hostPermission(u, h.ID, "read_transcript") {
+			continue
+		}
 		if !s.hostOnline(h.ID) {
 			continue
 		}
@@ -679,6 +699,12 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "host is offline")
 		return
 	}
+	if runID, active := s.store.ActiveRunForSession(sess.ID); active {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error": "session is already active", "run_id": runID,
+		})
+		return
+	}
 	var req runRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
@@ -714,7 +740,7 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	hostID := r.PathValue("id")
 	host, err := s.store.HostByID(hostID)
-	if err != nil || host.OwnerID != u.ID || host.RevokedAt != nil {
+	if err != nil || host.RevokedAt != nil {
 		writeError(w, http.StatusNotFound, "host not found")
 		return
 	}
@@ -768,6 +794,9 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 		RunID: id, SessionID: sess.ID, Agent: sess.Agent, NativeID: sess.NativeID,
 		Cwd: cwd, Action: action, Mode: mode, Cols: cols, Rows: rows,
 	}
+	s.mu.Lock()
+	s.runHosts[id] = sess.HostID
+	s.mu.Unlock()
 	if err := s.sendHost(sess.HostID, protocol.Envelope{Type: "run.start", Run: &spec}); err != nil {
 		s.store.UpdateRunState(id, protocol.StateFailed)
 		return protocol.RunView{}, err
@@ -776,6 +805,19 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 	s.audit(u.Username, "run.started", map[string]string{"run_id": id, "host_id": sess.HostID, "agent": sess.Agent, "action": action, "mode": mode})
 	run, _, _ := s.store.RunByID(id)
 	return run, nil
+}
+
+func (s *Server) handleActiveRuns(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	runs, err := s.store.ActiveRunsForUser(u.ID, isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if runs == nil {
+		runs = []protocol.RunView{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"runs": runs})
 }
 
 func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {

@@ -104,20 +104,8 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		fail("unknown run mode")
 		return
 	}
-	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
-		fail("invalid native session id")
-		return
-	}
-	if spec.Action != protocol.ActionNew && !d.policy.AgentAllowed(spec.Agent) {
-		fail("agent is not allowed by host policy")
-		return
-	}
-	if spec.Action == protocol.ActionNew && !d.policy.AllowNew {
-		fail("host policy does not allow new sessions")
-		return
-	}
-	if spec.Action == protocol.ActionFork && !d.policy.AllowFork {
-		fail("host policy does not allow forking")
+	if err := d.validateRunPolicy(spec); err != nil {
+		fail(err.Error())
 		return
 	}
 	cwd := spec.Cwd
@@ -173,14 +161,17 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		sessionKey = spec.Agent + ":new:" + randomRunKey()
 	}
 	d.runMu.Lock()
-	for _, existing := range d.runs {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another run on this host")
-			return
-		}
-	}
+	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
 	d.runMu.Unlock()
+	if !reserved {
+		fail("session is already active in another run on this host")
+		return
+	}
+	defer func() {
+		d.runMu.Lock()
+		d.releaseRunLocked(sessionKey, spec.RunID)
+		d.runMu.Unlock()
+	}()
 
 	cols, rows := spec.Cols, spec.Rows
 	if cols <= 0 {
@@ -222,8 +213,11 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 			if n > 0 {
 				seq := r.seq.Add(1)
 				data := append([]byte(nil), buf[:n]...)
+				// A hub outage must not kill the agent. Output produced while
+				// disconnected is not replayed; the native session remains the
+				// source of truth and the run reconnects through active_runs.
 				if sendErr := d.send(protocol.Envelope{Type: "run.output", RunID: spec.RunID, Seq: seq, Data: data}); sendErr != nil {
-					r.terminate()
+					d.log.Debug("run output dropped while hub is offline", "run_id", spec.RunID)
 				}
 			}
 			if err != nil {

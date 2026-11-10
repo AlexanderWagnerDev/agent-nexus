@@ -129,6 +129,33 @@ func (c Config) SigningKey() (ed25519.PrivateKey, error) {
 	return ed25519.PrivateKey(raw), nil
 }
 
+// splitCommandLine splits an ACP adapter command. Double quotes group a path
+// with spaces; backslash escaping is intentionally not interpreted so Windows
+// paths remain unchanged.
+func splitCommandLine(s string) []string {
+	var out []string
+	var b strings.Builder
+	quoted := false
+	flush := func() {
+		if b.Len() > 0 {
+			out = append(out, b.String())
+			b.Reset()
+		}
+	}
+	for _, r := range s {
+		switch {
+		case r == '"':
+			quoted = !quoted
+		case (r == ' ' || r == '\t') && !quoted:
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return out
+}
+
 func NewIdentity() (ed25519.PublicKey, ed25519.PrivateKey, error) {
 	return ed25519.GenerateKey(rand.Reader)
 }

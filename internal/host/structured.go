@@ -53,6 +53,10 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		d.log.Warn("structured run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if err := d.validateRunPolicy(spec); err != nil {
+		fail(err.Error())
+		return
+	}
 	if spec.Agent == "codex" {
 		d.startCodexStructured(parent, spec)
 		return
@@ -65,20 +69,8 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("structured mode is available for OpenCode, Codex and configured ACP agents; use terminal mode")
 		return
 	}
-	if !d.policy.AgentAllowed(spec.Agent) {
-		fail("agent is not allowed by host policy")
-		return
-	}
-	if spec.Action == protocol.ActionNew && !d.policy.AllowNew {
-		fail("host policy does not allow new sessions")
-		return
-	}
 	if spec.Action == protocol.ActionFork {
 		fail("structured fork is not implemented; use terminal fork")
-		return
-	}
-	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
-		fail("invalid native session id")
 		return
 	}
 	cwd := spec.Cwd
@@ -111,38 +103,17 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		sessionKey = spec.Agent + ":new:" + randomRunKey()
 	}
 	d.runMu.Lock()
-	for _, existing := range d.runs {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another run on this host")
-			return
-		}
-	}
-	for _, existing := range d.structured {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another structured run on this host")
-			return
-		}
-		if existing.id == spec.RunID {
-			d.runMu.Unlock()
-			fail("run already exists")
-			return
-		}
-	}
-	for _, existing := range d.codexRuns {
-		if existing.sessionKey == sessionKey {
-			d.runMu.Unlock()
-			fail("session is already active in another structured run on this host")
-			return
-		}
-		if existing.id == spec.RunID {
-			d.runMu.Unlock()
-			fail("run already exists")
-			return
-		}
-	}
+	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
 	d.runMu.Unlock()
+	if !reserved {
+		fail("session is already active in another run on this host")
+		return
+	}
+	defer func() {
+		d.runMu.Lock()
+		d.releaseRunLocked(sessionKey, spec.RunID)
+		d.runMu.Unlock()
+	}()
 
 	port, err := freeLoopbackPort()
 	if err != nil {
