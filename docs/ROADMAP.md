@@ -41,7 +41,7 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user service, `doctor` | Windows Task Scheduler/NSSM service option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker | Mobile usability review |
+| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push, content-free payloads, QR/link device pairing, PWA manifest/service worker, 360 px mobile layout review | WCAG 2.2 AA audit for non-terminal views |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
@@ -178,9 +178,10 @@ External dependencies: availability and stability of the agents' interfaces list
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
 > **0.1.x implementation:** OpenCode and Codex structured modes, generic ACP
-> adapters (Claude Code via `claude-code-acp`), the approval broker and Web
-> Push, QR/link device pairing are implemented. The mobile usability review
-> remains open.
+> adapters (Claude Code via `claude-agent-acp`), the approval broker and Web
+> Push, QR/link device pairing are implemented. The main views and the paired
+> host, step-up and pairing dialogs were reviewed at 360 px with no horizontal
+> overflow; WCAG 2.2 AA checks remain open.
 
 **Acceptance criteria (M4):**
 
@@ -188,7 +189,7 @@ External dependencies: availability and stability of the agents' interfaces list
 - [ ] A session continued in structured mode remains resumable in the native CLI with all turns, and can be continued again in terminal mode.
 - [ ] Approval requests from all three agents appear in the web app and as Web Push (installed PWA on Android and iOS 16.4+, desktop browsers); allow-once/deny work; timeouts deny by default; decisions are audited.
 - [x] Push payloads contain no conversation content by default (implemented in `notifyRun`).
-- [ ] Mobile layout passes usability review on a 360 px wide screen; WCAG 2.2 AA checks for non-terminal views pass (NFR-10).
+- [ ] Mobile layout passes usability review on a 360 px wide screen; WCAG 2.2 AA checks for non-terminal views pass (NFR-10). *360 px layout reviewed; WCAG audit still open.*
 - [ ] QR pairing of a second device with SAS confirmation works.
 - [ ] If an agent version outside the supported range is detected, structured mode is disabled for it with a visible warning and terminal mode still works (NFR-08).
 

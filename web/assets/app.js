@@ -727,7 +727,7 @@ async function pageDevices() {
   const data = await api('/devices');
   view.innerHTML = `
     <div class="table-wrap">
-      <table><thead><tr><th>Device</th><th>Created</th><th>Last seen</th><th></th></tr></thead><tbody>
+      <table class="devices-table"><thead><tr><th>Device</th><th>Created</th><th>Last seen</th><th></th></tr></thead><tbody>
       ${data.devices.map((d) => `<tr>
         <td><b>${esc(d.name)}</b><div class="mono-small">${esc(shortId(d.id))}</div></td>
         <td>${esc(fmtTime(d.created_at))}</td>
@@ -915,14 +915,11 @@ async function pageAudit() {
   const data = await api('/audit?limit=300');
   view.innerHTML = `
     ${data.broken_seq ? `<div class="notice error mb-2">Audit chain broken at sequence ${esc(data.broken_seq)}. Investigate the database immediately.</div>` : `<div class="notice info mb-2">Hash chain verified: no broken link in the checked range.</div>`}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Seq</th><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
-      <tbody>${data.events.map((e) => `<tr>
-        <td class="mono">${esc(e.seq)}</td><td class="nowrap">${esc(fmtTime(e.at))}</td>
-        <td>${esc(e.actor)}</td><td class="mono">${esc(e.action)}</td>
-        <td class="mono" style="max-width:420px;white-space:pre-wrap;word-break:break-all">${esc(e.details)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
+    <div class="list">${data.events.map((e) => `
+      <div class="audit-row">
+        <div class="split wrap"><span class="badge no-dot">#${esc(e.seq)}</span><strong>${esc(e.action)}</strong><span class="right small muted">${esc(fmtTime(e.at))} · ${esc(e.actor)}</span></div>
+        ${e.details && e.details !== 'null' ? `<pre class="audit-details">${esc(e.details)}</pre>` : ''}
+      </div>`).join('')}</div>`;
 }
 
 async function pageStructuredRun(id, run) {

@@ -29,7 +29,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
 | **Search** | Federated search across online hosts; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
-| **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-code-acp`) gets the same experience |
+| **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-agent-acp`) gets the same experience |
 | **Notifications** | Web Push for run completion and approval requests; content-free payloads |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
@@ -71,7 +71,7 @@ make build          # produces bin/nexus-hub and bin/nexusd
 ./bin/nexusd doctor
 # Optional: give Claude Code the structured chat UI through an ACP adapter.
 # claude-agent-acp and claude-code-acp are auto-detected on PATH.
-./bin/nexusd acp --agent claude --command claude-code-acp
+./bin/nexusd acp --agent claude --command claude-agent-acp
 ```
 
 The host connects **outbound only**; no ports need to be opened on your machines.
@@ -146,7 +146,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing and host SAS confirmation implemented; mobile review open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; WCAG audit open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants and the signed GoReleaser/SBOM pipeline implemented; signed commands, PostgreSQL, actual signing credentials and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 
