@@ -1,0 +1,34 @@
+# Portainer stack for AgentNexus behind an existing reverse proxy
+# (Nginx Proxy Manager, Caddy, Traefik, ...).
+#
+# 1. Create the stack in Portainer and paste this file.
+# 2. Set HUB_DOMAIN to the external HTTPS hostname.
+# 3. Point the proxy at http://<docker-host>:8787 (or change HUB_PORT).
+# 4. Keep /data persistent and back up the named volume.
+services:
+  hub:
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      NEXUS_ADDR: "0.0.0.0:8080"
+      NEXUS_DATA_DIR: "/data"
+      NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN}"
+      NEXUS_HUB_NAME: "${HUB_NAME:-AgentNexus}"
+    volumes:
+      - nexus-data:/data
+    ports:
+      - "${HUB_BIND:-0.0.0.0}:${HUB_PORT:-8787}:8080"
+    healthcheck:
+      test: ["CMD", "/nexus-hub", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  nexus-data:

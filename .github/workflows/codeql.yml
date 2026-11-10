@@ -16,27 +16,29 @@ permissions:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         language: [go, javascript-typescript]
     steps:
-      - uses: actions/checkout@v7
-      - uses: github/codeql-action/init@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: github/codeql-action/init@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
-      - uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/autobuild@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
       # Code scanning uploads need GitHub Advanced Security on private repos.
       # Results are kept as a workflow artifact instead. Set upload: always
       # (and drop the artifact step) once code scanning is enabled.
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@5895b2c9be147bc7f1c75ce72c5cb577febb1907 # v4
         with:
           upload: never
           output: sarif-results
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: codeql-sarif-${{ matrix.language }}
           path: sarif-results
           if-no-files-found: warn
+          retention-days: 14

@@ -1,7 +1,13 @@
 services:
   hub:
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-latest}
     build: .
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       NEXUS_ADDR: "0.0.0.0:8080"
       NEXUS_DATA_DIR: "/data"
@@ -11,12 +17,19 @@ services:
       - nexus-data:/data
     expose:
       - "8080"
+    healthcheck:
+      test: ["CMD", "/nexus-hub", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   caddy:
     image: caddy:2
     restart: unless-stopped
     depends_on:
-      - hub
+      hub:
+        condition: service_healthy
     environment:
       HUB_DOMAIN: "${HUB_DOMAIN:-localhost}"
     ports:
