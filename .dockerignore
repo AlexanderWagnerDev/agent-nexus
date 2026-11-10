@@ -1,0 +1,8 @@
+.git
+.nexus
+data
+*.db
+*.db-shm
+*.db-wal
+nexus-hub
+nexusd

@@ -1,0 +1,4 @@
+{$HUB_DOMAIN:localhost} {
+	encode zstd gzip
+	reverse_proxy hub:8080
+}

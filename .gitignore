@@ -1,0 +1,19 @@
+# Binaries
+/nexus-hub
+/nexusd
+*.exe
+*.test
+
+# Runtime data
+/data/
+*.db
+*.db-shm
+*.db-wal
+/coverage.out
+/coverage.html
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
+*.log
