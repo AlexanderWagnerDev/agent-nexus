@@ -46,9 +46,8 @@ explicitly approved the first public version.
 Removing Git tags and GitHub releases does not delete container images or old
 workflow logs. At the time of the cleanup:
 
-- GitHub Actions artifacts were deleted.
-- Old workflow runs remain and may mention previous commit authors in their
-  logs. Delete them before making the repository public if that matters.
+- GitHub Actions artifacts and all old workflow runs were deleted, including
+  their logs.
 - GHCR may still contain images from the removed release candidates. Listing
   and deleting them requires a token with `read:packages` and
   `delete:packages`:

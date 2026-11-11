@@ -43,12 +43,11 @@ sessions.
 - New screenshots must be generated from the synthetic demo hub in
   `web/e2e/demo/`. Existing screenshots are being replaced as the demo fixture
   grows.
-- **Git history:** 13 commits carry a personal display name and 72 commits use a
-  personal email domain in author/committer metadata. Earlier commits also
-  contain screenshots from a real development machine. They are not in the
-  current tree. A history rewrite is prepared but **not executed** because it
-  changes every commit SHA and requires separate maintainer approval. See
-  [HISTORY-REWRITE.md](HISTORY-REWRITE.md).
+- **Git history:** rewritten on 2026-11-11. Authors and committers are normalised
+  to `AlexanderWagnerDev` and the GitHub no-reply address. Old screenshots and
+  release-note blobs were removed from all commits; the synthetic screenshots
+  were re-added in one commit. No real name or personal email is reachable in
+  the published history.
 
 ## Pre-publication checklist
 
