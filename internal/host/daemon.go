@@ -45,6 +45,9 @@ type Daemon struct {
 	connectedAt  atomic.Int64
 	sessionDelta atomic.Bool
 
+	hubNonceMu sync.Mutex
+	hubNonces  map[string]time.Time
+
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
 }
@@ -62,6 +65,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		startingRuns: map[string]bool{},
 		lastByAgent:  map[string][]protocol.Session{},
 		lastSnapshot: map[string]string{},
+		hubNonces:    map[string]time.Time{},
 		gitBranches:  map[string]gitRepoCache{},
 	}
 	d.adapters = DetectAdapters(logger)
@@ -112,6 +116,16 @@ func jitter(d time.Duration) time.Duration {
 }
 
 func (d *Daemon) connect(ctx context.Context) error {
+	if d.cfg.HubPublicKey == "" {
+		if key, err := FetchHubPublicKey(ctx, d.cfg.HubURL); err == nil && key != "" {
+			d.cfg.HubPublicKey = key
+			if err := SaveConfig(d.cfg); err != nil {
+				d.log.Warn("cannot save pinned hub key", "error", err)
+			} else {
+				d.log.Info("pinned hub command-signing key")
+			}
+		}
+	}
 	u := strings.TrimSuffix(d.cfg.HubURL, "/")
 	u = strings.Replace(u, "https://", "wss://", 1)
 	u = strings.Replace(u, "http://", "ws://", 1)
@@ -173,6 +187,9 @@ func (d *Daemon) connect(ctx context.Context) error {
 		}
 		return errors.New("host authentication rejected")
 	}
+	if err := d.verifyHubEnvelope(&auth); err != nil {
+		return fmt.Errorf("hub auth signature: %w", err)
+	}
 
 	d.sessionDelta.Store(false)
 	for _, feature := range auth.Features {
@@ -206,6 +223,10 @@ func (d *Daemon) connect(ctx context.Context) error {
 		var msg protocol.Envelope
 		if err := json.Unmarshal(data, &msg); err != nil {
 			continue
+		}
+		if err := d.verifyHubEnvelope(&msg); err != nil {
+			d.log.Warn("rejected hub command", "type", msg.Type, "error", err)
+			return fmt.Errorf("hub command rejected: %w", err)
 		}
 		go d.handleMessage(ctx, msg)
 	}

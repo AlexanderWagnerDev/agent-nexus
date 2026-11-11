@@ -2,7 +2,7 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current 0.3.1-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants and five-minute step-up confirmation for sensitive actions. Signed-command mode is **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The current 0.3.2-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
 ### 0.1.x implementation notes
 
@@ -14,7 +14,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Step-up | Sensitive actions require a fresh passkey or password + TOTP confirmation; the window is five minutes and is bound to the session | no per-action confirmation list is configurable yet |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
 | CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
-| Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window | host key is a `0600` file, not OS keystore/DPAPI; no hub identity pinning |
+| Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window; hub commands signed and replay-protected after authentication | hub key is a `0600` file, not OS keystore/DPAPI; client/device signatures not implemented |
 | Host policy | allowed roots (symlinks resolved), allowed agents, new/fork switches, forbidden flags; enforced on host | no per-action launch profiles |
 | Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in 0.1.x |
 | Audit | hash-chained append-only table plus host-local JSONL audit, verification endpoint/UI | host-local log is not hash-chained |
@@ -40,6 +40,10 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 - Viewers can no longer create host pairing codes.
 - The Windows Startup launcher was replaced by a Task Scheduler task with
   crash restart and no administrator rights.
+- Hub-to-host commands are signed with an Ed25519 hub identity, nonce and
+  timestamp; hosts pin the key and reject replays or stale commands.
+- `hub-signing.key`, `secret.key`, `nexusd.json` and the host private key are
+  `0600` where the OS supports POSIX permissions.
 - Audit appends are serialized so concurrent requests cannot fork the hash
   chain; a concurrent append test verifies the chain.
 - TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under a
@@ -331,6 +335,26 @@ sessions and fork enabled, and the forbidden-argument list above.
 - Unanswered requests are **denied** after a timeout (default 10 min, configurable per host).
 - Every request and decision is audited with user, device and timestamp.
 - Push notifications for approvals contain no command text by default ("Codex on build-server needs approval").
+
+## Hub command signing (v0.3.2)
+
+- The hub has a persistent Ed25519 key at `<data-dir>/hub-signing.key` and
+  publishes the public key at `GET /api/v1/hub-key`.
+- Every post-authentication hub-to-host envelope carries `nonce`, `issued_at`
+  and `signature` over a canonical JSON payload with the signature field
+  cleared. This covers run control, requests, approvals and session snapshots.
+- The host pins the key during pairing, or on first connection for a host
+  paired before v0.3.2. On every message it verifies:
+  - the Ed25519 signature;
+  - a timestamp within ?5 minutes;
+  - that the nonce has not been seen in the replay window.
+- A missing, invalid, stale or replayed command closes the host link and is
+  logged. Older hosts that ignore signatures remain compatible; a host with no
+  pinned key continues unsigned against an older hub.
+- **This does not defend against a compromised hub**, which owns the signing
+  key. It defends against command injection/tampering by entities without the
+  key and prevents replay. Client/device-signed commands with host-local device
+  approval remain the Phase 5 goal below.
 
 ## Signed-command mode (Phase 5)
 

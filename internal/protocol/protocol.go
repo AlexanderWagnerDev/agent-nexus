@@ -213,6 +213,7 @@ type Envelope struct {
 	Arch       string         `json:"arch,omitempty"`
 	Version    string         `json:"version,omitempty"`
 	Nonce      string         `json:"nonce,omitempty"`
+	IssuedAt   int64          `json:"issued_at,omitempty"`
 	Signature  string         `json:"signature,omitempty"`
 	Agents     []AgentInfo    `json:"agents,omitempty"`
 	Policy     *PolicySummary `json:"policy,omitempty"`

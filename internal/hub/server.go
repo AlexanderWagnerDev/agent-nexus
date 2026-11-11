@@ -27,7 +27,7 @@ const (
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.3.1"
+var Version = "0.3.2"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -50,6 +50,7 @@ type Server struct {
 	vapidPublic  string
 	vapidPrivate string
 	epoch        string
+	signer       *HubSigner
 
 	passkeySessions passkeySessionStore
 }
@@ -83,6 +84,8 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 
 func (s *Server) SetAssets(h http.Handler) { s.assets = h }
 
+func (s *Server) SetSigner(signer *HubSigner) { s.signer = signer }
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
@@ -93,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/passkey/begin", s.handlePasskeyLoginBegin)
 	mux.HandleFunc("POST /api/v1/auth/passkey/finish", s.handlePasskeyLoginFinish)
 	mux.HandleFunc("POST /api/v1/auth/device-pair", s.handleDevicePair)
+	mux.HandleFunc("GET /api/v1/hub-key", s.handleHubKey)
 	mux.HandleFunc("POST /api/v1/hosts/pair", s.handlePairHost)
 
 	mux.HandleFunc("POST /api/v1/auth/logout", s.requireAuth(s.handleLogout))
@@ -163,11 +167,12 @@ func (s *Server) Handler() http.Handler {
 // ---- host connections ----
 
 type hostConn struct {
-	id   string
-	ws   *websocket.Conn
-	send chan protocol.Envelope
-	done chan struct{}
-	once sync.Once
+	id     string
+	ws     *websocket.Conn
+	send   chan protocol.Envelope
+	done   chan struct{}
+	once   sync.Once
+	signer *HubSigner
 }
 
 func (h *hostConn) close() {
@@ -183,6 +188,9 @@ func (h *hostConn) runWriter(ctx context.Context) {
 		case <-h.done:
 			return
 		case msg := <-h.send:
+			if err := h.signer.Sign(&msg); err != nil {
+				continue
+			}
 			data, err := json.Marshal(msg)
 			if err != nil {
 				continue
@@ -246,7 +254,7 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	hc := &hostConn{id: hostID, ws: ws, send: make(chan protocol.Envelope, hostSendQueue), done: make(chan struct{})}
+	hc := &hostConn{id: hostID, ws: ws, send: make(chan protocol.Envelope, hostSendQueue), done: make(chan struct{}), signer: s.signer}
 	s.registerHost(hc)
 	defer s.unregisterHost(hostID, hc)
 	go hc.runWriter(ctx)
@@ -254,7 +262,15 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	if auth.HostName != "" {
 		_, _ = s.store.db.Exec(`UPDATE hosts SET name=? WHERE id=?`, auth.HostName, hostID)
 	}
-	_ = writeWS(ctx, ws, protocol.Envelope{Type: "auth.ok", Protocol: protocol.Version, Features: []string{"session-delta-v1"}})
+	features := []string{"session-delta-v1"}
+	if s.signer != nil {
+		features = append(features, "hub-signing-v1")
+	}
+	authOK := protocol.Envelope{Type: "auth.ok", Protocol: protocol.Version, Features: features}
+	if err := s.signer.Sign(&authOK); err != nil {
+		s.log.Warn("cannot sign auth.ok", "host_id", hostID, "error", err)
+	}
+	_ = writeWS(ctx, ws, authOK)
 	s.store.UpdateHostSeen(hostID)
 	s.broadcastHostUpdate(hostID)
 	s.log.Info("host connected", "host_id", hostID, "version", auth.Version, "os", auth.OS, "arch", auth.Arch)

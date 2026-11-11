@@ -21,7 +21,7 @@ Edit `.env`:
 ```dotenv
 HUB_DOMAIN=nexus.example.com
 HUB_NAME=AgentNexus
-NEXUS_TAG=v0.3.1-rc.1
+NEXUS_TAG=v0.3.2-rc.1
 ```
 
 Point the DNS record for `HUB_DOMAIN` at the server, open TCP 80/443, then:

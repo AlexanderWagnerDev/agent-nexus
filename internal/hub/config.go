@@ -191,6 +191,15 @@ func (s *Server) audit(actor, action string, details any) {
 	_ = s.store.AppendAudit(actor, action, details)
 }
 
+func (s *Server) handleHubKey(w http.ResponseWriter, r *http.Request) {
+	public := s.signer.PublicKey()
+	if public == "" {
+		writeError(w, http.StatusServiceUnavailable, "hub signing is not configured")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"public_key": public})
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": Version})
 }

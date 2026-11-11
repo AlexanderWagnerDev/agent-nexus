@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-const Version = "0.3.1"
+const Version = "0.3.2"
 
 // Policy is enforced on the host and cannot be overridden by the hub.
 type Policy struct {
@@ -27,11 +27,12 @@ type Policy struct {
 
 // Config is stored next to the host key in the per-user config directory.
 type Config struct {
-	HubURL     string `json:"hub_url"`
-	HostID     string `json:"host_id"`
-	HostName   string `json:"host_name"`
-	PrivateKey string `json:"private_key"`
-	Policy     Policy `json:"policy"`
+	HubURL       string `json:"hub_url"`
+	HostID       string `json:"host_id"`
+	HostName     string `json:"host_name"`
+	PrivateKey   string `json:"private_key"`
+	HubPublicKey string `json:"hub_public_key,omitempty"`
+	Policy       Policy `json:"policy"`
 	// ACPCommands maps an agent name to an Agent Client Protocol adapter
 	// command line, for example {"claude": "claude-code-acp"}. When empty the
 	// daemon looks for the claude-agent-acp or claude-code-acp binary on PATH.

@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.1-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments and review-grade diffs are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.2-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs and replay-protected hub command signing are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -56,6 +56,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, SAS confirmation, challenge-response over an outbound WebSocket |
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
+| **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -104,7 +105,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 Download the latest release binaries or use the multi-arch image:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.1-rc.1
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.2-rc.1
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
@@ -156,7 +157,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Signed-command mode and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Hub-to-host commands are signed, but client/device-signed commands and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
@@ -232,7 +233,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
 | 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; WCAG audit open |
-| 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants and the signed GoReleaser/SBOM pipeline implemented; signed commands, PostgreSQL, actual signing credentials and external pentest open |
+| 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, hub command signing and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 
 Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The status table reflects what the code does, not what the roadmap intends.

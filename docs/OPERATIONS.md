@@ -9,6 +9,7 @@ and what has actually been tested, not the 1.0 target.
 | --- | --- |
 | Hub database | `<config-dir>/AgentNexus/hub.db` (override with `--data-dir` / `NEXUS_DATA_DIR`) |
 | Hub secret key | `<data-dir>/secret.key` (AES-256-GCM key for TOTP and VAPID secrets, mode `0600`) |
+| Hub signing key | `<data-dir>/hub-signing.key` (Ed25519 identity for signed host commands, mode `0600`) |
 | Hub web assets | embedded in `nexus-hub` |
 | Host config and key | `<config-dir>/AgentNexus/nexusd.json` (mode `0600` where the OS supports it) |
 | Host audit log | `<config-dir>/AgentNexus/audit.log` (JSONL) |
@@ -25,7 +26,7 @@ Versioned images are published to GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:latest
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.1-rc.1   # release tag
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.2-rc.1   # release tag
 ```
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
@@ -52,7 +53,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — a release tag such as `v0.3.1-rc.1`; avoid `latest` in production.
+- `NEXUS_TAG` — a release tag such as `v0.3.2-rc.1`; avoid `latest` in production.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
@@ -74,7 +75,7 @@ sudo chown -R 65532:65532 /srv/agentnexus
 The hub stores users, hosts, device sessions, pairing history, settings and the
 audit log. Native session transcripts remain on the hosts.
 
-The database and `secret.key` form one backup set. TOTP secrets and the VAPID
+The database, `secret.key` and `hub-signing.key` form one backup set. TOTP secrets and the VAPID
 private key cannot be read without the key file.
 
 With the hub running, use the built-in online snapshot (available in the hub
@@ -83,6 +84,7 @@ binary, including the container image):
 ```bash
 nexus-hub --data-dir "$NEXUS_DATA_DIR" --backup "backup/hub-$(date +%F).db"
 cp -a "$NEXUS_DATA_DIR/secret.key" "backup/secret-$(date +%F).key"
+cp -a "$NEXUS_DATA_DIR/hub-signing.key" "backup/hub-signing-$(date +%F).key"
 ```
 
 The command refuses to overwrite an existing file. With the hub stopped, a
@@ -100,13 +102,16 @@ Restore (stop the hub first and restore both files):
 systemctl --user stop agentnexus          # or stop the container/task
 cp backup/hub-YYYY-MM-DD.db "$NEXUS_DATA_DIR/hub.db"
 cp backup/secret-YYYY-MM-DD.key "$NEXUS_DATA_DIR/secret.key"
-chmod 600 "$NEXUS_DATA_DIR/hub.db" "$NEXUS_DATA_DIR/secret.key"
+cp backup/hub-signing-YYYY-MM-DD.key "$NEXUS_DATA_DIR/hub-signing.key"
+chmod 600 "$NEXUS_DATA_DIR/hub.db" "$NEXUS_DATA_DIR/secret.key" "$NEXUS_DATA_DIR/hub-signing.key"
 systemctl --user start agentnexus
 ```
 
 Rollback: keep the previous hub binary and the matching backup set. Stop the
 hub, restore the database and key, start the previous binary against the same
-data directory. Do not mix an old database with a new secret key. A host daemon
+data directory. Do not mix an old database with a new secret or signing key. If the signing key
+is intentionally rotated, remove `hub_public_key` from each host config (or
+re-pair) so the new key can be pinned. A host daemon
 needs no backup beyond `nexusd.json`; native sessions are owned by the agents.
 
 ## Upgrade

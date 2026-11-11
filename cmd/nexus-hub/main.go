@@ -78,6 +78,11 @@ func main() {
 		os.Exit(1)
 	}
 	store.SetSecretBox(box)
+	signer, err := hub.OpenHubSigner(*dataDir)
+	if err != nil {
+		logger.Error("cannot open hub signing key", "error", err)
+		os.Exit(1)
+	}
 	if err := store.MigrateSecrets(); err != nil {
 		logger.Error("cannot encrypt stored secrets", "error", err)
 		os.Exit(1)
@@ -100,6 +105,7 @@ func main() {
 		TLSKey:    *tlsKey,
 		HubName:   *hubName,
 	}, store, logger)
+	srv.SetSigner(signer)
 	srv.SetAssets(web.Handler())
 
 	httpServer := &http.Server{
