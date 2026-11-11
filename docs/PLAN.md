@@ -36,8 +36,9 @@ This document is the single source of truth for **what** AgentNexus must do (req
   not a browser or multi-host soak test.
 - **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
   Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
-  (no Docker daemon on the development host), client/device-signed commands, PostgreSQL,
-  native apps, WCAG 2.2 AA and external penetration testing.
+  (no Docker daemon on the development host), a physical three-host setup,
+  client/device-signed commands, PostgreSQL, native apps, WCAG 2.2 AA and
+  external penetration testing.
 
 ## Table of contents
 

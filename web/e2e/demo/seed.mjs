@@ -131,6 +131,35 @@ try {
     console.log(`started demo run ${run.id} for ${session.title}`);
   }
   console.log(`READY ${base} (login ${user} / ${password})`);
+
+  if (process.env.DEMO_VERIFY === '1') {
+    let allRuns = [];
+    let notifications = [];
+    for (let i = 0; i < 50; i += 1) {
+      allRuns = (await api('/api/v1/runs')).runs || [];
+      notifications = (await api('/api/v1/notifications?limit=40')).notifications || [];
+      if (notifications.some((n) => n.kind === 'failed') && allRuns.filter((r) => r.state === 'idle').length >= 2) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const { hosts: paired } = await api('/api/v1/hosts');
+    if (paired.length !== 3) throw new Error(`expected 3 hosts, got ${paired.length}`);
+    if (paired.some((h) => h.status !== 'online')) throw new Error('a demo host is offline');
+    const platforms = new Set(paired.map((h) => h.os));
+    if (!platforms.has('windows') || !platforms.has('linux') || !platforms.has('darwin')) {
+      throw new Error(`platforms not distinct: ${[...platforms].join(',')}`);
+    }
+    const { sessions: allSessions } = await api('/api/v1/sessions?limit=50');
+    if (allSessions.length < 7) throw new Error(`expected at least 7 sessions, got ${allSessions.length}`);
+    if (allRuns.length < 2) throw new Error(`expected at least 2 active demo runs, got ${allRuns.length}`);
+    if (!notifications.some((n) => n.kind === 'failed')) throw new Error('expected a failed-run notification');
+    const sample = allSessions.find((s) => s.repo_url);
+    if (!sample) throw new Error('no session with repository metadata');
+    const git = await api(`/api/v1/sessions/${sample.id}/git`);
+    if (!git.diff || !git.branch) throw new Error('demo git fixture missing');
+    console.log('VERIFY OK 3 hosts, 7+ sessions, 2 active runs, failed-run notification, git fixture');
+    for (const { child } of children) child.kill();
+    process.exit(0);
+  }
 } catch (err) {
   console.error(err);
   for (const { child } of children) child.kill();
