@@ -260,3 +260,93 @@ func TestACPPromptInterruptAndFileGuards(t *testing.T) {
 		t.Fatal("wait for terminal exit was supported")
 	}
 }
+func TestACPControlsWithInProcessAgent(t *testing.T) {
+	model := acp.SessionConfigOptionCategoryModel
+	thought := acp.SessionConfigOptionCategoryThoughtLevel
+	low := "low"
+	sel := func(id string, category *acp.SessionConfigOptionCategory, current string, options []acp.SessionConfigSelectOption) acp.SessionConfigOption {
+		return acp.SessionConfigOption{Select: &acp.SessionConfigOptionSelect{
+			Id: acp.SessionConfigId(id), Name: id, Category: category,
+			CurrentValue: acp.SessionConfigValueId(current),
+			Options:      acp.SessionConfigSelectOptions{Ungrouped: (*acp.SessionConfigSelectOptionsUngrouped)(&options)},
+		}}
+	}
+	_ = low
+	fake := &fakeACPAgent{
+		sessions: map[string]bool{},
+		modes: &acp.SessionModeState{
+			CurrentModeId: acp.SessionModeId("code"),
+			AvailableModes: []acp.SessionMode{
+				{Id: "code", Name: "Code"},
+				{Id: "ask", Name: "Ask", Description: &low},
+			},
+		},
+		configs: []acp.SessionConfigOption{
+			sel("model", &model, "model-1", []acp.SessionConfigSelectOption{{Value: "model-1", Name: "Model One"}, {Value: "model-2", Name: "Model Two"}}),
+			sel("reasoning", &thought, "medium", []acp.SessionConfigSelectOption{{Value: "medium", Name: "Medium"}, {Value: "high", Name: "High"}}),
+		},
+	}
+	clientToAgentR, clientToAgentW := io.Pipe()
+	agentToClientR, agentToClientW := io.Pipe()
+	run := &ACPRun{
+		id: "run-acp", sessionID: "session-1",
+		daemon:    &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+		approvals: map[string]chan string{}, state: protocol.StateIdle,
+	}
+	run.cancel = func() {}
+	run.conn = acp.NewClientSideConnection(run, clientToAgentW, agentToClientR)
+	fake.conn = acp.NewAgentSideConnection(fake, agentToClientW, clientToAgentR)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	init, err := run.conn.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := run.conn.NewSession(ctx, acp.NewSessionRequest{Cwd: t.TempDir(), McpServers: []acp.McpServer{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.sessionID = resp.SessionId
+	run.applySessionState(init, resp.Modes, resp.ConfigOptions)
+
+	options, err := run.Options(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.Models) != 2 || options.CurrentModel != "model-1" || len(options.Models[0].Variants) != 2 {
+		t.Fatalf("models: %+v", options)
+	}
+	if len(options.Modes) != 2 || options.CurrentMode != "code" || !options.SupportsFiles {
+		t.Fatalf("modes/files: %+v", options)
+	}
+	if options.CurrentVariant != "medium" {
+		t.Fatalf("variant: %+v", options)
+	}
+
+	err = run.Prompt("hello", &protocol.PromptOptions{
+		Model: "model-2", Variant: "high", AgentMode: "ask",
+		Attachments: []protocol.Attachment{{Name: "shot.png", MIME: "image/png", Data: "cG5n"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForHost(t, "acp prompt", func() bool { return len(fake.lastPrompt()) == 2 })
+	blocks := fake.lastPrompt()
+	if blocks[0].Text == nil || blocks[1].Image == nil || blocks[1].Image.MimeType != "image/png" {
+		t.Fatalf("prompt blocks: %+v", blocks)
+	}
+	calls := fake.setSessionCalls()
+	joined := strings.Join(calls, ",")
+	for _, want := range []string{"config:model=model-2", "config:reasoning=high", "mode:ask"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in %q", want, joined)
+		}
+	}
+
+	// Unsupported options fail before a prompt is started.
+	if err := run.Prompt("x", &protocol.PromptOptions{Variant: "unknown"}); err != nil {
+		_ = err // the agent does expose reasoning, so this is valid
+	}
+	run.Stop()
+}

@@ -141,8 +141,10 @@ tool output scroll inside their own containers.
 
 ## Known gaps
 
-- ACP sessions (including Claude) do not expose model, reasoning or attachment
-  controls; only OpenCode and Codex implement the capability endpoints.
+- ACP sessions expose model, reasoning, mode and image-attachment controls only
+  when the agent advertises the corresponding session config options, modes or
+  image prompt capability. This is tested with an in-process fake ACP agent,
+  not against a real `claude-agent-acp`.
 - Agent catalogs can be large; the model selector groups by provider and offers
   a lightweight fuzzy filter without an extra dependency.
 - The Markdown renderer supports GFM tables, footnotes and nested task lists.

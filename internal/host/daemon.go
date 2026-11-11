@@ -745,12 +745,16 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		d.runMu.Lock()
 		sr := d.structured[p.RunID]
 		cr := d.codexRuns[p.RunID]
+		ar := d.acpRuns[p.RunID]
 		d.runMu.Unlock()
 		if sr != nil {
 			return sr.Options(context.Background())
 		}
 		if cr != nil {
 			return cr.Options(context.Background())
+		}
+		if ar != nil {
+			return ar.Options(context.Background())
 		}
 		return protocol.RunOptions{Models: []protocol.ModelOption{}, Modes: []protocol.AgentModeOption{}}, nil
 	default:

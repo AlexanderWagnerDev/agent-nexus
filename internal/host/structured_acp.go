@@ -31,17 +31,26 @@ type ACPRun struct {
 	conn       *acp.ClientSideConnection
 	cancel     context.CancelFunc
 
-	mu            sync.Mutex
-	sessionID     acp.SessionId
-	approvals     map[string]chan string
-	approvalSeq   int
-	turnSeq       int
-	turnID        string
-	thought       strings.Builder
-	lastMessageID string
-	state         string
-	active        bool
-	closed        bool
+	mu             sync.Mutex
+	sessionID      acp.SessionId
+	models         []protocol.ModelOption
+	modelConfigID  string
+	thoughtID      string
+	variants       []string
+	currentModel   string
+	currentVariant string
+	modes          []protocol.AgentModeOption
+	currentMode    string
+	supportsFiles  bool
+	approvals      map[string]chan string
+	approvalSeq    int
+	turnSeq        int
+	turnID         string
+	thought        strings.Builder
+	lastMessageID  string
+	state          string
+	active         bool
+	closed         bool
 }
 
 func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpec, command string) {
@@ -185,6 +194,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 			return
 		}
 		ar.sessionID = resp.SessionId
+		ar.applySessionState(init, resp.Modes, resp.ConfigOptions)
 	} else {
 		if !init.AgentCapabilities.LoadSession {
 			ar.Stop()
@@ -192,13 +202,15 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 			return
 		}
 		ar.sessionID = acp.SessionId(spec.NativeID)
-		if _, err := ar.conn.LoadSession(ctx, acp.LoadSessionRequest{
+		loaded, err := ar.conn.LoadSession(ctx, acp.LoadSessionRequest{
 			Cwd: cwd, McpServers: []acp.McpServer{}, SessionId: ar.sessionID,
-		}); err != nil {
+		})
+		if err != nil {
 			ar.Stop()
 			fail("cannot load ACP session: " + err.Error())
 			return
 		}
+		ar.applySessionState(init, loaded.Modes, loaded.ConfigOptions)
 	}
 
 	d.runMu.Lock()
@@ -245,9 +257,6 @@ func (r *ACPRun) send(ev protocol.RunEvent) {
 }
 
 func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
-	if options != nil && (options.Model != "" || options.Provider != "" || options.Variant != "" || options.AgentMode != "" || len(options.Attachments) > 0) {
-		return errors.New("this ACP agent does not expose run configuration options")
-	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -257,19 +266,93 @@ func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
 		r.mu.Unlock()
 		return errors.New("agent is already processing a prompt")
 	}
+	sessionID := r.sessionID
+	modelConfig := r.modelConfigID
+	thoughtConfig := r.thoughtID
+	hasModes := len(r.modes) > 0
+	supportsFiles := r.supportsFiles
 	r.active = true
 	r.turnSeq++
 	r.turnID = fmt.Sprintf("%s-turn-%d", r.sessionID, r.turnSeq)
 	r.thought.Reset()
 	r.lastMessageID = ""
-	sessionID := r.sessionID
 	r.mu.Unlock()
+
+	fail := func(err error) error {
+		r.mu.Lock()
+		r.active = false
+		r.mu.Unlock()
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if options != nil {
+		if options.Model != "" {
+			if modelConfig == "" {
+				return fail(errors.New("this ACP agent does not expose a model selector"))
+			}
+			_, err := r.conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{
+				ValueId: &acp.SetSessionConfigOptionValueId{
+					ConfigId: acp.SessionConfigId(modelConfig), SessionId: sessionID,
+					Value: acp.SessionConfigValueId(options.Model),
+				},
+			})
+			if err != nil {
+				return fail(err)
+			}
+			r.mu.Lock()
+			r.currentModel = options.Model
+			r.mu.Unlock()
+		}
+		if options.Variant != "" {
+			if thoughtConfig == "" {
+				return fail(errors.New("this ACP agent does not expose a reasoning selector"))
+			}
+			_, err := r.conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{
+				ValueId: &acp.SetSessionConfigOptionValueId{
+					ConfigId: acp.SessionConfigId(thoughtConfig), SessionId: sessionID,
+					Value: acp.SessionConfigValueId(options.Variant),
+				},
+			})
+			if err != nil {
+				return fail(err)
+			}
+			r.mu.Lock()
+			r.currentVariant = options.Variant
+			r.mu.Unlock()
+		}
+		if options.AgentMode != "" {
+			if !hasModes {
+				return fail(errors.New("this ACP agent does not expose session modes"))
+			}
+			if _, err := r.conn.SetSessionMode(ctx, acp.SetSessionModeRequest{
+				SessionId: sessionID, ModeId: acp.SessionModeId(options.AgentMode),
+			}); err != nil {
+				return fail(err)
+			}
+			r.mu.Lock()
+			r.currentMode = options.AgentMode
+			r.mu.Unlock()
+		}
+	}
+	blocks := []acp.ContentBlock{acp.TextBlock(text)}
+	if options != nil {
+		for _, attachment := range options.Attachments {
+			if !strings.HasPrefix(strings.ToLower(attachment.MIME), "image/") {
+				return fail(errors.New("this ACP agent only accepts image attachments"))
+			}
+			if !supportsFiles {
+				return fail(errors.New("this ACP agent does not advertise image prompt support"))
+			}
+			blocks = append(blocks, acp.ImageBlock(attachment.Data, attachment.MIME))
+		}
+	}
 
 	r.send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
 	go func() {
 		_, err := r.conn.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
-			Prompt:    []acp.ContentBlock{acp.TextBlock(text)},
+			Prompt:    blocks,
 		})
 		r.mu.Lock()
 		thought := r.thought.String()
@@ -285,6 +368,94 @@ func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
 		}
 		r.send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
 	}()
+	return nil
+}
+
+// Options returns only what the agent actually advertised: config options
+// categorised as model/thought level and the session's mode list.
+func (r *ACPRun) Options(context.Context) (protocol.RunOptions, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := protocol.RunOptions{
+		Models:         append([]protocol.ModelOption(nil), r.models...),
+		Modes:          append([]protocol.AgentModeOption(nil), r.modes...),
+		CurrentModel:   r.currentModel,
+		CurrentVariant: r.currentVariant,
+		CurrentMode:    r.currentMode,
+		SupportsFiles:  r.supportsFiles,
+	}
+	if out.Models == nil {
+		out.Models = []protocol.ModelOption{}
+	}
+	if out.Modes == nil {
+		out.Modes = []protocol.AgentModeOption{}
+	}
+	return out, nil
+}
+
+func (r *ACPRun) applySessionState(init acp.InitializeResponse, modes *acp.SessionModeState, configs []acp.SessionConfigOption) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.supportsFiles = init.AgentCapabilities.PromptCapabilities.Image
+	r.models = nil
+	r.variants = nil
+	r.modes = nil
+	r.currentMode = ""
+	for _, config := range configs {
+		if config.Select == nil {
+			continue
+		}
+		selectConfig := config.Select
+		category := ""
+		if selectConfig.Category != nil {
+			category = string(*selectConfig.Category)
+		}
+		values := selectValues(selectConfig.Options)
+		switch category {
+		case string(acp.SessionConfigOptionCategoryModel):
+			r.modelConfigID = string(selectConfig.Id)
+			r.currentModel = string(selectConfig.CurrentValue)
+			for _, value := range values {
+				r.models = append(r.models, protocol.ModelOption{
+					ID: string(value.Value), Name: value.Name, Provider: selectConfig.Name,
+				})
+			}
+		case string(acp.SessionConfigOptionCategoryThoughtLevel):
+			r.thoughtID = string(selectConfig.Id)
+			r.currentVariant = string(selectConfig.CurrentValue)
+			for _, value := range values {
+				r.variants = append(r.variants, string(value.Value))
+			}
+		}
+	}
+	if len(r.variants) > 0 {
+		for i := range r.models {
+			r.models[i].Variants = append([]string(nil), r.variants...)
+		}
+	}
+	if modes != nil {
+		r.currentMode = string(modes.CurrentModeId)
+		for _, mode := range modes.AvailableModes {
+			option := protocol.AgentModeOption{ID: string(mode.Id), Name: mode.Name}
+			if mode.Description != nil {
+				option.Description = *mode.Description
+			}
+			r.modes = append(r.modes, option)
+		}
+	}
+}
+
+func selectValues(options acp.SessionConfigSelectOptions) []acp.SessionConfigSelectOption {
+	if options.Ungrouped != nil {
+		return []acp.SessionConfigSelectOption(*options.Ungrouped)
+	}
+	if options.Grouped != nil {
+		var out []acp.SessionConfigSelectOption
+		for _, group := range *options.Grouped {
+			out = append(out, group.Options...)
+		}
+		return out
+	}
 	return nil
 }
 

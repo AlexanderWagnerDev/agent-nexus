@@ -349,18 +349,18 @@ compared.
 
 Items to resolve in Phase 0 spikes (WP-0.1 … WP-0.3) before the dependent phase starts:
 
-| ID | Item | Spike |
-| --- | --- | --- |
-| V-01 | Minimal-field extraction from Claude transcripts across the last 3 minor versions on Linux, macOS, Windows | SP-1 |
-| V-02 | `claude agents --json` availability and field stability; behavior when agent view is disabled | SP-1 |
-| V-03 | `claude-agent-acp`: `session/list`, `session/load`, permission flow, distribution and license | SP-1 |
-| V-04 | Codex rollout location/format; `thread/list` coverage of interactive + exec sessions; `sourceKinds` values | SP-2 |
-| V-05 | Codex app-server: approval request shapes, interrupt, behavior while the same thread is open in a TUI | SP-2 |
-| V-06 | OpenCode `session list` scope (all projects?), `export` format, 1.x vs 2.x differences | SP-3 |
-| V-07 | OpenCode server: cross-project session listing, permission events in SSE stream | SP-3 |
-| V-08 | Terminal-mode resume for all three agents under Windows ConPTY (rendering, resize, Ctrl-C) | SP-5 |
-| V-09 | CGO-free process `cwd`/argv inspection on macOS | SP-1/SP-5 |
-| V-10 | Gemini CLI mapping from `<project_hash>` to project path | WP-6.1 |
+| ID | Item | Spike | Status |
+| --- | --- | --- | --- |
+| V-01 | Minimal-field extraction from Claude transcripts across the last 3 minor versions on Linux, macOS, Windows | [SP-1](spikes/SP-1-claude.md) | ⚠️ fixture-tested; real versions not installed |
+| V-02 | `claude agents --json` availability and field stability; behavior when agent view is disabled | [SP-1](spikes/SP-1-claude.md) | ⚠️ not used or verified |
+| V-03 | `claude-agent-acp`: `session/list`, `session/load`, permission flow, distribution and license | [SP-1](spikes/SP-1-claude.md) | ⚠️ fake ACP peer only |
+| V-04 | Codex rollout location/format; `thread/list` coverage of interactive + exec sessions; `sourceKinds` values | [SP-2](spikes/SP-2-codex.md) | ⚠️ rollout format yes; `thread/list` not verified |
+| V-05 | Codex app-server: approval request shapes, interrupt, behavior while the same thread is open in a TUI | [SP-2](spikes/SP-2-codex.md) | ⚠️ fake app-server only; TUI case open |
+| V-06 | OpenCode `session list` scope (all projects?), `export` format, 1.x vs 2.x differences | [SP-3](spikes/SP-3-opencode.md) | ⚠️ v1/v2 reads covered; export unused |
+| V-07 | OpenCode server: cross-project session listing, permission events in SSE stream | [SP-3](spikes/SP-3-opencode.md) | ⚠️ fake server only |
+| V-08 | Terminal-mode resume for all three agents under Windows ConPTY (rendering, resize, Ctrl-C) | [SP-5](spikes/SP-5-pty.md) | ⚠️ manual Windows run; no visual matrix |
+| V-09 | CGO-free process `cwd`/argv inspection on macOS | [SP-1](spikes/SP-1-claude.md), [SP-5](spikes/SP-5-pty.md) | ⚠️ `ps` fallback, not verified on macOS |
+| V-10 | Gemini CLI mapping from `<project_hash>` to project path | [SP-3](spikes/SP-3-opencode.md) | ⚠️ best effort; hash mapping not decoded |
 
 ## 11. Sources
 

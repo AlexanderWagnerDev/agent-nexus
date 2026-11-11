@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -135,10 +136,54 @@ type fakeACPAgent struct {
 	acp.Agent
 	conn     *acp.AgentSideConnection
 	sessions map[string]bool
+
+	mu       sync.Mutex
+	modes    *acp.SessionModeState
+	configs  []acp.SessionConfigOption
+	setCalls []string
+	prompts  [][]acp.ContentBlock
+}
+
+func (a *fakeACPAgent) recordSet(call string) {
+	a.mu.Lock()
+	a.setCalls = append(a.setCalls, call)
+	a.mu.Unlock()
+}
+
+func (a *fakeACPAgent) setSessionCalls() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.setCalls...)
+}
+
+func (a *fakeACPAgent) lastPrompt() []acp.ContentBlock {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.prompts) == 0 {
+		return nil
+	}
+	return a.prompts[len(a.prompts)-1]
 }
 
 func (a *fakeACPAgent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
-	return acp.InitializeResponse{ProtocolVersion: acp.ProtocolVersionNumber}, nil
+	return acp.InitializeResponse{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+		AgentCapabilities: acp.AgentCapabilities{
+			PromptCapabilities: acp.PromptCapabilities{Image: true},
+		},
+	}, nil
+}
+
+func (a *fakeACPAgent) SetSessionConfigOption(_ context.Context, params acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+	if params.ValueId != nil {
+		a.recordSet("config:" + string(params.ValueId.ConfigId) + "=" + string(params.ValueId.Value))
+	}
+	return acp.SetSessionConfigOptionResponse{}, nil
+}
+
+func (a *fakeACPAgent) SetSessionMode(_ context.Context, params acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
+	a.recordSet("mode:" + string(params.ModeId))
+	return acp.SetSessionModeResponse{}, nil
 }
 
 func (a *fakeACPAgent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
@@ -147,7 +192,11 @@ func (a *fakeACPAgent) Authenticate(context.Context, acp.AuthenticateRequest) (a
 
 func (a *fakeACPAgent) NewSession(_ context.Context, _ acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	a.sessions["fake-acp-session"] = true
-	return acp.NewSessionResponse{SessionId: acp.SessionId("fake-acp-session")}, nil
+	return acp.NewSessionResponse{
+		SessionId:     acp.SessionId("fake-acp-session"),
+		Modes:         a.modes,
+		ConfigOptions: a.configs,
+	}, nil
 }
 
 func (a *fakeACPAgent) ResumeSession(_ context.Context, params acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
@@ -157,6 +206,9 @@ func (a *fakeACPAgent) ResumeSession(_ context.Context, params acp.ResumeSession
 func (a *fakeACPAgent) Cancel(context.Context, acp.CancelNotification) error { return nil }
 
 func (a *fakeACPAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.PromptResponse, error) {
+	a.mu.Lock()
+	a.prompts = append(a.prompts, params.Prompt)
+	a.mu.Unlock()
 	text := ""
 	for _, block := range params.Prompt {
 		text += acpContentText(block)
