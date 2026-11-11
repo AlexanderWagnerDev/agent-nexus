@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "e2e": "node e2e/smoke.mjs",
+    "e2e:live": "node e2e/live.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {

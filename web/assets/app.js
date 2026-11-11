@@ -323,9 +323,11 @@ function connectWS() {
   ws.addEventListener('close', () => {
     state.ws = null;
     if (!state.me) return;
-    const delay = Math.min(state.wsRetry, 15000);
+    const base = Math.min(state.wsRetry, 15000);
     state.wsRetry = Math.min(state.wsRetry * 1.7, 15000);
-    setTimeout(connectWS, delay);
+    // Jitter avoids a thundering herd when a hub restarts and every open
+    // browser reconnects at once.
+    setTimeout(connectWS, Math.round(base * (0.8 + Math.random() * 0.4)));
   });
   ws.addEventListener('error', () => ws.close());
 }
@@ -784,6 +786,7 @@ function installGlobalUi() {
     }
     if (event.key === 'Escape') {
       if (state.palette) closePalette();
+      if (modalRoot.firstElementChild) { closeModal(); return; }
       const panel = document.getElementById('notif-panel');
       if (panel) panel.hidden = true;
       document.getElementById('layout')?.classList.remove('mobile-sidebar-open');
@@ -1513,6 +1516,33 @@ async function pageSession(id) {
   await append();
 }
 
+function inlineAttachmentLabel(name, path) {
+  const raw = String(name || '').trim();
+  if (raw && !/^\[image #\d+\]$/i.test(raw)) return raw;
+  const clean = String(path || '').replaceAll('\\', '/');
+  return (clean.split('/').filter(Boolean).pop() || 'attachment').replace(/^\d{2}-/, '');
+}
+
+function renderUserText(raw) {
+  let text = String(raw || '');
+  const attachments = [];
+  text = text.replace(/<image\b[^>]*>/gi, (tag) => {
+    const name = (tag.match(/name="([^"]*)"/i) || [])[1] || '';
+    const file = (tag.match(/path="([^"]*)"/i) || [])[1] || '';
+    attachments.push(inlineAttachmentLabel(name, file));
+    return '';
+  });
+  text = text.replace(/<\/image>/gi, '');
+  text = text.replace(/<(mention|skill)\b[^>]*\bname="([^"]*)"[^>]*>/gi, (_, _kind, name) => {
+    attachments.push(name);
+    return '';
+  });
+  text = text.replace(/<\/?mention[^>]*>/gi, '').replace(/<\/?skill[^>]*>/gi, '').trim();
+  const chips = attachments.map((name) => `<span class="inline-attachment">${svgIcon('paperclip', 12)}${esc(name)}</span>`).join('');
+  if (!text && !chips) return '';
+  return `${chips}${text ? `<div class="user-text">${esc(text)}</div>` : ''}`;
+}
+
 function renderTranscriptMessage(m, agent = 'agent') {
   if (m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
   if (m.kind === 'tool_call' || m.kind === 'tool_result') {
@@ -1520,7 +1550,9 @@ function renderTranscriptMessage(m, agent = 'agent') {
     return historyToolCard(described, m);
   }
   if (m.role === 'user') {
-    return `<article class="turn turn-user"><div class="turn-meta"><span>You</span><time>${esc(fmtStamp(m.timestamp))}</time></div><div class="turn-body">${esc(m.text || '')}</div></article>`;
+    const body = renderUserText(m.text);
+    if (!body) return '';
+    return `<article class="turn turn-user"><div class="turn-meta"><span>You</span><time>${esc(fmtStamp(m.timestamp))}</time></div><div class="turn-body">${body}</div></article>`;
   }
   return `<article class="turn turn-assistant"><div class="turn-meta">${agentGlyph(agent, 'small')}<span class="agent-name">${esc(agentMeta(agent).label)}</span><time>${esc(fmtStamp(m.timestamp))}</time></div><div class="turn-body md">${renderMarkdown(m.text || '')}</div></article>`;
 }
@@ -2107,10 +2139,95 @@ async function pageStructuredRun(id, run) {
   const configKey = `nexus-run-config-${id}`;
   const readConfig = () => storeGet(configKey, {});
   const writeConfig = (patch) => storeSet(configKey, { ...readConfig(), ...patch });
+  let selectedModelIndex = -1;
+  const modelKey = (m) => `${m?.provider || 'agent'}|${m?.id || ''}`;
+  const modelList = (key) => {
+    const value = storeGet(key, []);
+    return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
+  };
+  const rememberModel = (key) => {
+    const recent = modelList('nexus-model-recent').filter((item) => item !== key);
+    recent.unshift(key);
+    storeSet('nexus-model-recent', recent.slice(0, 8));
+  };
+  const fuzzyMatch = (query, text) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = text.toLowerCase();
+    if (haystack.includes(q)) return true;
+    let index = 0;
+    for (const ch of haystack) {
+      if (ch === q[index]) index += 1;
+      if (index === q.length) return true;
+    }
+    return index === q.length;
+  };
   const selectedModel = () => {
-    const select = document.getElementById('opt-model');
-    if (!select || !runConfigOptions?.models?.length) return null;
-    return runConfigOptions.models[Number(select.value)] || null;
+    if (!runConfigOptions?.models?.length || selectedModelIndex < 0) return null;
+    return runConfigOptions.models[selectedModelIndex] || null;
+  };
+  const openModelPicker = () => {
+    const models = runConfigOptions?.models || [];
+    if (!models.length) return;
+    const byKey = new Map(models.map((model, index) => [modelKey(model), { model, index }]));
+    let query = '';
+    modal(`
+      <div class="model-picker-head"><h2>Choose a model</h2><span class="muted">${models.length} available</span></div>
+      <label class="model-search">${svgIcon('search', 14)}<input id="model-search" type="search" placeholder="Search model or provider?" autocomplete="off" spellcheck="false" autofocus></label>
+      <div class="model-picker-list" id="model-picker-list"></div>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>Close</button></div>`);
+    const list = document.getElementById('model-picker-list');
+    const search = document.getElementById('model-search');
+    const renderList = () => {
+      const favorites = new Set(modelList('nexus-model-favorites'));
+      const recent = modelList('nexus-model-recent');
+      let entries = models.map((model, index) => ({ model, index }));
+      if (query.trim()) {
+        entries = entries.filter(({ model }) => fuzzyMatch(query, `${model.name || ''} ${model.id || ''} ${model.provider || ''}`));
+      } else {
+        const rank = (model) => {
+          const key = modelKey(model);
+          const recentIndex = recent.indexOf(key);
+          return recentIndex >= 0 ? recentIndex : (favorites.has(key) ? 100 : 1000);
+        };
+        entries.sort((a, b) => rank(a.model) - rank(b.model));
+      }
+      list.innerHTML = entries.length ? entries.map(({ model, index }) => {
+        const key = modelKey(model);
+        const active = index === selectedModelIndex;
+        const variant = (model.variants || []).length ? `${model.variants.length} reasoning levels` : 'default reasoning';
+        return `<div class="model-row ${active ? 'active' : ''}">
+          <button class="model-main" type="button" data-model-pick="${esc(key)}" data-model-index="${index}">
+            <span class="model-name">${esc(model.name || model.id)}</span>
+            <span class="model-meta">${esc(model.provider || 'agent')} &middot; ${esc(variant)}</span>
+          </button>
+          <button class="model-star ${favorites.has(key) ? 'active' : ''}" type="button" data-model-star="${esc(key)}" aria-label="${favorites.has(key) ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${favorites.has(key) ? 'true' : 'false'}">${svgIcon('star', 14)}</button>
+        </div>`;
+      }).join('') : '<div class="empty compact">No models match that search.</div>';
+    };
+    renderList();
+    search.addEventListener('input', () => { query = search.value; renderList(); });
+    list.addEventListener('click', (event) => {
+      const star = event.target.closest('[data-model-star]');
+      if (star) {
+        const key = star.dataset.modelStar;
+        const favorites = modelList('nexus-model-favorites');
+        const next = favorites.includes(key) ? favorites.filter((item) => item !== key) : [key, ...favorites];
+        storeSet('nexus-model-favorites', next);
+        renderList();
+        return;
+      }
+      const pick = event.target.closest('[data-model-pick]');
+      if (!pick) return;
+      selectedModelIndex = Number(pick.dataset.modelIndex);
+      const model = models[selectedModelIndex];
+      if (!model) return;
+      writeConfig({ model: model.id, provider: model.provider || '', variant: '' });
+      rememberModel(modelKey(model));
+      closeModal();
+      renderComposerConfig();
+    });
+    requestAnimationFrame(() => search.focus());
   };
   const renderComposerConfig = () => {
     if (!configBar || !runConfigOptions) return;
@@ -2118,47 +2235,41 @@ async function pageStructuredRun(id, run) {
     const modes = runConfigOptions.modes || [];
     if (!models.length && !modes.length) { configBar.innerHTML = ''; configBar.hidden = true; return; }
     const saved = readConfig();
-    let modelIndex = models.findIndex((m) => m.id === saved.model && (!saved.provider || m.provider === saved.provider));
-    if (modelIndex < 0) modelIndex = models.findIndex((m) => m.id === runConfigOptions.current_model && (!runConfigOptions.current_provider || m.provider === runConfigOptions.current_provider));
-    if (modelIndex < 0) modelIndex = 0;
-    const model = models[modelIndex];
+    selectedModelIndex = models.findIndex((m) => m.id === saved.model && (!saved.provider || m.provider === saved.provider));
+    if (selectedModelIndex < 0) selectedModelIndex = models.findIndex((m) => m.id === runConfigOptions.current_model && (!runConfigOptions.current_provider || m.provider === runConfigOptions.current_provider));
+    if (selectedModelIndex < 0) selectedModelIndex = 0;
+    const model = models[selectedModelIndex];
     const variants = model?.variants || [];
     let variant = saved.variant || '';
     if (variant && !variants.includes(variant)) variant = '';
     if (!variant && model?.default_variant && variants.includes(model.default_variant)) variant = model.default_variant;
     if (!variant && model && variants.length && runConfigOptions.current_model === model.id) variant = runConfigOptions.current_variant || '';
     const mode = saved.agent_mode || runConfigOptions.current_mode || '';
-    const groups = new Map();
-    models.forEach((m, index) => {
-      const provider = m.provider || 'agent';
-      if (!groups.has(provider)) groups.set(provider, []);
-      groups.get(provider).push([m, index]);
-    });
     configBar.hidden = false;
     configBar.innerHTML = `
-      ${models.length ? `<label class="composer-field"><span>Model</span><select id="opt-model" class="composer-select">${[...groups.entries()].map(([provider, entries]) => `<optgroup label="${esc(provider)}">${entries.map(([m, index]) => `<option value="${index}" ${index === modelIndex ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('')}</optgroup>`).join('')}</select></label>` : ''}
+      ${models.length ? `<div class="composer-field"><span>Model</span><button class="composer-model" id="opt-model-btn" type="button" title="Switch model"><span class="composer-model-name">${esc(model?.name || model?.id || 'Select model')}</span><span class="composer-model-provider">${esc(model?.provider || '')}</span>${svgIcon('chevronDown', 12)}</button></div>` : ''}
       ${variants.length ? `<label class="composer-field"><span>Reasoning</span><select id="opt-variant" class="composer-select"><option value="">Default</option>${variants.map((v) => `<option value="${esc(v)}" ${v === variant ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>` : ''}
       ${modes.length ? `<label class="composer-field"><span>Agent</span><select id="opt-agent" class="composer-select"><option value="">Default</option>${modes.map((m) => `<option value="${esc(m.id)}" ${m.id === mode ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('')}</select></label>` : ''}`;
-    document.getElementById('opt-model')?.addEventListener('change', () => {
-      const next = selectedModel();
-      writeConfig({ model: next?.id || '', provider: next?.provider || '', variant: '' });
-      renderComposerConfig();
-    });
+    document.getElementById('opt-model-btn')?.addEventListener('click', openModelPicker);
     document.getElementById('opt-variant')?.addEventListener('change', (event) => writeConfig({ variant: event.target.value }));
     document.getElementById('opt-agent')?.addEventListener('change', (event) => writeConfig({ agent_mode: event.target.value }));
     renderAttachments();
   };
   const currentPromptOptions = () => {
+    // Only send a setting the user explicitly changed. Re-sending the current
+    // native values on every prompt would rewrite agent configuration the user
+    // never touched and can fail on models that do not accept a variant.
+    const saved = readConfig();
     const model = selectedModel();
     const variant = document.getElementById('opt-variant')?.value || '';
     const agentMode = document.getElementById('opt-agent')?.value || '';
     const options = {};
-    if (model) {
+    if (model && (saved.model || saved.variant)) {
       options.model = model.id;
       options.provider = model.provider || '';
+      if (variant) options.variant = variant;
     }
-    if (variant) options.variant = variant;
-    if (agentMode) options.agent_mode = agentMode;
+    if (agentMode && saved.agent_mode) options.agent_mode = agentMode;
     if (pendingAttachments.length) {
       options.attachments = pendingAttachments.map((file) => ({ name: file.name, mime: file.mime, data: file.data }));
     }
@@ -2187,24 +2298,31 @@ async function pageStructuredRun(id, run) {
   const attachInput = document.getElementById('attach-input');
   let pendingAttachments = [];
   const attachmentKinds = () => selectedModel()?.inputs || [];
-  const attachmentAllowed = () => {
-    const kinds = attachmentKinds().map((kind) => kind.toLowerCase());
-    return kinds.some((kind) => ['image', 'file', 'pdf', 'audio'].includes(kind));
+  const allowedAttachmentKinds = () => attachmentKinds().map((kind) => kind.toLowerCase()).filter((kind) => ['image', 'file', 'pdf', 'audio', 'text'].includes(kind));
+  const attachmentMatches = (file, kinds) => {
+    const type = String(file.type || file.mime || '').toLowerCase();
+    return !kinds.length || kinds.includes('file') || kinds.some((kind) => (
+      kind === 'pdf' ? type === 'application/pdf' : type.startsWith(kind + '/')
+    ));
   };
+  const attachmentAllowed = () => allowedAttachmentKinds().length > 0;
   const attachmentAccept = () => {
     const kinds = attachmentKinds().map((kind) => kind.toLowerCase());
     const accepts = [];
     if (kinds.includes('image')) accepts.push('image/*');
     if (kinds.includes('audio')) accepts.push('audio/*');
     if (kinds.includes('pdf')) accepts.push('application/pdf');
+    if (kinds.includes('text')) accepts.push('text/*');
     return accepts.join(',') || undefined;
   };
   const renderAttachments = () => {
     if (!attachmentList || !attachButton) return;
-    const allowed = attachmentAllowed();
+    const kinds = allowedAttachmentKinds();
+    const allowed = kinds.length > 0;
     attachButton.hidden = !allowed;
     if (attachInput) attachInput.accept = attachmentAccept() || '';
     if (!allowed) pendingAttachments = [];
+    else pendingAttachments = pendingAttachments.filter((file) => attachmentMatches(file, kinds));
     attachmentList.innerHTML = pendingAttachments.map((file, index) => `
       <span class="attachment-chip" title="${esc(file.name)}">
         ${file.preview ? `<img src="${file.preview}" alt="">` : svgIcon('file', 13)}
@@ -2221,7 +2339,9 @@ async function pageStructuredRun(id, run) {
   attachInput?.addEventListener('change', async () => {
     const files = [...(attachInput.files || [])];
     attachInput.value = '';
+    const kinds = allowedAttachmentKinds();
     for (const file of files) {
+      if (!attachmentMatches(file, kinds)) { toast(`${file.name} is not supported by this model`, true); continue; }
       if (pendingAttachments.length >= 6) { toast('At most 6 attachments are allowed', true); break; }
       if (file.size > 8 * 1024 * 1024) { toast(`${file.name} exceeds the 8 MB limit`, true); continue; }
       const total = pendingAttachments.reduce((sum, item) => sum + item.size, 0) + file.size;
@@ -2236,7 +2356,7 @@ async function pageStructuredRun(id, run) {
       pendingAttachments.push({
         name: file.name, mime: file.type || 'application/octet-stream',
         data: dataUrl.split(',')[1] || '', size: file.size,
-        preview: file.type.startsWith('image/') ? dataUrl : '',
+        preview: String(file.type || '').startsWith('image/') ? dataUrl : '',
       });
     }
     renderAttachments();
@@ -2249,7 +2369,10 @@ async function pageStructuredRun(id, run) {
   const initialCursor = run.last_event_seq || 0;
   let lastSeq = initialCursor;
   let subscribedGen = 0;
-  let skipReplay = true;
+  let runEpoch = '';
+  let historyReady = false;
+  const pendingLiveEvents = [];
+  const historyAssistantTexts = new Set();
   let historyOffset = 0;
   let historyTotal = 0;
   let autoScroll = true;
@@ -2427,6 +2550,10 @@ async function pageStructuredRun(id, run) {
 
   const handleEvent = (event) => {
     if (!event || (event.seq && event.seq <= lastSeq)) return;
+    if (!historyReady) {
+      pendingLiveEvents.push(event);
+      return;
+    }
     if (event.seq) lastSeq = Math.max(lastSeq, event.seq);
     switch (event.type) {
       case 'message.started':
@@ -2474,10 +2601,38 @@ async function pageStructuredRun(id, run) {
     }
   };
 
+  const flushPendingLiveEvents = () => {
+    pendingLiveEvents.sort((a, b) => (a.seq || 0) - (b.seq || 0));
+    for (const event of pendingLiveEvents.splice(0)) {
+      if (event.type === 'message.completed') {
+        const text = String(event.text || '').trim();
+        if (text && historyAssistantTexts.has(text)) {
+          historyAssistantTexts.delete(text);
+          const key = event.message_id || 'assistant';
+          const rec = assistantRecords.get(key);
+          if (rec?.node) {
+            rec.node.remove();
+            assistantRecords.delete(key);
+          }
+          if (event.seq) lastSeq = Math.max(lastSeq, event.seq);
+          continue;
+        }
+      }
+      handleEvent(event);
+    }
+  };
+
   const handler = (msg) => {
     if (msg.run_id !== id && msg.type !== 'ready') return;
     if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
     if (msg.type === 'run.state') {
+      const epochChanged = Boolean(msg.epoch && runEpoch && msg.epoch !== runEpoch);
+      if (msg.epoch) runEpoch = msg.epoch;
+      if (epochChanged) {
+        // The hub restarted and its per-run sequence starts from zero again.
+        lastSeq = 0;
+        sendSubscribe();
+      }
       setState(msg.state);
       noteText(msg.state === 'idle' ? 'Idle — ready for your next message' : `Agent ${msg.state.replaceAll('_', ' ')}`, msg.state === 'running');
     }
@@ -2490,11 +2645,8 @@ async function pageStructuredRun(id, run) {
   state.wsHandlers.add(handler);
 
   const sendSubscribe = () => {
-    const last = skipReplay ? Number.MAX_SAFE_INTEGER : Math.max(lastSeq, initialCursor);
-    if (wsSend({ type: 'subscribe', run_id: id, last_seq: last })) {
-      subscribedGen = state.wsGen;
-      skipReplay = false;
-    }
+    const last = Math.max(lastSeq, initialCursor);
+    if (wsSend({ type: 'subscribe', run_id: id, last_seq: last })) subscribedGen = state.wsGen;
   };
 
   const loadEarlier = async () => {
@@ -2524,7 +2676,14 @@ async function pageStructuredRun(id, run) {
       const offset = Math.max(0, historyTotal - limit);
       const tr = historyTotal > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
       historyOffset = offset;
-      messagesEl.innerHTML = renderTranscriptMessages((tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')), run.agent || session?.agent);
+      const visible = (tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
+      for (const message of visible) {
+        if (message.role === 'assistant' && (!message.kind || message.kind === 'text')) {
+          const text = String(message.text || '').trim();
+          if (text) historyAssistantTexts.add(text);
+        }
+      }
+      messagesEl.innerHTML = renderTranscriptMessages(visible, run.agent || session?.agent);
       historyTop.innerHTML = offset > 0
         ? `<button class="btn small ghost history-button" id="load-earlier">Load earlier messages (${offset.toLocaleString()} remaining)</button>`
         : '';
@@ -2532,6 +2691,8 @@ async function pageStructuredRun(id, run) {
       autoScroll = true;
       scrollBottom(true);
     } catch { /* history is optional */ }
+    historyReady = true;
+    flushPendingLiveEvents();
   };
 
   api(`/runs/${id}/lease`, { method: 'POST' }).then(() => {
@@ -2625,9 +2786,9 @@ async function pageStructuredRun(id, run) {
     if (event.target.closest('#context-git-load') || event.target.closest('#git-refresh')) loadGit();
   });
 
+  sendSubscribe();
   await loadHistory().catch(() => {});
   loadRunOptions().catch(() => {});
-  sendSubscribe();
   const timer = setInterval(() => {
     if (!state.me) { clearInterval(timer); return; }
     if (state.ws?.readyState === WebSocket.OPEN) {
@@ -2795,7 +2956,7 @@ async function pageWorkspace() {
           <iframe title="${esc(run.session_title || 'Agent session')}" loading="eager" src="/?embed=1#/runs/${encodeURIComponent(id)}"></iframe>
         </div>
       </section>`;
-    }).join(panes.length === 2 ? '<div class="split-divider" id="split-divider" title="Drag to resize panes"><span></span></div>' : '');
+    }).join(panes.length === 2 ? '<div class="split-divider" id="split-divider" role="separator" tabindex="0" title="Drag or use arrow keys to resize panes" aria-label="Resize panes"><span></span></div>' : '');
     view.innerHTML = `
       <div class="workspace-page">
         <div class="workspace-head">
@@ -2854,6 +3015,17 @@ async function pageWorkspace() {
       };
       divider.addEventListener('pointerup', end);
       divider.addEventListener('pointercancel', end);
+      divider.setAttribute('aria-orientation', orientation === 'horizontal' ? 'vertical' : 'horizontal');
+      divider.addEventListener('keydown', (event) => {
+        const step = event.shiftKey ? 10 : 3;
+        const decrease = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp';
+        const increase = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
+        if (event.key !== decrease && event.key !== increase) return;
+        event.preventDefault();
+        ratio = Math.min(75, Math.max(25, ratio + (event.key === increase ? step : -step)));
+        document.getElementById('split-grid')?.style.setProperty('--split', `${ratio}%`);
+        persist();
+      });
     }
   };
 
@@ -2926,6 +3098,7 @@ async function pageRun(id) {
   const setLive = (text) => { status.textContent = text; dot.classList.toggle('live', text === 'connected'); };
   let lastSeq = 0;
   let subscribedGen = 0;
+  let runEpoch = '';
   const input = (data) => {
     if (run.lease_device_id && state.me.device.id && run.lease_device_id !== state.me.device.id) {
       note.textContent = 'Read-only: another device holds the lease.';
@@ -2966,6 +3139,11 @@ async function pageRun(id) {
         }
         break;
       case 'run.state':
+        if (msg.epoch && runEpoch && msg.epoch !== runEpoch) {
+          lastSeq = 0;
+          sendSubscribe();
+        }
+        if (msg.epoch) runEpoch = msg.epoch;
         if (msg.state) { run.state = msg.state; note.textContent = `state: ${msg.state}`; }
         break;
       case 'run.exit':
