@@ -10,7 +10,7 @@ require (
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/klauspost/compress v1.20.4
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	golang.org/x/crypto v0.58.0
+	golang.org/x/crypto v0.59.0
 	modernc.org/sqlite v1.62.0
 )
 
@@ -30,7 +30,7 @@ require (
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
