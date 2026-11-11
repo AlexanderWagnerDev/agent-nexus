@@ -450,3 +450,17 @@ func TestHostPermissionMatrix(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIBodyLimitRejectsOversizedRequests(t *testing.T) {
+	hub := newSetupHub(t)
+	big := strings.Repeat("a", maxRequestBody+1024)
+	status, body := hub.do(nil, http.MethodPost, "/api/v1/auth/login", map[string]string{
+		"username": "owner", "password": big,
+	}, nil)
+	if status == http.StatusOK {
+		t.Fatalf("oversized request was accepted: %s", body)
+	}
+	if status != http.StatusBadRequest && status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized request: status %d body %s", status, body)
+	}
+}

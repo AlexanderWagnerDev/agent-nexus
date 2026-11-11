@@ -433,3 +433,14 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	broken, _ := s.store.VerifyAudit()
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "broken_seq": broken})
 }
+
+func displayTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "Untitled session"
+	}
+	if len(title) > 200 {
+		return title[:200] + "..."
+	}
+	return title
+}

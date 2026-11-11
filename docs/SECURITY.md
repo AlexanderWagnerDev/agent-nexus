@@ -56,6 +56,9 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
   24 hours are removed at daemon start.
 - Prompt text is capped at 256 KiB and terminal paste input at 2 MiB on both
   hub and host; password input is capped at 1 KiB before Argon2.
+- HTTP JSON bodies are limited to 1 MiB with `http.MaxBytesReader`, and the
+  browser WebSocket read limit is 4 MiB (enough for a 2 MiB terminal paste).
+  The host link keeps a 32 MiB limit for paged transcripts.
 - Session snapshots are delta-synced after a capability negotiation; full
   snapshots remain the reconnect and repair path.
 - Browser WebSocket reconnects use jitter, detect a new hub epoch and replay

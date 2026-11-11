@@ -57,3 +57,8 @@ func (s *Server) hostPermission(u User, hostID, need string) bool {
 func (s *Server) sessionPermission(u User, sess protocol.SessionView, need string) bool {
 	return s.hostPermission(u, sess.HostID, need)
 }
+
+// isAdminRole reports whether a role may administer users and hosts.
+func isAdminRole(role string) bool {
+	return role == "owner" || role == "admin"
+}

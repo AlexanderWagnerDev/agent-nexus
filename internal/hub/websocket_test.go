@@ -178,3 +178,32 @@ func TestClientWebSocketRequiresAuthAndRejectsForeignRun(t *testing.T) {
 		t.Fatal("unauthenticated WebSocket was accepted")
 	}
 }
+func TestClientWebSocketRejectsOversizedMessages(t *testing.T) {
+	hub := newSetupHub(t)
+	base, _ := url.Parse(hub.http.URL)
+	var cookie string
+	for _, c := range hub.client.Jar.Cookies(base) {
+		if c.Name == cookieName {
+			cookie = c.Name + "=" + c.Value
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, wsURL(hub, "/api/v1/ws"), &websocket.DialOptions{
+		HTTPHeader: http.Header{"Cookie": {cookie}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	if ready := hub.readEnvelope(t, conn, 5*time.Second); ready.Type != "ready" {
+		t.Fatalf("ready: %+v", ready)
+	}
+	huge := strings.Repeat("x", clientReadLimit+1024)
+	if err := conn.Write(ctx, websocket.MessageText, []byte(huge)); err != nil {
+		return // the peer already closed the connection, which is the expected outcome
+	}
+	if _, _, err := conn.Read(ctx); err == nil {
+		t.Fatal("oversized client message did not close the connection")
+	}
+}
