@@ -50,7 +50,8 @@ sessions.
   the published history.
 - **GitHub retention:** a force-push does not immediately erase server-side
   objects. Old commits can still be fetched by SHA until GitHub Support purges
-  them. This must happen before the repository becomes public.
+  them, and merged pull-request refs still pin old commits. This must be
+  resolved before the repository becomes public.
 
 ## Pre-publication checklist
 

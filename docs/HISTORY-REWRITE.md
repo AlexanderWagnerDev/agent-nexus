@@ -52,8 +52,12 @@ The exact values are intentionally **not** written down in this file.
 - Old commit SHAs no longer resolve in the repository. External links to them
   are dead, which is expected.
 - GitHub may retain unreachable objects and still serve old commits by SHA for
-  a while after a force-push. This was observed through the API. Before the
-  repository is made public, ask GitHub Support to purge unreachable objects
-  and cached views, and provide the old `main` SHA plus the rewritten SHA.
+  a while after a force-push. This was observed through the API.
+- Merged pull-request refs (`refs/pull/*/head`) still pin old commits. At least
+  one dependency PR contains a commit with the personal identity. A force-push
+  does not remove those refs. Before the repository is made public, either ask
+  GitHub Support to purge the old objects and PR refs, or recreate the
+  repository from the rewritten history. Recreating it requires separate
+  maintainer approval because it deletes PR and issue history.
 - The mirror backup must stay offline and private until the maintainer confirms
   the result, then be deleted.
