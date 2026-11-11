@@ -76,6 +76,14 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 	return d
 }
 
+// NewDaemonWithAdapters builds a daemon with an explicit adapter set. It is
+// used by tests and by embedding scenarios; production uses DetectAdapters.
+func NewDaemonWithAdapters(cfg Config, logger *slog.Logger, adapters []Adapter) *Daemon {
+	d := NewDaemon(cfg, logger)
+	d.adapters = adapters
+	return d
+}
+
 func (d *Daemon) Adapters() []Adapter { return d.adapters }
 
 func (d *Daemon) Run(ctx context.Context) error {
@@ -739,6 +747,9 @@ func (d *Daemon) validateRunPolicy(spec protocol.RunSpec) error {
 	}
 	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
 		return errors.New("invalid native session id")
+	}
+	if spec.Cwd != "" && !d.policy.WithinRoots(spec.Cwd) {
+		return errors.New("working directory is outside the allowed roots")
 	}
 	return nil
 }

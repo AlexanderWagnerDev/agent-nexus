@@ -1,7 +1,12 @@
 package host
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -36,6 +41,68 @@ func TestValidateRunPolicyRejectsUnknownAction(t *testing.T) {
 		Agent: "codex", Action: "bogus", NativeID: "abc",
 	}); err == nil {
 		t.Fatal("unknown action was accepted")
+	}
+}
+
+func TestValidateRunPolicyEnforcesAllowedRoots(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	d := &Daemon{policy: Policy{
+		AllowedRoots:  []string{root},
+		AllowedAgents: []string{"codex"},
+		AllowNew:      true,
+		ForbiddenArgs: DefaultForbiddenArgs(),
+	}}
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionNew, Cwd: root,
+	}); err != nil {
+		t.Fatalf("inside root rejected: %v", err)
+	}
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionNew, Cwd: outside,
+	}); err == nil {
+		t.Fatal("working directory outside allowed roots was accepted")
+	}
+}
+
+func TestForbiddenArgsRejected(t *testing.T) {
+	p := Policy{ForbiddenArgs: DefaultForbiddenArgs()}
+	if err := p.ArgsAllowed([]string{"--dangerously-skip-permissions"}); err == nil {
+		t.Fatal("permission-bypass flag was accepted")
+	}
+	if err := p.ArgsAllowed([]string{"--yolo=1"}); err == nil {
+		t.Fatal("permission-bypass flag with a value was accepted")
+	}
+	if err := p.ArgsAllowed([]string{"--model", "fast"}); err != nil {
+		t.Fatalf("ordinary flags rejected: %v", err)
+	}
+}
+
+// A compromised hub can produce a perfectly valid signature and still ask for
+// something the local policy forbids. The signature must not override policy.
+func TestSignedHubCommandStillSubjectToHostPolicy(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	outside := t.TempDir()
+	d := &Daemon{
+		cfg:       Config{HubPublicKey: base64.StdEncoding.EncodeToString(public)},
+		policy:    Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"codex"}, AllowNew: true, ForbiddenArgs: DefaultForbiddenArgs()},
+		hubNonces: map[string]time.Time{},
+	}
+	spec := protocol.RunSpec{RunID: "run-evil", Agent: "codex", Action: protocol.ActionNew, Cwd: outside}
+	raw, _ := json.Marshal(spec)
+	envelope := protocol.Envelope{Type: "run.start", Run: &spec, Params: raw}
+	if err := protocol.SignEnvelope(private, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.verifyHubEnvelope(&envelope); err != nil {
+		t.Fatalf("valid signature rejected: %v", err)
+	}
+	if err := d.validateRunPolicy(spec); err == nil {
+		t.Fatal("signed command bypassed host policy")
 	}
 }
 
