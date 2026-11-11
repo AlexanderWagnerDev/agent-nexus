@@ -41,6 +41,7 @@ new sessions and fork enabled, with permission-bypass flags rejected.
     "allowed_agents": ["claude", "codex", "opencode"],
     "allow_new_sessions": true,
     "allow_fork": true,
+    "process_grace_seconds": 5,
     "forbidden_args": [
       "--dangerously-skip-permissions",
       "--dangerously-bypass-approvals-and-sandbox",
@@ -53,7 +54,9 @@ new sessions and fork enabled, with permission-bypass flags rejected.
 
 `allowed_agents` applies to new and resumed sessions in terminal, OpenCode,
 Codex and ACP modes. Paths are canonicalized (symlinks resolved) before the
-root check. `nexusd doctor` prints the current policy summary.
+root check. `process_grace_seconds` (default 5, maximum 60) is how long a
+stopped run may take to exit before its whole process tree is killed.
+`nexusd doctor` prints the current policy summary.
 
 ## Agent support
 
@@ -142,7 +145,8 @@ the previous container tag and database backup for rollback.
   builds and unit tests.
 - Terminal output produced while the hub is offline is not replayed; the native
   session and process survive.
-- Full process-tree termination is best effort.
+- Process-tree termination covers Unix process groups and Windows Job Objects;
+  the Windows job assignment has a small post-start race (see [SECURITY.md](SECURITY.md)).
 - Windows Server 2025 uses the same Task Scheduler schema but was not available
   for testing.
 - The release is a pre-release while the Claude and cross-OS real-agent gaps

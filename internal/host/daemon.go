@@ -87,6 +87,7 @@ func NewDaemonWithAdapters(cfg Config, logger *slog.Logger, adapters []Adapter) 
 func (d *Daemon) Adapters() []Adapter { return d.adapters }
 
 func (d *Daemon) Run(ctx context.Context) error {
+	defer d.stopAllRuns()
 	if d.cfg.HubURL == "" {
 		return errors.New("not configured")
 	}
@@ -118,6 +119,48 @@ func (d *Daemon) Run(ctx context.Context) error {
 			backoff = 60 * time.Second
 		}
 	}
+}
+
+// stopAllRuns terminates every live run and its process tree. It runs when
+// the daemon stops (SIGTERM, service stop or Windows shutdown).
+func (d *Daemon) stopAllRuns() {
+	d.runMu.Lock()
+	runs := make([]*Run, 0, len(d.runs))
+	for _, r := range d.runs {
+		runs = append(runs, r)
+	}
+	structured := make([]*StructuredRun, 0, len(d.structured))
+	for _, r := range d.structured {
+		structured = append(structured, r)
+	}
+	codex := make([]*CodexRun, 0, len(d.codexRuns))
+	for _, r := range d.codexRuns {
+		codex = append(codex, r)
+	}
+	acp := make([]*ACPRun, 0, len(d.acpRuns))
+	for _, r := range d.acpRuns {
+		acp = append(acp, r)
+	}
+	d.runMu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, r := range runs {
+		wg.Add(1)
+		go func(r *Run) { defer wg.Done(); r.Stop() }(r)
+	}
+	for _, r := range structured {
+		wg.Add(1)
+		go func(r *StructuredRun) { defer wg.Done(); r.Stop() }(r)
+	}
+	for _, r := range codex {
+		wg.Add(1)
+		go func(r *CodexRun) { defer wg.Done(); r.Stop() }(r)
+	}
+	for _, r := range acp {
+		wg.Add(1)
+		go func(r *ACPRun) { defer wg.Done(); r.Stop() }(r)
+	}
+	wg.Wait()
 }
 
 func jitter(d time.Duration) time.Duration {

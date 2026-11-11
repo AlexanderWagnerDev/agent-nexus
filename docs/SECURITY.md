@@ -56,6 +56,13 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
   24 hours are removed at daemon start.
 - Prompt text is capped at 256 KiB and terminal paste input at 2 MiB on both
   hub and host; password input is capped at 1 KiB before Argon2.
+- Every agent process is contained in a process tree: Unix runs in their own
+  session/process group and receive `SIGTERM` then `SIGKILL`; Windows runs are
+  assigned to a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. A daemon
+  stop terminates every live tree. On Windows the job assignment happens
+  immediately after `CreateProcess`; a grandchild spawned in that microsecond
+  window could escape the job. The terminal-only alternative (running the
+  agent under a wrapper that creates the job first) is not implemented.
 - HTTP JSON bodies are limited to 1 MiB with `http.MaxBytesReader`, and the
   browser WebSocket read limit is 4 MiB (enough for a 2 MiB terminal paste).
   The host link keeps a 32 MiB limit for paged transcripts.

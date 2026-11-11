@@ -9,9 +9,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	acp "github.com/coder/acp-go-sdk"
 )
@@ -27,6 +30,8 @@ func TestMain(m *testing.M) {
 		os.Exit(runFakeCodex(os.Args[1:]))
 	case "acp":
 		os.Exit(runFakeACP(os.Args[1:]))
+	case "tree":
+		os.Exit(runFakeTree())
 	}
 	os.Exit(m.Run())
 }
@@ -172,5 +177,35 @@ func runFakeACP(args []string) int {
 	conn := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin)
 	agent.conn = conn
 	<-conn.Done()
+	return 0
+}
+
+// runFakeTree waits for a signal file, then spawns a long-running child and
+// writes its pid. The process-tree test kills the guard and verifies that the
+// child died too.
+func runFakeTree() int {
+	dir := os.Getenv("NEXUS_TEST_TREE_DIR")
+	if dir == "" {
+		return 2
+	}
+	_ = os.WriteFile(dir+"/parent.pid", []byte(strconv.Itoa(os.Getpid())), 0o600)
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(dir + "/spawn"); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 60")
+	} else {
+		cmd = exec.Command("sh", "-c", "sleep 60")
+	}
+	if err := cmd.Start(); err != nil {
+		return 1
+	}
+	_ = os.WriteFile(dir+"/child.pid", []byte(strconv.Itoa(cmd.Process.Pid)), 0o600)
+	_ = cmd.Wait()
 	return 0
 }

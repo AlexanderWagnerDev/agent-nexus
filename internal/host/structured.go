@@ -34,6 +34,7 @@ type StructuredRun struct {
 	password   string
 	client     *http.Client
 	cmd        *exec.Cmd
+	guard      *processGuard
 	cancel     context.CancelFunc
 	daemon     *Daemon
 
@@ -145,15 +146,20 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail(err.Error())
 		return
 	}
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
 		fail("cannot start opencode server: " + err.Error())
 		return
 	}
+	guard := newProcessGuard()
+	if err := guard.Attach(cmd.Process.Pid); err != nil {
+		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
+	}
 	sr := &StructuredRun{
 		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
 		sessionKey: sessionKey, state: protocol.StateIdle,
-		cmd: cmd, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
+		cmd: cmd, guard: guard, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
 		client:    &http.Client{Timeout: 30 * time.Second},
 		readyOnce: new(sync.Once),
 	}
@@ -488,10 +494,8 @@ func (r *StructuredRun) Stop() {
 		delete(r.approvals, id)
 	}
 	r.mu.Unlock()
+	stopProcessTree(r.guard, r.cmd, r.daemon.policy.ProcessGrace())
 	r.cancel()
-	if r.cmd != nil && r.cmd.Process != nil {
-		_ = r.cmd.Process.Kill()
-	}
 	cleanupPromptAttachments(r.id)
 }
 

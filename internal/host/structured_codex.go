@@ -26,6 +26,7 @@ type CodexRun struct {
 	cwd        string
 	daemon     *Daemon
 	cmd        *exec.Cmd
+	guard      *processGuard
 	stdin      io.WriteCloser
 	cancel     context.CancelFunc
 
@@ -145,14 +146,19 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail(err.Error())
 		return
 	}
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
 		fail("cannot start codex app-server: " + err.Error())
 		return
 	}
+	guard := newProcessGuard()
+	if err := guard.Attach(cmd.Process.Pid); err != nil {
+		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
+	}
 	cr := &CodexRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: "codex", cwd: cwd,
-		daemon: d, cmd: cmd, stdin: stdin, cancel: cancel,
+		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
 		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, state: protocol.StateIdle,
 	}
 	go cr.readLoop(stdout)

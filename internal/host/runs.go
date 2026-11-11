@@ -26,6 +26,8 @@ type Run struct {
 	agent      string
 	pty        pty.Pty
 	cmd        *pty.Cmd
+	guard      *processGuard
+	grace      time.Duration
 	cols, rows int
 	seq        atomic.Uint64
 	stopped    atomic.Bool
@@ -60,9 +62,24 @@ func (r *Run) Stop() {
 
 func (r *Run) terminate() {
 	r.closeOnce.Do(func() {
+		if r.guard != nil {
+			r.guard.Terminate()
+		}
+		if r.cmd != nil && r.cmd.Process != nil {
+			deadline := time.Now().Add(r.grace)
+			for time.Now().Before(deadline) && processAlive(r.cmd.Process.Pid) {
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
+		if r.guard != nil {
+			r.guard.Kill()
+		}
 		_ = r.pty.Close()
 		if r.cmd != nil && r.cmd.Process != nil {
 			_ = r.cmd.Process.Kill()
+		}
+		if r.guard != nil {
+			r.guard.Close()
 		}
 	})
 }
@@ -196,7 +213,14 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		return
 	}
 	_ = p.Resize(cols, rows)
-	r := &Run{id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, pty: p, cmd: c, cols: cols, rows: rows}
+	guard := newProcessGuard()
+	if c.Process != nil {
+		if err := guard.Attach(c.Process.Pid); err != nil {
+			d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
+		}
+	}
+	r := &Run{id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, pty: p, cmd: c,
+		guard: guard, grace: d.policy.ProcessGrace(), cols: cols, rows: rows}
 	d.runMu.Lock()
 	d.runs[spec.RunID] = r
 	d.runMu.Unlock()

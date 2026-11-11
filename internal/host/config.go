@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var Version = "alpha"
@@ -23,6 +24,21 @@ type Policy struct {
 	AllowNew      bool     `json:"allow_new_sessions"`
 	AllowFork     bool     `json:"allow_fork"`
 	ForbiddenArgs []string `json:"forbidden_args"`
+	// ProcessGraceSeconds is how long a stopped run may take to exit before
+	// its process tree is killed. Zero means the five-second default.
+	ProcessGraceSeconds int `json:"process_grace_seconds,omitempty"`
+}
+
+// ProcessGrace returns the configured grace period, clamped to a sane range.
+func (p Policy) ProcessGrace() time.Duration {
+	seconds := p.ProcessGraceSeconds
+	if seconds <= 0 {
+		seconds = 5
+	}
+	if seconds > 60 {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // Config is stored next to the host key in the per-user config directory.

@@ -26,6 +26,7 @@ type ACPRun struct {
 	cwd        string
 	daemon     *Daemon
 	cmd        *exec.Cmd
+	guard      *processGuard
 	stdin      io.WriteCloser
 	conn       *acp.ClientSideConnection
 	cancel     context.CancelFunc
@@ -139,14 +140,19 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail(err.Error())
 		return
 	}
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
 		fail("cannot start ACP adapter: " + err.Error())
 		return
 	}
+	guard := newProcessGuard()
+	if err := guard.Attach(cmd.Process.Pid); err != nil {
+		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
+	}
 	ar := &ACPRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, cwd: cwd,
-		daemon: d, cmd: cmd, stdin: stdin, cancel: cancel,
+		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
 		approvals: map[string]chan string{}, state: protocol.StateIdle,
 	}
 	ar.conn = acp.NewClientSideConnection(ar, stdin, stdout)
@@ -324,10 +330,8 @@ func (r *ACPRun) Stop() {
 		}
 	}
 	r.mu.Unlock()
+	stopProcessTree(r.guard, r.cmd, r.daemon.policy.ProcessGrace())
 	r.cancel()
-	if r.cmd != nil && r.cmd.Process != nil {
-		_ = r.cmd.Process.Kill()
-	}
 }
 
 // ReadTextFile is not advertised to the agent, so this is only a safety net.
