@@ -17,7 +17,12 @@ func (s *Server) ensureVAPID() {
 			return
 		}
 		_ = s.store.SetSetting("vapid_public", public)
-		_ = s.store.SetSetting("vapid_private", priv)
+		sealedPriv, sealErr := s.store.seal(priv)
+		if sealErr != nil {
+			s.log.Error("cannot encrypt VAPID private key; web push disabled", "error", sealErr)
+			return
+		}
+		_ = s.store.SetSetting("vapid_private", sealedPriv)
 		pub = public
 	}
 	priv, _ := s.store.GetSetting("vapid_private")
@@ -28,7 +33,13 @@ func (s *Server) ensureVAPID() {
 		} else {
 			priv = plain
 			if s.store.secrets != nil {
-				_ = s.store.SetSetting("vapid_private", s.store.seal(priv))
+				sealed, err := s.store.seal(priv)
+				if err != nil {
+					s.log.Error("cannot encrypt VAPID private key; web push disabled", "error", err)
+					priv = ""
+				} else {
+					_ = s.store.SetSetting("vapid_private", sealed)
+				}
 			}
 		}
 	}

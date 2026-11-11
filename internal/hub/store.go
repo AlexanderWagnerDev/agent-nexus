@@ -310,9 +310,15 @@ func (s *Store) CreateUserWithRole(username, passwordHash, totpSecret, role stri
 		Role:         role,
 		CreatedAt:    time.Now().UTC(),
 	}
-	_, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, role, created_at) VALUES(?,?,?,?,?,?)`,
-		u.ID, u.Username, u.PasswordHash, s.seal(u.TOTPSecret), u.Role, ms(u.CreatedAt))
-	return u, err
+	sealed, err := s.seal(u.TOTPSecret)
+	if err != nil {
+		return User{}, err
+	}
+	if _, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, role, created_at) VALUES(?,?,?,?,?,?)`,
+		u.ID, u.Username, u.PasswordHash, sealed, u.Role, ms(u.CreatedAt)); err != nil {
+		return User{}, err
+	}
+	return u, nil
 }
 
 func (s *Store) ListUsers() ([]User, error) {
@@ -370,7 +376,7 @@ func (s *Store) scanUser(row rowScanner) (User, error) {
 // and must run after SetSecretBox.
 func (s *Store) MigrateSecrets() error {
 	if s.secrets == nil {
-		return nil
+		return errors.New("secret box is not configured; refusing to leave secrets unencrypted")
 	}
 	rows, err := s.db.Query(`SELECT id, totp_secret FROM users WHERE totp_secret <> ''`)
 	if err != nil {
@@ -393,7 +399,11 @@ func (s *Store) MigrateSecrets() error {
 		return err
 	}
 	for _, update := range updates {
-		if _, err := s.db.Exec(`UPDATE users SET totp_secret=? WHERE id=?`, s.seal(update.secret), update.id); err != nil {
+		sealed, err := s.seal(update.secret)
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`UPDATE users SET totp_secret=? WHERE id=?`, sealed, update.id); err != nil {
 			return err
 		}
 	}
@@ -401,13 +411,17 @@ func (s *Store) MigrateSecrets() error {
 }
 
 func (s *Store) SetTOTP(userID, secret string, enabled bool) error {
-	_, err := s.db.Exec(`UPDATE users SET totp_secret=?, totp_enabled=? WHERE id=?`, s.seal(secret), boolInt(enabled), userID)
+	sealed, err := s.seal(secret)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`UPDATE users SET totp_secret=?, totp_enabled=? WHERE id=?`, sealed, boolInt(enabled), userID)
 	return err
 }
 
-func (s *Store) seal(value string) string {
+func (s *Store) seal(value string) (string, error) {
 	if s.secrets == nil || value == "" {
-		return value
+		return value, nil
 	}
 	return s.secrets.Seal(value)
 }

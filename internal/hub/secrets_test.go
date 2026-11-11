@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +15,10 @@ func TestSecretBoxRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sealed := box.Seal("JBSWY3DPEHPK3PXP")
+	sealed, err := box.Seal("JBSWY3DPEHPK3PXP")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.HasPrefix(sealed, secretPrefix) {
 		t.Fatalf("secret was not encrypted: %q", sealed)
 	}
@@ -104,5 +109,41 @@ func TestMigrateSecretsEncryptsLegacyTOTP(t *testing.T) {
 	}
 	if err := store.MigrateSecrets(); err != nil {
 		t.Fatalf("migration is not idempotent: %v", err)
+	}
+}
+
+func TestMigrateSecretsRefusesWithoutKey(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.MigrateSecrets(); err == nil {
+		t.Fatal("migration without an encryption key must fail instead of leaving plaintext")
+	}
+}
+
+func TestVAPIDPrivateKeyIsEncryptedAtRest(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	box, err := OpenSecretBox(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.SetSecretBox(box)
+	server := &Server{store: store, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	server.ensureVAPID()
+	stored, err := store.GetSetting("vapid_private")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(stored, secretPrefix) {
+		t.Fatalf("VAPID private key was stored in plaintext: %q", stored)
+	}
+	if server.vapidPrivate == "" || server.vapidPrivate == stored {
+		t.Fatalf("VAPID private key was not loaded correctly")
 	}
 }

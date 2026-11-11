@@ -63,16 +63,21 @@ func OpenSecretBox(dataDir string) (*SecretBox, error) {
 	return &SecretBox{aead: aead}, nil
 }
 
-func (b *SecretBox) Seal(value string) string {
-	if b == nil || value == "" {
-		return value
+// Seal encrypts a small secret. Encryption never falls back to plaintext: a
+// random-source failure is returned to the caller so the write can be aborted.
+func (b *SecretBox) Seal(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	if b == nil {
+		return "", errors.New("secret box is not initialised")
 	}
 	nonce := make([]byte, b.aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
-		return value
+		return "", fmt.Errorf("encrypt secret: %w", err)
 	}
 	sealed := b.aead.Seal(nonce, nonce, []byte(value), []byte("agentnexus"))
-	return secretPrefix + base64.RawStdEncoding.EncodeToString(sealed)
+	return secretPrefix + base64.RawStdEncoding.EncodeToString(sealed), nil
 }
 
 func (b *SecretBox) Open(value string) (string, error) {

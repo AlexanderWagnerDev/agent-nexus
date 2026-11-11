@@ -9,7 +9,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Control | Implemented | Gap |
 | --- | --- | --- |
 | Password login | Argon2id (m=64 MiB, t=3, p=2), min length 10 | no recovery codes or local admin reset command |
-| Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret stored unencrypted in `hub.db`; not required on non-loopback hubs yet |
+| Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret encrypted at rest (see §8); TOTP is not mandatory on non-loopback hubs |
 | Passkeys | WebAuthn registration and username-first login, user verification required for step-up | credential JSON is stored unencrypted in `hub.db` |
 | Step-up | Sensitive actions require a fresh passkey or password + TOTP confirmation; the window is five minutes and is bound to the session | no per-action confirmation list is configurable yet |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
@@ -248,7 +248,7 @@ mTLS is intentionally not required so that TLS may terminate at a reverse proxy 
 | Data | Protection |
 | --- | --- |
 | Client ↔ hub, host ↔ hub | TLS 1.3 preferred, TLS 1.2 minimum with AEAD ciphers only; HSTS; the hub refuses to start a non-loopback listener without TLS unless explicitly told it is behind a TLS-terminating proxy (`trusted_proxy` setting with proxy IP allow-list). |
-| Hub secrets at rest (TOTP secrets, VAPID private key, push subscription keys, hub identity key) | TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under `secret.key` (`0600`), generated on first start. Push subscription keys remain public material. Protects against database-only leaks; back up the database and key together. |
+| Hub secrets at rest (TOTP secrets, VAPID private key, push subscription keys, hub identity key) | TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under `secret.key` (`0600`), generated on first start. An encryption error aborts the write; secrets are never silently stored in plaintext. Push subscription keys remain public material. Protects against database-only leaks; back up the database and key together. |
 | Optional transcript cache on hub (Q-02) | Encrypted the same way; disabled by default. |
 | Hub database and backups | Recommend full-disk encryption on the server; backup command produces an encrypted archive (age/X25519 recipient). |
 | Host private key | OS keystore (macOS Keychain, Windows DPAPI/Credential Manager, Linux Secret Service), fallback file `0600` in the user data directory. |

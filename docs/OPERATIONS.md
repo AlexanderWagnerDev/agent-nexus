@@ -1,6 +1,6 @@
 # AgentNexus — Operations
 
-Practical runbook for the current 0.3.x build. It describes what the code does
+Practical runbook for the current alpha build. It describes what the code does
 and what has actually been tested, not the 1.0 target.
 
 ## Data locations
