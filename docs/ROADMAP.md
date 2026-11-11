@@ -31,7 +31,7 @@ flowchart LR
 
 ## Implementation status (2026-11-11)
 
-The repository now contains a runnable 0.3.2 development implementation. The
+The repository now contains a runnable 0.3.3 development implementation. The
 acceptance criteria below remain the definition of done; this table records
 what is actually implemented and tested versus what is still open.
 

@@ -26,7 +26,7 @@ Versioned images are published to GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:latest
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.2-rc.1   # release tag
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.3-rc.1   # release tag
 ```
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
@@ -53,7 +53,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — a release tag such as `v0.3.2-rc.1`; avoid `latest` in production.
+- `NEXUS_TAG` — a release tag such as `v0.3.3-rc.1`; avoid `latest` in production.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
@@ -114,7 +114,34 @@ is intentionally rotated, remove `hub_public_key` from each host config (or
 re-pair) so the new key can be pinned. A host daemon
 needs no backup beyond `nexusd.json`; native sessions are owned by the agents.
 
+## Host updates
+
+The host can self-update without a hub-managed binary feed:
+
+```bash
+nexusd update --check --channel prerelease
+nexusd update --install
+nexusd update --rollback
+```
+
+Downloads come from GitHub releases, not the hub. The archive SHA-256 is
+verified against `checksums.txt`; the cosign bundle is verified when `cosign`
+is installed. Hosts without cosign must explicitly pass
+`--allow-checksum-only`. The private release repository needs a read-only
+`NEXUS_GITHUB_TOKEN` with Contents access.
+
+`--install` is refused while `runtime.json` reports active runs. It requires an
+installed service, keeps `nexusd.previous`, and restarts the service. Windows
+logs to `%APPDATA%\AgentNexus\update.log`. A forced update is an explicit
+operator decision and can interrupt runs.
+
+For an unattended maintenance window, schedule `nexusd update --install`
+without `--force`; it is a no-op when current and refuses during active work.
+Keep the hub and host protocol major versions compatible, and upgrade the hub
+before the hosts.
+
 ## Upgrade
+
 
 1. Back up `hub.db` and `secret.key` (see above).
 2. Pull the new image / replace `nexus-hub` and restart. Migrations run

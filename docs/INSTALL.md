@@ -21,7 +21,7 @@ Edit `.env`:
 ```dotenv
 HUB_DOMAIN=nexus.example.com
 HUB_NAME=AgentNexus
-NEXUS_TAG=v0.3.2-rc.1
+NEXUS_TAG=v0.3.3-rc.1
 ```
 
 Point the DNS record for `HUB_DOMAIN` at the server, open TCP 80/443, then:
@@ -36,20 +36,43 @@ hub. The hub itself is not published on a host port.
 
 ### Portainer (external reverse proxy)
 
-Use [deploy/portainer-stack.yml](../deploy/portainer-stack.yml) if another proxy
-such as Nginx Proxy Manager terminates TLS:
+Two complete stacks are provided:
 
-1. Portainer → Stacks → Add stack.
-2. Paste the file.
-3. Set `HUB_DOMAIN`, `HUB_PORT` and `NEXUS_TAG`.
-4. Deploy, then point the proxy at `http://<docker-host>:8787` with **WebSockets
-   Support** enabled.
+- [deploy/portainer-stack.yml](../deploy/portainer-stack.yml) publishes a host
+  port (loopback by default) for a proxy on the same host.
+- [deploy/portainer-stack-proxy.yml](../deploy/portainer-stack-proxy.yml)
+  attaches the hub to an existing external proxy network and publishes no host
+  port. Set `PROXY_NETWORK` to the exact existing network name, for example
+  `npm_proxy`.
+
+1. Portainer -> Stacks -> Add stack.
+2. Paste the matching file.
+3. Set `HUB_DOMAIN`, `NEXUS_TAG` and, for the proxy variant, `PROXY_NETWORK`.
+4. Deploy. For the port variant, point the proxy at
+   `http://<docker-host>:8787` with **WebSockets Support** enabled. For the
+   proxy variant, use `http://agentnexus-hub:8080`.
+5. Keep `HUB_BIND=127.0.0.1` unless the proxy runs on another machine and a
+   firewall protects the port.
+
+Both stacks use `restart: always`, a named `agentnexus-data` volume, a
+read-only root filesystem with a small `/tmp`, no capabilities, and an IPv6
+bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
+enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
+
+The stack includes WUD labels. For controlled releases set
+`NEXUS_TAG=v0.3.3-rc.1` and `WUD_WATCH_DIGEST=false`; for a deliberate rolling
+channel set `NEXUS_TAG=latest` and `WUD_WATCH_DIGEST=true`. WUD only reports
+updates; it does not apply them. Never let an update cross a hub schema change
+without a backup.
 
 If you use a bind mount for `/data`, make it writable by UID `65532`:
 
 ```bash
 sudo chown -R 65532:65532 /srv/agentnexus
 ```
+
+Back up `hub.db`, `secret.key` and `hub-signing.key` together; the database
+alone cannot decrypt secrets.
 
 The central database is `hub.db` in the `nexus-data` volume. See
 [OPERATIONS.md](OPERATIONS.md) for backup and restore.
@@ -137,6 +160,41 @@ cd agent-nexus_*
 The LaunchAgent starts at login and is kept alive. Grant Full Disk Access /
 Files and Folders permission if your projects live under `~/Documents`,
 `~/Desktop` or iCloud Drive.
+
+## 3.1 Host updates
+
+`nexusd` can check and stage releases without any hub involvement. This keeps a
+compromised hub out of the binary trust path.
+
+```bash
+nexusd update --check --channel prerelease
+nexusd update --stage --channel prerelease
+nexusd update --install          # refuses while active runs are reported
+nexusd update --install --force  # explicit override
+nexusd update --rollback         # restore nexusd.previous
+```
+
+- The release repository is private. Create a fine-grained read-only GitHub
+  token with **Contents: read** and export it as `NEXUS_GITHUB_TOKEN` on the
+  host (or make the repository public).
+- Every archive is verified against the release `checksums.txt` (SHA-256).
+  If `cosign` is installed, the signed checksum bundle is also verified against
+  the release workflow identity. `--allow-checksum-only` is the explicit
+  fallback for hosts without cosign.
+- `--install` requires the per-user service and keeps `nexusd.previous` for
+  rollback. It reads `runtime.json` and refuses to restart while active runs
+  are reported; `--force` is an explicit override.
+- Windows update logs are written to `%APPDATA%\AgentNexus\update.log`; the
+  helper stops and restarts the Task Scheduler task. Linux uses the systemd
+  user unit and macOS the LaunchAgent.
+- The host identity, config, native agent stores and credentials are not
+  touched.
+
+A safe automatic maintenance window can run `nexusd update --install` from the
+OS scheduler. It will no-op when up to date and refuse while runs are active.
+On Windows create a weekly task; on Linux/macOS use a systemd user timer or a
+LaunchAgent. Set `NEXUS_GITHUB_TOKEN` in that task's environment. Do not enable
+`--force` in an automatic task.
 
 ## 4. Start using existing chats
 

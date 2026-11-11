@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.2-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs and replay-protected hub command signing are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.3-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -57,6 +57,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
+| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | Private releases need a read-only `NEXUS_GITHUB_TOKEN`; automatic scheduling is OS-level |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -105,7 +106,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 Download the latest release binaries or use the multi-arch image:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.2-rc.1
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.3-rc.1
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,

@@ -2,7 +2,7 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current 0.3.2-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The current 0.3.3-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
 ### 0.1.x implementation notes
 
@@ -22,6 +22,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
 | Web Push | VAPID, content-free payloads, subscriptions bound to user and device; private key encrypted at rest | permission is browser-controlled |
+| Host updates | `nexusd update` downloads releases directly from GitHub, verifies SHA-256 and verifies the cosign keyless bundle when cosign is installed; install is refused while runs are active unless forced | private repository needs a read-only GitHub token; hub does not apply updates |
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
 | Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
 | Role limits | viewers cannot create host pairing codes | viewers can still read every host explicitly shared with them |
@@ -355,6 +356,21 @@ sessions and fork enabled, and the forbidden-argument list above.
   key. It defends against command injection/tampering by entities without the
   key and prevents replay. Client/device-signed commands with host-local device
   approval remain the Phase 5 goal below.
+
+## Host update trust chain (v0.3.3)
+
+- The hub never serves or selects `nexusd` binaries. The host queries GitHub
+  releases and downloads the archive and `checksums.txt` directly.
+- Every archive is matched against the release checksum; the checksum bundle is
+  verified with cosign keyless verification (release workflow identity) when
+  cosign is available. `--allow-checksum-only` is an explicit operator choice.
+- The daemon publishes `runtime.json` with its active-run count. The updater
+  refuses to restart the service while runs are active unless `--force` is
+  used. It keeps `nexusd.previous` for rollback and preserves host identity and
+  agent configuration.
+- A compromised hub cannot inject an executable into this path. A compromised
+  GitHub repository/account or a host without cosign (and with
+  `--allow-checksum-only`) remains a residual risk.
 
 ## Signed-command mode (Phase 5)
 

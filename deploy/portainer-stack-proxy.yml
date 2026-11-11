@@ -1,0 +1,76 @@
+# Portainer stack: AgentNexus hub attached to an existing proxy network.
+#
+# Use this variant when Nginx Proxy Manager, Caddy, Traefik or another proxy
+# already runs in a Docker network. The hub publishes no host port; the proxy
+# reaches it as http://agentnexus-hub:8080 (WebSocket upgrade included).
+#
+# Required:
+#   HUB_DOMAIN      external HTTPS hostname (WebAuthn requires a hostname)
+#   PROXY_NETWORK   exact name of the existing proxy network
+#   NEXUS_TAG       v0.3.3-rc.1 for pinned updates, or latest for the latest channel
+# Optional:
+#   HUB_NAME, WUD_WATCH_DIGEST=false (true for latest), subnets
+#
+# Create/inspect the proxy network first, for example:
+#   docker network ls
+#   docker network inspect npm_proxy
+#
+# IPv6: the Docker daemon must have IPv6 enabled; user-defined bridges then
+# honour enable_ipv6.
+services:
+  hub:
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-v0.3.3-rc.1}
+    container_name: agentnexus-hub
+    restart: always
+    init: true
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    environment:
+      NEXUS_ADDR: "0.0.0.0:8080"
+      NEXUS_DATA_DIR: "/data"
+      NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN:?set HUB_DOMAIN to the external HTTPS hostname}"
+      NEXUS_HUB_NAME: "${HUB_NAME:-AgentNexus}"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - nexus-data:/data
+    expose:
+      - "8080"
+    networks:
+      - agentnexus-net
+      - proxy
+    healthcheck:
+      test: ["CMD", "/nexus-hub", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    labels:
+      wud.watch: "true"
+      wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
+      wud.tag.include: "^${NEXUS_TAG:-v0.3.3-rc.1}$$"
+      wud.display.name: "AgentNexus Hub"
+      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/releases"
+
+volumes:
+  nexus-data:
+    name: agentnexus-data
+
+networks:
+  agentnexus-net:
+    name: agentnexus-net
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: ${NEXUS_IPV4_SUBNET:-172.30.0.0/24}
+        - subnet: ${NEXUS_IPV6_SUBNET:-fd42:6e78:6578::/64}
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:?set PROXY_NETWORK to the existing proxy network name}

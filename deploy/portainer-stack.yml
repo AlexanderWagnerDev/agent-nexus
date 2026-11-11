@@ -1,34 +1,71 @@
-# Portainer stack for AgentNexus behind an existing reverse proxy
-# (Nginx Proxy Manager, Caddy, Traefik, ...).
+# Portainer stack: AgentNexus hub behind an existing reverse proxy.
 #
-# 1. Create the stack in Portainer and paste this file.
-# 2. Set HUB_DOMAIN to the external HTTPS hostname.
-# 3. Point the proxy at http://<docker-host>:8787 (or change HUB_PORT).
-# 4. Keep /data persistent and back up the named volume.
+# This variant publishes the hub on a host port (loopback by default) that
+# Nginx Proxy Manager, Caddy, Traefik or another proxy can reach. Use
+# portainer-stack-proxy.yml instead when the proxy runs in its own Docker
+# network and you do not want a published port at all.
+#
+# Required:
+#   HUB_DOMAIN   external HTTPS hostname (WebAuthn requires a hostname)
+#   NEXUS_TAG    v0.3.3-rc.1 for pinned updates, or latest for the latest channel
+# Optional:
+#   HUB_NAME, HUB_BIND (default 127.0.0.1), HUB_PORT (default 8787)
+#   WUD_WATCH_DIGEST=false (set true only for the latest channel)
+#   NEXUS_IPV4_SUBNET, NEXUS_IPV6_SUBNET
+#
+# IPv6: the Docker daemon must have IPv6 enabled; user-defined bridges then
+# honour enable_ipv6. If your engine does not support IPv6, remove the IPv6
+# ipam entry and set enable_ipv6 to false.
 services:
   hub:
-    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-latest}
-    restart: unless-stopped
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-v0.3.3-rc.1}
+    container_name: agentnexus-hub
+    restart: always
     init: true
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    stop_grace_period: 30s
     environment:
       NEXUS_ADDR: "0.0.0.0:8080"
       NEXUS_DATA_DIR: "/data"
-      NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN}"
+      NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN:?set HUB_DOMAIN to the external HTTPS hostname}"
       NEXUS_HUB_NAME: "${HUB_NAME:-AgentNexus}"
+      TZ: "${TZ:-UTC}"
     volumes:
       - nexus-data:/data
     ports:
-      - "${HUB_BIND:-0.0.0.0}:${HUB_PORT:-8787}:8080"
+      - "${HUB_BIND:-127.0.0.1}:${HUB_PORT:-8787}:8080"
+    networks:
+      - agentnexus-net
     healthcheck:
       test: ["CMD", "/nexus-hub", "--healthcheck"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
+    labels:
+      wud.watch: "true"
+      wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
+      wud.tag.include: "^${NEXUS_TAG:-v0.3.3-rc.1}$$"
+      wud.display.name: "AgentNexus Hub"
+      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/releases"
 
 volumes:
   nexus-data:
+    name: agentnexus-data
+
+networks:
+  agentnexus-net:
+    name: agentnexus-net
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: ${NEXUS_IPV4_SUBNET:-172.30.0.0/24}
+        - subnet: ${NEXUS_IPV6_SUBNET:-fd42:6e78:6578::/64}

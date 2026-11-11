@@ -2,10 +2,10 @@
 
 This document is the single source of truth for **what** AgentNexus must do (requirements), **how** it will be built (technical decisions) and **in which steps** (work packages). Component details live in [ARCHITECTURE.md](ARCHITECTURE.md), per-agent details in [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md), security details in [SECURITY.md](SECURITY.md), and the schedule with acceptance criteria in [ROADMAP.md](ROADMAP.md).
 
-- **Status:** Implementation in progress — 0.3.2-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-11)
+- **Status:** Implementation in progress — 0.3.3-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-11)
 - **Last reviewed:** 2026-11-11
 
-### Implementation snapshot (0.3.2-dev)
+### Implementation snapshot (0.3.3-dev)
 
 - **Implemented:** hub/daemon, SAS host pairing, discovery/transcripts for
   Claude/Codex/OpenCode (Gemini best effort), terminal resume, OpenCode/Codex
@@ -14,7 +14,8 @@ This document is the single source of truth for **what** AgentNexus must do (req
   two-pane split workspace, live model/reasoning/agent selection, bounded
   attachments, cross-host repository identity, review-grade diffs, searchable
   model picker, incremental session sync, encrypted hub secrets, signed
-  hub-to-host commands with replay protection, online backups and per-user
+  hub-to-host commands with replay protection, verified host self-updates with
+  rollback, hardened IPv6/proxy Portainer stacks, online backups and per-user
   services on Linux/macOS/Windows.
 - **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
   (CI), cross-compilation for six targets, CodeQL (SARIF artifact because the
@@ -22,11 +23,12 @@ This document is the single source of truth for **what** AgentNexus must do (req
   uninstall on Windows 11, live Codex `app-server` and OpenCode `serve`/ACP
   runs on Windows 11, OpenCode/Codex option discovery, OpenCode and Codex image
   attachment round-trips, offline/reconnect replay, signed-command acceptance
-  with a second daemon, split-view and model-picker browser QA, transcript
-  export against a 1,000+ message session.
+  with a second daemon, a simulated three-host concurrent run, host update
+  staging, split-view and model-picker browser QA, transcript export against a
+  1,000+ message session.
 - **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
   Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
-  (no Docker daemon on the development host), signed-command mode, PostgreSQL,
+  (no Docker daemon on the development host), client/device-signed commands, PostgreSQL,
   native apps, WCAG 2.2 AA and external penetration testing.
 
 ## Table of contents
