@@ -1,0 +1,73 @@
+import { enablePush, logout } from '../auth.js';
+import { renderShell, saveTheme, setPage } from '../shell.js';
+import { state } from '../state.js';
+import { badge, toast } from '../ui.js';
+import { getLang, setLang, t } from '../i18n.js';
+import { svgIcon } from '../icons.js';
+import { esc } from '../ui-format.js';
+
+export async function pageSettings() {
+  renderShell('settings');
+  const view = setPage(t('Settings'), t('Appearance, account, notifications and administration.'));
+  const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
+  view.innerHTML = `
+    <div class="grid cols-2">
+      <section class="card">
+        <h2 class="mt-0">${t('Appearance')}</h2>
+        <p class="hint">${t('The theme is stored on the hub for your user and follows you across devices.')}</p>
+        <div class="theme-choices" role="group" aria-label="${t('Theme')}">
+          ${[['system', 'monitor', 'System', 'Follow the operating system'], ['dark', 'moon', 'Dark', 'Always dark'], ['light', 'sun', 'Light', 'Always light']].map(([value, icon, label, hint]) => `
+            <button type="button" class="theme-choice ${state.settings.theme === value ? 'active' : ''}" data-theme-choice="${value}" aria-pressed="${state.settings.theme === value}">
+              <span class="theme-icon" aria-hidden="true">${svgIcon(icon, 16)}</span>
+              <span><strong>${t(label)}</strong><small>${t(hint)}</small></span>
+            </button>`).join('')}
+        </div>
+        <label class="label mt-2">${t('Language')}<select class="select" id="settings-language">
+          <option value="en" ${getLang() === 'en' ? 'selected' : ''}>English</option>
+          <option value="de" ${getLang() === 'de' ? 'selected' : ''}>Deutsch</option>
+        </select></label>
+        <p class="hint mt-1">${t('The interface language is stored on this device. English is the default; changing it reloads the page.')}</p>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${t('Account')}</h2>
+        <div class="list">
+          <div class="list-row"><div><div class="title">${esc(state.me.username)}</div><div class="sub"><span>${esc(t(state.me.role))}</span><span>${state.me.totp_enabled ? t('TOTP enabled') : t('TOTP not enabled')}</span></div></div></div>
+        </div>
+        <div class="split wrap mt-2">
+          <a class="btn small" href="#/devices">${t('Devices & passkeys')}</a>
+          <button class="btn small ghost" id="settings-signout">${t('Sign out')}</button>
+        </div>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${t('Notifications')}</h2>
+        <p class="hint">${t('Content-free Web Push for approvals, completed runs, failures and host disconnects.')}</p>
+        <div id="settings-push-area"><button class="btn" id="settings-push">${t('Enable on this device')}</button></div>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${isAdmin ? t('Administration') : t('About')}</h2>
+        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">${t('Users & roles')}</a><a class="btn small" href="#/audit">${t('Audit log')}</a><a class="btn small" href="#/devices">${t('All devices')}</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)} · ${t('version')} ${esc(state.version || t('unknown'))}. ${t('Sessions stay on your hosts; the hub stores metadata.')}</p>`}
+      </section>
+    </div>`;
+  document.getElementById('settings-language').addEventListener('change', (event) => {
+    setLang(event.target.value);
+    location.reload();
+  });
+  view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {
+    try {
+      await saveTheme(button.dataset.themeChoice);
+      view.querySelectorAll('[data-theme-choice]').forEach((other) => {
+        const active = other.dataset.themeChoice === button.dataset.themeChoice;
+        other.classList.toggle('active', active);
+        other.setAttribute('aria-pressed', String(active));
+      });
+    } catch (err) { toast(err.message, true); }
+  }));
+  document.getElementById('settings-signout').addEventListener('click', logout);
+  document.getElementById('settings-push')?.addEventListener('click', async () => {
+    try {
+      await enablePush();
+      document.getElementById('settings-push-area').innerHTML = badge(t('enabled on this device'), 'online');
+      toast(t('Push notifications enabled'));
+    } catch (err) { toast(err.message, true); }
+  });
+}
