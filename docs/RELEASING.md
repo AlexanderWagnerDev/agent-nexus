@@ -41,6 +41,27 @@ explicitly approved the first public version.
 5. Only then may the container workflow be extended with a semver tag, and the
    `latest` tag may be introduced.
 
+## Leftover artifacts from removed releases
+
+Removing Git tags and GitHub releases does not delete container images or old
+workflow logs. At the time of the cleanup:
+
+- GitHub Actions artifacts were deleted.
+- Old workflow runs remain and may mention previous commit authors in their
+  logs. Delete them before making the repository public if that matters.
+- GHCR may still contain images from the removed release candidates. Listing
+  and deleting them requires a token with `read:packages` and
+  `delete:packages`:
+
+  ```bash
+  gh auth refresh -s read:packages,delete:packages
+  gh api /user/packages/container/agent-nexus/versions --paginate
+  gh api -X DELETE /user/packages/container/agent-nexus/versions/<id>
+  ```
+
+  Keep the current `alpha`/`sha-` images used for development tests. Do not
+  delete packages that belong to another repository.
+
 ## Versioning
 
 The first approved version is expected to be `v0.1.0`. Until then, builds are
