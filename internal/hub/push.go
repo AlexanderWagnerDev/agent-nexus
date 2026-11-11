@@ -9,6 +9,12 @@ import (
 )
 
 func (s *Server) ensureVAPID() {
+	if s.store.secrets == nil {
+		// Without a key the private key would be stored in plaintext. Refuse
+		// instead of silently degrading.
+		s.log.Error("secret box is not configured; web push disabled")
+		return
+	}
 	pub, err := s.store.GetSetting("vapid_public")
 	if err != nil || pub == "" {
 		priv, public, genErr := webpush.GenerateVAPIDKeys()
