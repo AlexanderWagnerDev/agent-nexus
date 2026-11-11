@@ -83,7 +83,7 @@ can be dragged between 240 and 520 px; its width is stored locally.
   an expandable body with command, output, diff and collapsed raw input. Shell,
   read, edit, search, web, Git, tests, plans, delegated tasks and MCP calls have
   distinct labels.
-- Diff lines use added/removed/hunk styling in both Git and tool output.
+- Diffs render as a structured review panel: unified or side-by-side, old/new line numbers, per-file headers with change totals, file chips, syntax highlighting and a persisted layout choice.
 - Reasoning is a collapsed “Thinking” row.
 - Streaming is throttled to keep long sessions responsive; auto-scroll pauses
   when the reader scrolls up and offers “Jump to latest”.
@@ -100,6 +100,16 @@ can be dragged between 240 and 520 px; its width is stored locally.
 - Drafts are stored per run in `localStorage` and restored on return.
 - The send control is a compact icon button rather than a large call to action.
 
+## Split workspace
+
+- Two live sessions share one workspace, side by side or stacked. Each pane is
+  an embedded same-origin chat iframe with its own stream and approvals.
+- A draggable divider resizes the panes between 25% and 75%; orientation and
+  ratio are persisted locally.
+- Panes expose the session title, project, host, agent and live state, plus
+  open-in-single-view, swap and close actions.
+- On phones the panes stack and the divider is hidden.
+
 ## Responsive behavior
 
 | Width | Behavior |
@@ -115,11 +125,10 @@ tool output scroll inside their own containers.
 
 ## Known gaps
 
-- Split view with two simultaneous chat panes is not implemented; session tabs
-  and the control room cover switching and monitoring.
-- File attachments, model/thinking selection and agent-mode selection inside the
-  composer are not exposed because the host protocols currently used do not
-  provide a stable contract for them.
+- ACP sessions (including Claude) do not expose model, reasoning or attachment
+  controls; only OpenCode and Codex implement the capability endpoints.
+- Agent catalogs can be large; the model selector groups by provider but does
+  not offer fuzzy search yet.
 - The Markdown renderer is intentionally small; footnotes, nested task lists and
   complex tables may fall back to plain text.
 - No formal WCAG 2.2 AA audit has been performed. Semantic controls, labels,

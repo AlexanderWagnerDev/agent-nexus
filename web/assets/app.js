@@ -1,6 +1,7 @@
 /* AgentNexus browser client — dependency-free ES modules. */
 import { renderMarkdown, highlightCode } from './markdown.js';
 import { describeTool } from './chat-format.js';
+import { parseUnifiedDiff, renderUnifiedDiff, renderSplitDiff, diffFileList, diffSummary } from './diff.js';
 
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
@@ -49,6 +50,7 @@ const iconPaths = {
   git: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h4a6 6 0 0 0 6-6M18 9a6 6 0 0 1-6 6H8"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 16-5-5-8 8"/>',
   web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/>',
+  paperclip: '<path d="m20 11-7.5 7.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-7.5 7.5a2 2 0 0 1-3-3L14 7"/>',
   task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
   plan: '<path d="M8 4h8v4H8Z"/><path d="M6 6H4v15h16V6h-2"/><path d="M8 12h8M8 16h5"/>',
   mcp: '<path d="M8 12a4 4 0 0 1 4-4h4a4 4 0 0 1 0 8h-2"/><path d="M16 12a4 4 0 0 1-4 4H8a4 4 0 0 1 0-8h2"/>',
@@ -63,6 +65,7 @@ const state = {
   setupRequired: false,
   hubName: 'AgentNexus',
   version: '',
+  embed: false,
   settings: { theme: 'system' },
   ws: null,
   wsRetry: 1000,
@@ -155,6 +158,13 @@ function projectName(cwd) {
 
 function cwdKey(cwd) {
   return String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
+}
+
+function repoLink(url, label = '') {
+  const value = String(url || '');
+  if (!/^https?:\/\//i.test(value)) return '';
+  const name = label || value.replace(/^https?:\/\/[^/]+\//, '');
+  return `<a class="repo-link" href="${esc(value)}" target="_blank" rel="noopener noreferrer">${svgIcon('git', 13)}${esc(name)}</a>`;
 }
 
 function fmtDuration(value) {
@@ -353,7 +363,7 @@ function renderShell(active = 'overview') {
   const collapsed = storeGet('nexus-sidebar-collapsed', false);
   app.className = '';
   app.innerHTML = `
-    <div class="layout ${collapsed ? 'sidebar-collapsed' : ''}" id="layout">
+    <div class="layout ${collapsed ? 'sidebar-collapsed' : ''} ${state.embed ? 'embed' : ''}" id="layout">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-top">
           <a class="brand" href="#/" title="AgentNexus home">
@@ -415,8 +425,10 @@ function renderShell(active = 'overview') {
       toast(err.message, true);
     }
   });
-  loadSidebar().catch(() => {});
-  loadNotifications().catch(() => {});
+  if (!state.embed) {
+    loadSidebar().catch(() => {});
+    loadNotifications().catch(() => {});
+  }
   let sidebarTimer = null;
   state.wsHandlers.add((msg) => {
     if (msg.type === 'host.updated' || msg.type === 'sessions.changed' || msg.type === 'run.state' || msg.type === 'run.exit') {
@@ -429,7 +441,7 @@ function renderShell(active = 'overview') {
   });
   renderTabs();
   if (state.notifTimer) clearInterval(state.notifTimer);
-  state.notifTimer = setInterval(() => { if (state.me) loadNotifications().catch(() => {}); }, 30000);
+  if (!state.embed) state.notifTimer = setInterval(() => { if (state.me) loadNotifications().catch(() => {}); }, 30000);
   connectWS();
 }
 
@@ -537,23 +549,44 @@ function updateNotificationBadge() {
 function renderNotificationPanel() {
   const panel = document.getElementById('notif-panel');
   if (!panel) return;
-  const items = state.notifications.filter((n) => state.notifFilter === 'unread' ? !n.read : true);
+  const notifHost = storeGet('nexus-notif-host', '');
+  const notifAgent = storeGet('nexus-notif-agent', '');
+  const hosts = [...new Map(state.notifications.filter((n) => n.host_id).map((n) => [n.host_id, n.host_name || n.host_id])).entries()];
+  const agents = [...new Set(state.notifications.filter((n) => n.agent).map((n) => n.agent))].sort();
+  const items = state.notifications.filter((n) => {
+    if (state.notifFilter === 'unread' && n.read) return false;
+    if (notifHost && n.host_id !== notifHost) return false;
+    if (notifAgent && n.agent !== notifAgent) return false;
+    return true;
+  });
   panel.innerHTML = `
     <div class="notif-head"><strong>Notifications</strong><button class="btn ghost small" id="notif-read-all" ${state.unread ? '' : 'disabled'}>Mark all read</button></div>
     <div class="notif-filter segmented" role="group" aria-label="Filter notifications">
       <button class="segment ${state.notifFilter === 'all' ? 'active' : ''}" data-notif-filter="all" type="button">All</button>
       <button class="segment ${state.notifFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread" type="button">Unread${state.unread ? ` (${state.unread})` : ''}</button>
     </div>
+    ${hosts.length || agents.length ? `<div class="notif-scope">
+      ${hosts.length > 1 ? `<select id="notif-host" aria-label="Filter by host"><option value="">All hosts</option>${hosts.map(([value, name]) => `<option value="${esc(value)}" ${value === notifHost ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select>` : ''}
+      ${agents.length > 1 ? `<select id="notif-agent" aria-label="Filter by agent"><option value="">All agents</option>${agents.map((value) => `<option value="${esc(value)}" ${value === notifAgent ? 'selected' : ''}>${esc(value)}</option>`).join('')}</select>` : ''}
+    </div>` : ''}
     <div class="notif-list">${items.length ? items.map((n) => `
       <a class="notif-item ${n.read ? '' : 'unread'}" href="${esc(n.link || '#/')}" data-notif-id="${esc(n.id)}">
         <span class="notif-icon ${esc(n.kind)}">${notificationIcon(n.kind)}</span>
         <span class="notif-copy"><strong>${esc(n.title)}</strong><small>${esc(n.body)}</small><time>${esc(fmtRelative(n.created_at))}</time></span>
-      </a>`).join('') : `<div class="notif-empty">${state.notifFilter === 'unread' ? 'Nothing unread.' : 'No notifications yet. Run completions, failures and approvals will appear here.'}</div>`}</div>
+      </a>`).join('') : `<div class="notif-empty">${state.notifications.length && (state.notifFilter === 'unread' || notifHost || notifAgent) ? 'No notifications match these filters.' : 'No notifications yet. Run completions, failures and approvals will appear here.'}</div>`}</div>
     <div class="notif-foot"><a href="#/settings">Notification settings</a><span>${state.unread} unread</span></div>`;
   panel.querySelectorAll('[data-notif-filter]').forEach((button) => button.addEventListener('click', () => {
     state.notifFilter = button.dataset.notifFilter;
     renderNotificationPanel();
   }));
+  document.getElementById('notif-host')?.addEventListener('change', (event) => {
+    storeSet('nexus-notif-host', event.target.value);
+    renderNotificationPanel();
+  });
+  document.getElementById('notif-agent')?.addEventListener('change', (event) => {
+    storeSet('nexus-notif-agent', event.target.value);
+    renderNotificationPanel();
+  });
   document.getElementById('notif-read-all')?.addEventListener('click', async () => {
     const data = await api('/notifications/read', { method: 'POST', body: {} });
     state.unread = data.unread;
@@ -596,6 +629,7 @@ function paletteActions() {
     { label: 'Projects', hint: 'Grouped by repository and worktree', icon: 'projects', run: () => { location.hash = '#/projects'; } },
     { label: 'Sessions', hint: 'All discovered native sessions', icon: 'sessions', run: () => { location.hash = '#/sessions'; } },
     { label: 'Active runs', hint: 'Terminal and structured runs', icon: 'runs', run: () => { location.hash = '#/runs'; } },
+    { label: 'Split workspace', hint: 'Open two agent chats side by side', icon: 'panelRight', run: () => { location.hash = '#/workspace'; } },
     { label: 'Hosts', hint: 'Paired machines and agent inventory', icon: 'hosts', run: () => { location.hash = '#/hosts'; } },
     { label: 'Search transcripts', hint: 'Federated search across hosts', icon: 'search', run: () => { location.hash = '#/search'; } },
     { label: 'Settings', hint: 'Appearance, notifications, devices', icon: 'settings', run: () => { location.hash = '#/settings'; } },
@@ -717,7 +751,7 @@ function closeTab(key) {
 function renderTabs() {
   const bar = document.getElementById('tabs-bar');
   if (!bar) return;
-  if (!state.openTabs.length) {
+  if (state.embed || !state.openTabs.length) {
     bar.innerHTML = '';
     bar.hidden = true;
     return;
@@ -779,6 +813,19 @@ function installGlobalUi() {
     if (!button) return;
     copyText(button.dataset.copy || '');
   });
+  document.addEventListener('click', (event) => {
+    const modeButton = event.target.closest('[data-diff-mode]');
+    if (modeButton) {
+      applyDiffMode(modeButton.closest('.diff-panel'), modeButton.dataset.diffMode);
+      return;
+    }
+    const jump = event.target.closest('[data-diff-jump]');
+    if (!jump) return;
+    const panel = jump.closest('.diff-panel');
+    if (!panel) return;
+    const target = [...panel.querySelectorAll('[data-diff-file]')].find((node) => node.dataset.diffFile === jump.dataset.diffJump);
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
   window.addEventListener('hashchange', renderTabs);
 }
 
@@ -801,7 +848,7 @@ function activeFromHash() {
   if (h.startsWith('#/hosts')) return 'hosts';
   if (h.startsWith('#/projects')) return 'projects';
   if (h.startsWith('#/sessions')) return 'sessions';
-  if (h.startsWith('#/runs')) return 'runs';
+  if (h.startsWith('#/runs') || h.startsWith('#/workspace')) return 'runs';
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/settings')) return 'settings';
   if (h.startsWith('#/devices') || h.startsWith('#/users') || h.startsWith('#/audit')) return 'settings';
@@ -949,6 +996,7 @@ async function route() {
     if (hash.startsWith('#/sessions/')) return await pageSession(hash.split('/')[2]);
     if (hash.startsWith('#/sessions')) return await pageSessions();
     if (hash === '#/runs') return await pageRuns();
+    if (hash.startsWith('#/workspace')) return await pageWorkspace();
     if (hash.startsWith('#/runs/')) return await pageRun(hash.split('/')[2]);
     if (hash.startsWith('#/search')) return await pageSearch();
     if (hash.startsWith('#/settings')) return await pageSettings();
@@ -1309,20 +1357,24 @@ async function pageSessions() {
     }
     const groups = new Map();
     for (const s of sessions) {
-      const key = `${s.host_id}|${cwdKey(s.cwd)}`;
-      if (!groups.has(key)) groups.set(key, { name: projectName(s.cwd), cwd: s.cwd, host: s.host_name, branch: s.git_branch, rows: [] });
-      groups.get(key).rows.push(s);
+      const key = s.repo_url ? `repo:${s.repo_url.toLowerCase()}` : `dir:${s.host_id}|${cwdKey(s.cwd)}`;
+      if (!groups.has(key)) groups.set(key, { name: projectName(s.cwd), cwd: s.cwd, hosts: new Set(), branches: new Set(), roots: new Set(), rows: [] });
+      const group = groups.get(key);
+      group.hosts.add(s.host_name || s.host_id);
+      if (s.git_branch) group.branches.add(s.git_branch);
+      if (s.repo_root) group.roots.add(cwdKey(s.repo_root));
+      group.rows.push(s);
     }
     list.innerHTML = [...groups.values()].map((g) => `
       <section class="session-group">
         <div class="session-group-head">
           <span>${svgIcon('folder', 14)}<strong>${esc(g.name)}</strong><code>${esc(g.cwd)}</code></span>
-          <span>${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted">${esc(g.host)} · ${g.rows.length}</span></span>
+          <span>${[...g.branches].slice(0, 3).map((b) => `<span class="branch-chip">${svgIcon('branch', 12)}${esc(b)}</span>`).join('')}${g.roots.size > 1 ? `<span class="muted">${g.roots.size} worktrees</span>` : ''}<span class="muted">${esc([...g.hosts].join(', '))} &middot; ${g.rows.length}</span></span>
         </div>
         <div class="session-list">${g.rows.map((s) => `
           <a class="session-row" href="#/sessions/${esc(s.id)}">
             ${agentGlyph(s.agent)}
-            <span class="session-row-main"><strong>${esc(s.title || 'Untitled session')}</strong><small>${esc(fmtRelative(s.updated_at))} · ${s.message_count || 0} messages</small></span>
+            <span class="session-row-main"><strong>${esc(s.title || 'Untitled session')}</strong><small>${g.hosts.size > 1 ? `${esc(s.host_name || s.host_id)} &middot; ` : ''}${esc(fmtRelative(s.updated_at))} &middot; ${s.message_count || 0} messages${g.roots.size > 1 && s.repo_root ? ` &middot; ${esc(projectName(s.repo_root))}` : ''}</small></span>
             ${stateBadge(s.state)}
           </a>`).join('')}</div>
       </section>`).join('');
@@ -1394,7 +1446,7 @@ async function pageSession(id) {
         <p class="hint">Read-only status and diff from <code>${esc(s.cwd)}</code>. No files are modified.</p>
         ${g.root ? `<div class="meta-row"><span>Repository</span><code>${esc(g.root)}</code></div>` : ''}
         <div class="git-stat"><pre>${esc(g.status?.trim() || '(clean working tree)')}</pre>${g.stat ? `<pre class="muted">${esc(g.stat)}</pre>` : ''}</div>
-        ${g.diff ? `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(g.diff, 'diff')}</code></pre></div>` : '<div class="empty compact">No uncommitted changes.</div>'}
+        ${g.diff ? renderDiffBlock(g.diff) : '<div class="empty compact">No uncommitted changes.</div>'}
         <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`);
     } catch (err) { toast(err.message, true); }
   };
@@ -1429,6 +1481,7 @@ async function pageSession(id) {
           <div class="copy-line"><code>${esc(s.native_id || s.id)}</code><button class="icon-btn" data-copy="${esc(s.native_id || s.id)}" title="Copy native id">${svgIcon('copy', 14)}</button></div>
           <div class="copy-line"><code>${esc(s.cwd || '')}</code><button class="icon-btn" data-copy="${esc(s.cwd || '')}" title="Copy working directory">${svgIcon('copy', 14)}</button></div>
           ${s.git_branch ? `<div class="branch-chip wide">${svgIcon('branch', 13)}${esc(s.git_branch)}</div>` : ''}
+          ${s.repo_url ? `<div class="aside-repo">${repoLink(s.repo_url)}${s.repo_root && cwdKey(s.repo_root) !== cwdKey(s.cwd) ? '<span class="muted">worktree</span>' : ''}</div>` : ''}
         </div>
         <div class="aside-section">
           <div class="aside-label">Actions</div>
@@ -1805,12 +1858,42 @@ function toolIcon(kind) {
   return { terminal: 'terminal', read: 'file', edit: 'edit', write: 'edit', search: 'searchFile', web: 'web', git: 'git', test: 'check', todo: 'plan', task: 'task', mcp: 'mcp', image: 'image' }[kind] || 'tool';
 }
 
+function renderDiffBlock(text, title = 'diff') {
+  const files = parseUnifiedDiff(text);
+  if (!files.length) {
+    return `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(String(text || ''), 'diff')}</code></pre></div>`;
+  }
+  const summary = diffSummary(files);
+  const mode = storeGet('nexus-diff-mode', 'unified');
+  return `<div class="diff-panel" data-mode="${mode}">
+    <div class="diff-toolbar">
+      <span class="diff-summary">${summary.files} file${summary.files === 1 ? '' : 's'} <b>+${summary.additions}</b> <i>-${summary.deletions}</i></span>
+      <div class="diff-mode-switch" role="group" aria-label="Diff layout">
+        <button type="button" data-diff-mode="unified" class="${mode === 'unified' ? 'active' : ''}">Unified</button>
+        <button type="button" data-diff-mode="split" class="${mode === 'split' ? 'active' : ''}">Split</button>
+      </div>
+    </div>
+    <div class="diff-file-list">${diffFileList(files)}</div>
+    <div class="diff-body">
+      <div class="diff-unified">${renderUnifiedDiff(files, { title })}</div>
+      <div class="diff-split">${renderSplitDiff(files)}</div>
+    </div>
+  </div>`;
+}
+
+function applyDiffMode(panel, mode) {
+  if (!panel) return;
+  panel.dataset.mode = mode;
+  storeSet('nexus-diff-mode', mode);
+  panel.querySelectorAll('[data-diff-mode]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.diffMode === mode);
+  });
+}
+
 function outputBlock(text) {
   const value = String(text || '');
   if (!value) return '';
-  if (/^(diff --git|@@ )/m.test(value) && /^[+-]/m.test(value)) {
-    return `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(value, 'diff')}</code></pre></div>`;
-  }
+  if (/^(diff --git|@@ )/m.test(value) && /^[+-]/m.test(value)) return renderDiffBlock(value);
   return `<pre class="tool-output">${esc(value)}</pre>`;
 }
 
@@ -1827,9 +1910,7 @@ function toolCardHtml(described, status = 'done') {
   const pathBlock = described.path && described.kind !== 'terminal' && described.kind !== 'edit' && described.kind !== 'write'
     ? `<div class="tool-block"><div class="tool-label">Path</div><pre class="tool-pre">${esc(described.path)}</pre></div>`
     : '';
-  const diffBlock = described.diff
-    ? `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">changes</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(described.diff, 'diff')}</code></pre></div>`
-    : '';
+  const diffBlock = described.diff ? renderDiffBlock(described.diff) : '';
   const output = described.kind !== 'edit' && described.output ? `<div class="tool-block"><div class="tool-label">Output</div>${outputBlock(described.output)}</div>` : '';
   const hasStructured = commandBlock || pathBlock || diffBlock || output;
   const raw = described.inputText && described.inputText !== '{}' && described.inputText !== 'null'
@@ -1889,10 +1970,11 @@ async function pageStructuredRun(id, run) {
   const cwd = session?.cwd || run.cwd || '';
   const branch = session?.git_branch || run.git_branch || '';
   const host = run.host_name || session?.host_name || run.host_id;
-  const contextDefault = storeGet('nexus-context-open', window.innerWidth >= 1180);
+  const contextDefault = !state.embed && storeGet('nexus-context-open', window.innerWidth >= 1180);
   setPage(title, `${projectName(cwd)} · ${agent.label} · ${host}`, `
     <button class="btn small ghost icon-mobile" id="chat-context-toggle" title="Toggle session details" aria-label="Toggle session details">${svgIcon('panelRight')} <span>Details</span></button>
     <button class="btn small danger icon-mobile" id="stop-run" title="Stop this run" aria-label="Stop this run">${svgIcon('stop')} <span>Stop</span></button>
+    <a class="btn small ghost icon-mobile" href="#/workspace?pane=${encodeURIComponent(id)}" title="Open split workspace" aria-label="Open split workspace">${svgIcon('panelRight')} <span>Split</span></a>
     <a class="btn small ghost icon-mobile" href="#/sessions" title="All sessions" aria-label="All sessions">${svgIcon('sessions')} <span>Sessions</span></a>`);
   openTab({ id, key: session?.id || id, kind: 'run', href: `#/runs/${id}`, title, agent: run.agent || session?.agent });
   rememberRecent({ id, title, agent: run.agent || session?.agent, hint: `${agent.label} · ${host} · ${projectName(cwd)}`, href: `#/runs/${id}` });
@@ -1907,6 +1989,7 @@ async function pageStructuredRun(id, run) {
           <span class="chat-sep">·</span>
           <span class="chat-host">${esc(host)}</span>
           ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
+          <button class="icon-btn chat-inline-context" id="chat-inline-context" type="button" title="Toggle session details" aria-label="Toggle session details">${svgIcon('panelRight')}</button>
           <span class="chat-connection" id="run-note"><span class="connection-dot"></span>Connecting…</span>
         </div>
         <div class="chat-scroll" id="chat">
@@ -1921,10 +2004,14 @@ async function pageStructuredRun(id, run) {
           <div id="approval-banner" class="approval-slot"></div>
           <form class="composer" id="prompt-form">
             <textarea id="prompt-text" rows="1" placeholder="Message ${esc(agent.label)}…" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
+            <div class="composer-config" id="composer-config"></div>
+            <div class="attachment-list" id="attachment-list"></div>
             <div class="composer-bar">
               <div class="composer-info">${agentGlyph(run.agent || session?.agent, 'small')}<span>${esc(agent.label)}</span><span class="composer-pill">${esc(run.mode)}</span><span class="composer-pill host-pill">${esc(host)}</span></div>
               <div class="composer-actions">
                 <span class="composer-hint">Enter to send · Shift+Enter newline</span>
+                <input type="file" id="attach-input" multiple hidden>
+                <button class="icon-btn" id="attach-button" type="button" title="Attach files" aria-label="Attach files" hidden>${svgIcon('paperclip')}</button>
                 <button class="icon-btn composer-stop" id="interrupt-run" type="button" title="Interrupt current turn" aria-label="Interrupt current turn" hidden>${svgIcon('stop')}</button>
                 <button class="send-button" id="send-prompt" type="submit" title="Send message" aria-label="Send message">${svgIcon('send')}</button>
               </div>
@@ -1952,7 +2039,8 @@ async function pageStructuredRun(id, run) {
               <div><span>Updated</span><strong>${esc(fmtRelative(session.updated_at))}</strong></div>
             </div>
             <div class="copy-line"><code>${esc(session.native_id || session.id)}</code><button class="icon-btn" data-copy="${esc(session.native_id || session.id)}" title="Copy native id">${svgIcon('copy', 14)}</button></div>
-            <div class="copy-line"><code>${esc(cwd)}</code><button class="icon-btn" data-copy="${esc(cwd)}" title="Copy working directory">${svgIcon('copy', 14)}</button></div>` : '<p class="aside-note">This run was started without a discovered native session.</p>'}
+            <div class="copy-line"><code>${esc(cwd)}</code><button class="icon-btn" data-copy="${esc(cwd)}" title="Copy working directory">${svgIcon('copy', 14)}</button></div>
+            ${session.repo_url ? `<div class="aside-repo">${repoLink(session.repo_url)}${session.repo_root && cwdKey(session.repo_root) !== cwdKey(cwd) ? '<span class="muted">worktree</span>' : ''}</div>` : ''}` : '<p class="aside-note">This run was started without a discovered native session.</p>'}
           </section>
           <section class="context-section">
             <div class="aside-label">Git</div>
@@ -2014,6 +2102,146 @@ async function pageStructuredRun(id, run) {
   };
   resizer.addEventListener('pointerup', endResize);
   resizer.addEventListener('pointercancel', endResize);
+  const configBar = document.getElementById('composer-config');
+  let runConfigOptions = null;
+  const configKey = `nexus-run-config-${id}`;
+  const readConfig = () => storeGet(configKey, {});
+  const writeConfig = (patch) => storeSet(configKey, { ...readConfig(), ...patch });
+  const selectedModel = () => {
+    const select = document.getElementById('opt-model');
+    if (!select || !runConfigOptions?.models?.length) return null;
+    return runConfigOptions.models[Number(select.value)] || null;
+  };
+  const renderComposerConfig = () => {
+    if (!configBar || !runConfigOptions) return;
+    const models = runConfigOptions.models || [];
+    const modes = runConfigOptions.modes || [];
+    if (!models.length && !modes.length) { configBar.innerHTML = ''; configBar.hidden = true; return; }
+    const saved = readConfig();
+    let modelIndex = models.findIndex((m) => m.id === saved.model && (!saved.provider || m.provider === saved.provider));
+    if (modelIndex < 0) modelIndex = models.findIndex((m) => m.id === runConfigOptions.current_model && (!runConfigOptions.current_provider || m.provider === runConfigOptions.current_provider));
+    if (modelIndex < 0) modelIndex = 0;
+    const model = models[modelIndex];
+    const variants = model?.variants || [];
+    let variant = saved.variant || '';
+    if (variant && !variants.includes(variant)) variant = '';
+    if (!variant && model?.default_variant && variants.includes(model.default_variant)) variant = model.default_variant;
+    if (!variant && model && variants.length && runConfigOptions.current_model === model.id) variant = runConfigOptions.current_variant || '';
+    const mode = saved.agent_mode || runConfigOptions.current_mode || '';
+    const groups = new Map();
+    models.forEach((m, index) => {
+      const provider = m.provider || 'agent';
+      if (!groups.has(provider)) groups.set(provider, []);
+      groups.get(provider).push([m, index]);
+    });
+    configBar.hidden = false;
+    configBar.innerHTML = `
+      ${models.length ? `<label class="composer-field"><span>Model</span><select id="opt-model" class="composer-select">${[...groups.entries()].map(([provider, entries]) => `<optgroup label="${esc(provider)}">${entries.map(([m, index]) => `<option value="${index}" ${index === modelIndex ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('')}</optgroup>`).join('')}</select></label>` : ''}
+      ${variants.length ? `<label class="composer-field"><span>Reasoning</span><select id="opt-variant" class="composer-select"><option value="">Default</option>${variants.map((v) => `<option value="${esc(v)}" ${v === variant ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>` : ''}
+      ${modes.length ? `<label class="composer-field"><span>Agent</span><select id="opt-agent" class="composer-select"><option value="">Default</option>${modes.map((m) => `<option value="${esc(m.id)}" ${m.id === mode ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('')}</select></label>` : ''}`;
+    document.getElementById('opt-model')?.addEventListener('change', () => {
+      const next = selectedModel();
+      writeConfig({ model: next?.id || '', provider: next?.provider || '', variant: '' });
+      renderComposerConfig();
+    });
+    document.getElementById('opt-variant')?.addEventListener('change', (event) => writeConfig({ variant: event.target.value }));
+    document.getElementById('opt-agent')?.addEventListener('change', (event) => writeConfig({ agent_mode: event.target.value }));
+    renderAttachments();
+  };
+  const currentPromptOptions = () => {
+    const model = selectedModel();
+    const variant = document.getElementById('opt-variant')?.value || '';
+    const agentMode = document.getElementById('opt-agent')?.value || '';
+    const options = {};
+    if (model) {
+      options.model = model.id;
+      options.provider = model.provider || '';
+    }
+    if (variant) options.variant = variant;
+    if (agentMode) options.agent_mode = agentMode;
+    if (pendingAttachments.length) {
+      options.attachments = pendingAttachments.map((file) => ({ name: file.name, mime: file.mime, data: file.data }));
+    }
+    return options;
+  };
+  let optionsRetries = 0;
+  const loadRunOptions = async () => {
+    try {
+      runConfigOptions = await api(`/runs/${encodeURIComponent(id)}/options`);
+      renderComposerConfig();
+      const empty = !(runConfigOptions.models?.length || runConfigOptions.modes?.length);
+      if (empty && optionsRetries < 8) {
+        optionsRetries += 1;
+        setTimeout(() => { loadRunOptions().catch(() => {}); }, 1500);
+      }
+    } catch {
+      runConfigOptions = null;
+      if (optionsRetries < 8) {
+        optionsRetries += 1;
+        setTimeout(() => { loadRunOptions().catch(() => {}); }, 1500);
+      }
+    }
+  };
+  const attachmentList = document.getElementById('attachment-list');
+  const attachButton = document.getElementById('attach-button');
+  const attachInput = document.getElementById('attach-input');
+  let pendingAttachments = [];
+  const attachmentKinds = () => selectedModel()?.inputs || [];
+  const attachmentAllowed = () => {
+    const kinds = attachmentKinds().map((kind) => kind.toLowerCase());
+    return kinds.some((kind) => ['image', 'file', 'pdf', 'audio'].includes(kind));
+  };
+  const attachmentAccept = () => {
+    const kinds = attachmentKinds().map((kind) => kind.toLowerCase());
+    const accepts = [];
+    if (kinds.includes('image')) accepts.push('image/*');
+    if (kinds.includes('audio')) accepts.push('audio/*');
+    if (kinds.includes('pdf')) accepts.push('application/pdf');
+    return accepts.join(',') || undefined;
+  };
+  const renderAttachments = () => {
+    if (!attachmentList || !attachButton) return;
+    const allowed = attachmentAllowed();
+    attachButton.hidden = !allowed;
+    if (attachInput) attachInput.accept = attachmentAccept() || '';
+    if (!allowed) pendingAttachments = [];
+    attachmentList.innerHTML = pendingAttachments.map((file, index) => `
+      <span class="attachment-chip" title="${esc(file.name)}">
+        ${file.preview ? `<img src="${file.preview}" alt="">` : svgIcon('file', 13)}
+        <span class="attachment-name">${esc(file.name)}</span>
+        <small>${Math.max(1, Math.round(file.size / 1024))} KB</small>
+        <button class="attachment-remove" type="button" data-remove-attachment="${index}" aria-label="Remove ${esc(file.name)}">${svgIcon('x', 12)}</button>
+      </span>`).join('');
+    attachmentList.querySelectorAll('[data-remove-attachment]').forEach((button) => button.addEventListener('click', () => {
+      pendingAttachments.splice(Number(button.dataset.removeAttachment), 1);
+      renderAttachments();
+    }));
+  };
+  attachButton?.addEventListener('click', () => attachInput?.click());
+  attachInput?.addEventListener('change', async () => {
+    const files = [...(attachInput.files || [])];
+    attachInput.value = '';
+    for (const file of files) {
+      if (pendingAttachments.length >= 6) { toast('At most 6 attachments are allowed', true); break; }
+      if (file.size > 8 * 1024 * 1024) { toast(`${file.name} exceeds the 8 MB limit`, true); continue; }
+      const total = pendingAttachments.reduce((sum, item) => sum + item.size, 0) + file.size;
+      if (total > 16 * 1024 * 1024) { toast('Attachments exceed the 16 MB total limit', true); break; }
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+        reader.readAsDataURL(file);
+      }).catch((err) => { toast(err.message, true); return ''; });
+      if (!dataUrl) continue;
+      pendingAttachments.push({
+        name: file.name, mime: file.type || 'application/octet-stream',
+        data: dataUrl.split(',')[1] || '', size: file.size,
+        preview: file.type.startsWith('image/') ? dataUrl : '',
+      });
+    }
+    renderAttachments();
+  });
+
   const assistantRecords = new Map();
   const toolRecords = new Map();
   const reasoningRecords = new Map();
@@ -2032,6 +2260,7 @@ async function pageStructuredRun(id, run) {
     storeSet('nexus-context-open', open);
   };
   document.getElementById('chat-context-toggle').addEventListener('click', () => setContext(!chatPage.classList.contains('context-open')));
+  document.getElementById('chat-inline-context').addEventListener('click', () => setContext(!chatPage.classList.contains('context-open')));
   document.getElementById('context-close').addEventListener('click', () => setContext(false));
   document.getElementById('chat-scrim').addEventListener('click', () => setContext(false));
 
@@ -2345,12 +2574,17 @@ async function pageStructuredRun(id, run) {
     event.preventDefault();
     const text = textarea.value.trim();
     if (!text) return;
-    if (!wsSend({ type: 'prompt', run_id: id, text })) {
+    const promptOptions = currentPromptOptions();
+    const message = { type: 'prompt', run_id: id, text };
+    if (Object.keys(promptOptions).length) message.options = promptOptions;
+    if (!wsSend(message)) {
       toast('WebSocket is reconnecting; try again in a moment', true);
       return;
     }
     appendUser(text);
     textarea.value = '';
+    pendingAttachments = [];
+    renderAttachments();
     storeSet(draftKey(id), '');
     autosize();
     autoScroll = true;
@@ -2382,7 +2616,7 @@ async function pageStructuredRun(id, run) {
         ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
         <pre class="git-status">${esc(g.status?.trim() || 'Clean working tree')}</pre>
         ${g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : ''}
-        ${g.diff ? `<details class="git-diff"><summary>Show diff</summary><div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(g.diff, 'diff')}</code></pre></div></details>` : ''}`;
+        ${g.diff ? `<details class="git-diff" open><summary>Uncommitted changes</summary>${renderDiffBlock(g.diff)}</details>` : ''}`;
     } catch (err) {
       box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><button class="btn small block mt-1" id="context-git-load">Try again</button>`;
     }
@@ -2392,6 +2626,7 @@ async function pageStructuredRun(id, run) {
   });
 
   await loadHistory().catch(() => {});
+  loadRunOptions().catch(() => {});
   sendSubscribe();
   const timer = setInterval(() => {
     if (!state.me) { clearInterval(timer); return; }
@@ -2411,7 +2646,7 @@ async function pageStructuredRun(id, run) {
 }
 async function pageRuns() {
   renderShell('runs');
-  const view = setPage('Control room', 'All active terminal and structured runs across your machines.', '<button class="btn primary small" id="runs-new">New session</button><a class="btn small" href="#/sessions">All sessions</a>');
+  const view = setPage('Control room', 'All active terminal and structured runs across your machines.', '<button class="btn primary small" id="runs-new">New session</button><a class="btn small" href="#/workspace">Split view</a><a class="btn small" href="#/sessions">All sessions</a>');
   view.innerHTML = `
     <div class="control-summary" id="run-summary"></div>
     <div class="filterbar compact">
@@ -2489,6 +2724,150 @@ async function pageRuns() {
         msg.type === 'sessions.changed' || msg.type === 'host.updated') schedule();
   });
   await load();
+}
+
+async function pageWorkspace() {
+  renderShell('runs');
+  const view = setPage('Workspace', 'Side-by-side agent sessions from any host.', '<button class="btn small" id="workspace-add">Add session</button><a class="btn small" href="#/runs">Control room</a>');
+  const { runs } = await api('/runs');
+  if (!runs.length) {
+    view.innerHTML = '<div class="card empty"><strong>No open runs</strong>Resume a native session or start a new agent before opening a split workspace.</div>';
+    return;
+  }
+  const byID = new Map(runs.map((run) => [run.id, run]));
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const stored = storeGet('nexus-workspace', { panes: [], orientation: 'horizontal', ratio: 50 });
+  let panes = [...new Set(params.getAll('pane'))].filter((id) => byID.has(id));
+  if (!panes.length) panes = (stored.panes || []).filter((id) => byID.has(id));
+  for (const run of runs) {
+    if (panes.length >= 2) break;
+    if (!panes.includes(run.id)) panes.push(run.id);
+  }
+  panes = panes.slice(0, 2);
+  let orientation = params.get('orientation') === 'vertical' ? 'vertical' : (stored.orientation === 'vertical' ? 'vertical' : 'horizontal');
+  let ratio = Math.min(75, Math.max(25, Number(params.get('ratio')) || Number(stored.ratio) || 50));
+  let dragging = false;
+
+  const persist = () => {
+    storeSet('nexus-workspace', { panes, orientation, ratio });
+    const query = new URLSearchParams();
+    panes.forEach((id) => query.append('pane', id));
+    query.set('orientation', orientation);
+    query.set('ratio', String(Math.round(ratio)));
+    history.replaceState(null, '', `#/workspace?${query.toString()}`);
+  };
+  const choosePane = () => {
+    const available = runs.filter((run) => !panes.includes(run.id));
+    if (!available.length) { toast('All open runs are already visible', true); return; }
+    modal(`
+      <h2>Add a session to the workspace</h2>
+      <p class="hint">Each pane keeps its own live connection and approval controls. A native session can only be started once; this picker only opens existing runs.</p>
+      <div class="list workspace-picker">${available.map((run) => `
+        <button class="list-row" type="button" data-pick-run="${esc(run.id)}">
+          <span class="workspace-pick-main">${agentGlyph(run.agent)}<span><strong>${esc(run.session_title || 'Untitled session')}</strong><small>${esc(projectName(run.cwd))} · ${esc(run.host_name || run.host_id)} · ${esc(run.agent)}</small></span></span>
+          ${stateBadge(run.state)}
+        </button>`).join('')}</div>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>Cancel</button></div>`);
+    modalRoot.querySelectorAll('[data-pick-run]').forEach((button) => button.addEventListener('click', () => {
+      const id = button.dataset.pickRun;
+      if (!panes.includes(id)) panes.push(id);
+      panes = panes.slice(0, 2);
+      closeModal();
+      persist();
+      render();
+    }));
+  };
+
+  const render = () => {
+    const paneMarkup = panes.map((id, index) => {
+      const run = byID.get(id);
+      if (!run) return '';
+      return `<section class="split-pane">
+        <div class="pane-head">
+          ${agentGlyph(run.agent)}
+          <div class="pane-title"><strong>${esc(run.session_title || 'Untitled session')}</strong><small>${esc(projectName(run.cwd))} · ${esc(run.host_name || run.host_id)} · ${esc(run.agent)}</small></div>
+          <span class="badge ${esc(run.state)} pane-state" data-pane-state="${esc(id)}">${esc((run.state || 'unknown').replaceAll('_', ' '))}</span>
+          <a class="icon-btn" href="#/runs/${esc(id)}" title="Open in single view" aria-label="Open in single view">${svgIcon('external', 14)}</a>
+          ${panes.length > 1 ? `<button class="icon-btn" type="button" data-swap-pane="${esc(id)}" title="Swap panes" aria-label="Swap panes">${svgIcon('arrowDown', 14)}</button><button class="icon-btn" type="button" data-close-pane="${esc(id)}" title="Close pane" aria-label="Close pane">${svgIcon('x', 14)}</button>` : ''}
+        </div>
+        <div class="pane-frame">
+          <div class="pane-loading"><span class="spinner"></span></div>
+          <iframe title="${esc(run.session_title || 'Agent session')}" loading="eager" src="/?embed=1#/runs/${encodeURIComponent(id)}"></iframe>
+        </div>
+      </section>`;
+    }).join(panes.length === 2 ? '<div class="split-divider" id="split-divider" title="Drag to resize panes"><span></span></div>' : '');
+    view.innerHTML = `
+      <div class="workspace-page">
+        <div class="workspace-head">
+          <div><strong>${panes.length} visible session${panes.length === 1 ? '' : 's'}</strong><span>Panels keep independent streams and approval prompts.</span></div>
+          <div class="workspace-actions">
+            <button class="btn small" id="workspace-add-inline" type="button">${svgIcon('plus')} Add pane</button>
+            <button class="btn small" id="workspace-orientation" type="button">${orientation === 'horizontal' ? 'Side by side' : 'Stacked'}</button>
+          </div>
+        </div>
+        <div class="split-grid ${orientation} ${panes.length === 2 ? 'two' : 'single'}" id="split-grid" style="--split:${ratio}%">
+          ${paneMarkup}
+        </div>
+      </div>`;
+    document.getElementById('workspace-add').onclick = choosePane;
+    document.getElementById('workspace-add-inline').onclick = choosePane;
+    document.getElementById('workspace-orientation')?.addEventListener('click', () => {
+      orientation = orientation === 'horizontal' ? 'vertical' : 'horizontal';
+      persist();
+      render();
+    });
+    view.querySelectorAll('[data-close-pane]').forEach((button) => button.addEventListener('click', () => {
+      panes = panes.filter((id) => id !== button.dataset.closePane);
+      persist();
+      render();
+    }));
+    view.querySelectorAll('[data-swap-pane]').forEach((button) => button.addEventListener('click', () => {
+      if (panes.length === 2) panes = [panes[1], panes[0]];
+      persist();
+      render();
+    }));
+    view.querySelectorAll('iframe').forEach((frame) => frame.addEventListener('load', () => frame.parentElement?.querySelector('.pane-loading')?.remove()));
+    const divider = document.getElementById('split-divider');
+    if (divider) {
+      divider.addEventListener('pointerdown', (event) => {
+        dragging = true;
+        divider.setPointerCapture(event.pointerId);
+        document.body.style.cursor = orientation === 'horizontal' ? 'col-resize' : 'row-resize';
+        document.body.style.userSelect = 'none';
+      });
+      divider.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        const grid = document.getElementById('split-grid');
+        const rect = grid.getBoundingClientRect();
+        const raw = orientation === 'horizontal'
+          ? ((event.clientX - rect.left) / rect.width) * 100
+          : ((event.clientY - rect.top) / rect.height) * 100;
+        ratio = Math.min(75, Math.max(25, raw));
+        grid.style.setProperty('--split', `${ratio}%`);
+      });
+      const end = () => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        persist();
+      };
+      divider.addEventListener('pointerup', end);
+      divider.addEventListener('pointercancel', end);
+    }
+  };
+
+  state.wsHandlers.add((msg) => {
+    if (msg.type !== 'run.state' && msg.type !== 'run.exit' && msg.type !== 'run.error') return;
+    const node = view.querySelector(`[data-pane-state="${msg.runID || msg.run_id}"]`);
+    if (!node) return;
+    const next = msg.type === 'run.state' ? msg.state : (msg.type === 'run.exit' ? (msg.state || 'exited') : 'failed');
+    if (!next) return;
+    node.textContent = String(next).replaceAll('_', ' ');
+    node.className = `badge ${next} pane-state`;
+  });
+  persist();
+  render();
 }
 
 async function pageRun(id) {
@@ -2829,6 +3208,8 @@ async function enablePush() {
 }
 
 async function boot() {
+  state.embed = new URLSearchParams(location.search).get('embed') === '1';
+  if (state.embed) document.documentElement.dataset.embed = '1';
   installGlobalUi();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   const pairToken = new URLSearchParams(location.search).get('pair');

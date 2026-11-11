@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -329,10 +330,40 @@ func (r *StructuredRun) createSession(cwd string) (string, error) {
 	return out.Data.ID, nil
 }
 
-func (r *StructuredRun) Prompt(text string) error {
-	_, _, err := r.request(context.Background(), http.MethodPost, "/api/session/"+url.PathEscape(r.sessionID)+"/prompt", map[string]any{
-		"text": text,
-	})
+func (r *StructuredRun) Prompt(text string, options *protocol.PromptOptions) error {
+	if options != nil {
+		if options.Model != "" {
+			model := map[string]any{"id": options.Model, "providerID": options.Provider}
+			if options.Variant != "" {
+				model["variant"] = options.Variant
+			}
+			if _, _, err := r.request(context.Background(), http.MethodPost, "/api/session/"+url.PathEscape(r.sessionID)+"/model", map[string]any{"model": model}); err != nil {
+				return fmt.Errorf("switch opencode model: %w", err)
+			}
+		}
+		if options.AgentMode != "" {
+			if _, _, err := r.request(context.Background(), http.MethodPost, "/api/session/"+url.PathEscape(r.sessionID)+"/agent", map[string]any{"agent": options.AgentMode}); err != nil {
+				return fmt.Errorf("switch opencode agent: %w", err)
+			}
+		}
+	}
+	body := map[string]any{"text": text}
+	if options != nil && len(options.Attachments) > 0 {
+		files, err := writePromptAttachments(r.id, options.Attachments)
+		if err != nil {
+			return err
+		}
+		promptFiles := make([]map[string]any, 0, len(files))
+		for _, file := range files {
+			uri := "file://" + filepath.ToSlash(file.Path)
+			promptFiles = append(promptFiles, map[string]any{
+				"uri": uri, "name": file.Name,
+				"source": map[string]any{"type": "uri", "uri": uri},
+			})
+		}
+		body["files"] = promptFiles
+	}
+	_, _, err := r.request(context.Background(), http.MethodPost, "/api/session/"+url.PathEscape(r.sessionID)+"/prompt", body)
 	if err != nil {
 		r.daemon.log.Warn("structured prompt failed", "run_id", r.id, "session", r.sessionID, "error", err)
 	} else {
@@ -340,6 +371,92 @@ func (r *StructuredRun) Prompt(text string) error {
 		hostAudit("structured.prompt", map[string]any{"run_id": r.id})
 	}
 	return err
+}
+
+// Options returns the model, reasoning-variant and agent choices that the
+// running OpenCode server actually exposes.
+func (r *StructuredRun) Options(ctx context.Context) (protocol.RunOptions, error) {
+	out := protocol.RunOptions{Models: []protocol.ModelOption{}, Modes: []protocol.AgentModeOption{}}
+	raw, _, err := r.request(ctx, http.MethodGet, "/api/model", nil)
+	if err != nil {
+		return out, err
+	}
+	var models struct {
+		Data []struct {
+			ID         string `json:"id"`
+			ModelID    string `json:"modelID"`
+			ProviderID string `json:"providerID"`
+			Name       string `json:"name"`
+			Enabled    bool   `json:"enabled"`
+			Status     string `json:"status"`
+			Variants   []struct {
+				ID string `json:"id"`
+			} `json:"variants"`
+			Capabilities struct {
+				Input []string `json:"input"`
+			} `json:"capabilities"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &models); err != nil {
+		return out, err
+	}
+	for _, model := range models.Data {
+		if !model.Enabled || model.Status == "deprecated" {
+			continue
+		}
+		option := protocol.ModelOption{
+			ID: model.ID, Provider: model.ProviderID, Name: model.Name,
+			Inputs: append([]string(nil), model.Capabilities.Input...),
+		}
+		for _, variant := range model.Variants {
+			if variant.ID != "" {
+				option.Variants = append(option.Variants, variant.ID)
+			}
+		}
+		out.Models = append(out.Models, option)
+	}
+	raw, _, err = r.request(ctx, http.MethodGet, "/api/agent", nil)
+	if err != nil {
+		return out, err
+	}
+	var agents struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Mode        string `json:"mode"`
+			Hidden      bool   `json:"hidden"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &agents); err == nil {
+		for _, agent := range agents.Data {
+			if agent.Hidden || agent.Mode == "subagent" {
+				continue
+			}
+			out.Modes = append(out.Modes, protocol.AgentModeOption{ID: agent.ID, Name: agent.Name, Description: agent.Description})
+		}
+	}
+	raw, _, err = r.request(ctx, http.MethodGet, "/api/session/"+url.PathEscape(r.sessionID), nil)
+	if err == nil {
+		var session struct {
+			Data struct {
+				Agent string `json:"agent"`
+				Model struct {
+					ID         string `json:"id"`
+					ProviderID string `json:"providerID"`
+					Variant    string `json:"variant"`
+				} `json:"model"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &session) == nil {
+			out.CurrentMode = session.Data.Agent
+			out.CurrentModel = session.Data.Model.ID
+			out.CurrentProvider = session.Data.Model.ProviderID
+			out.CurrentVariant = session.Data.Model.Variant
+		}
+	}
+	out.SupportsFiles = len(out.Models) > 0
+	return out, nil
 }
 
 func (r *StructuredRun) Interrupt() error {
@@ -380,6 +497,7 @@ func (r *StructuredRun) Stop() {
 	if r.cmd != nil && r.cmd.Process != nil {
 		_ = r.cmd.Process.Kill()
 	}
+	cleanupPromptAttachments(r.id)
 }
 
 func (r *StructuredRun) streamEvents(ctx context.Context) {

@@ -17,15 +17,15 @@ import (
 
 const (
 	ed25519PublicKeySize = 32
-	hostReadLimit        = 16 << 20
-	clientReadLimit      = 4 << 20
+	hostReadLimit        = 32 << 20
+	clientReadLimit      = 32 << 20
 	runBufferBytes       = 4 << 20
 	hostSendQueue        = 256
 	clientSendQueue      = 512
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.2.0"
+var Version = "0.3.0"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/v1/runs", s.requireAuth(s.handleActiveRuns))
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.requireAuth(s.handleRun))
+	mux.HandleFunc("GET /api/v1/runs/{id}/options", s.requireAuth(s.handleRunOptions))
 	mux.HandleFunc("POST /api/v1/runs/{id}/stop", s.requireAuth(s.handleStopRun))
 	mux.HandleFunc("POST /api/v1/runs/{id}/lease", s.requireAuth(s.handleLease))
 
@@ -721,7 +722,21 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		if strings.TrimSpace(msg.Text) == "" {
 			return
 		}
-		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.prompt", RunID: msg.RunID, Message: msg.Text}); err != nil {
+		if msg.Options != nil && len(msg.Options.Attachments) > 6 {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "at most 6 attachments are allowed"})
+			return
+		}
+		if msg.Options != nil {
+			total := 0
+			for _, attachment := range msg.Options.Attachments {
+				total += len(attachment.Data)
+			}
+			if total > 24<<20 {
+				c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "attachments are too large"})
+				return
+			}
+		}
+		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.prompt", RunID: msg.RunID, Message: msg.Text, Options: msg.Options}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
 		}
 	case "approval":

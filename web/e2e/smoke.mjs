@@ -99,7 +99,7 @@ async function run() {
     await page.waitForFunction(() => document.documentElement.dataset.themeMode === 'system');
     assert((await themeOf(page)).mode === 'system', 'system mode was not stored');
 
-    for (const route of ['#/', '#/projects', '#/hosts', '#/sessions', '#/runs', '#/search', '#/settings']) {
+    for (const route of ['#/', '#/projects', '#/hosts', '#/sessions', '#/runs', '#/workspace', '#/search', '#/settings']) {
       await page.goto(`${baseURL}/${route}`, { waitUntil: 'networkidle' });
       assert(await page.locator('#view').count(), `view missing for ${route}`);
     }
@@ -134,6 +134,10 @@ async function run() {
     assert(await phone.locator('.nav a[href="#/hosts"]').isVisible(), 'hosts navigation is not visible on mobile');
     await phone.goto(`${baseURL}/#/projects`, { waitUntil: 'networkidle' });
     assert(await phone.locator('#view').count(), 'projects view missing on mobile');
+    await phone.goto(`${baseURL}/#/workspace`, { waitUntil: 'networkidle' });
+    assert(await phone.locator('#view').count(), 'workspace view missing on mobile');
+    const workspaceOverflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    assert(!workspaceOverflow, 'workspace has horizontal overflow on mobile');
     await desktop.close();
     await mobile.close();
     console.log('browser smoke test passed');

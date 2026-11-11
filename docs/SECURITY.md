@@ -330,7 +330,7 @@ Goal: a compromised or malicious hub must not be able to forge control commands.
 
 ## Web security controls
 
-- **CSP:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://<hub>; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`; Trusted Types where supported.
+- **CSP:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://<hub>; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`; Trusted Types where supported.
 - **Headers:** HSTS (with `includeSubDomains` when appropriate), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` restricting unused features, `Cross-Origin-Opener-Policy: same-origin`.
 - **CSRF:** SameSite=Strict cookies + synchronizer token for all state-changing requests; WebSocket upgrade requires matching `Origin` and a valid token.
 - **CORS:** disabled (same-origin only).

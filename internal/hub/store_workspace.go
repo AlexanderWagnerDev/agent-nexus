@@ -18,6 +18,8 @@ func (s *Store) ListProjects(userID string, all bool, limit int) ([]protocol.Pro
 	}
 	q := `SELECT s.host_id,h.name,s.cwd,
 		COALESCE(MAX(NULLIF(s.git_branch,'')),''),
+		COALESCE(MAX(NULLIF(s.repo_root,'')),''),
+		COALESCE(MAX(NULLIF(s.repo_url,'')),''),
 		COUNT(*),
 		SUM(CASE WHEN s.state IN ('running','waiting_for_input','starting','stopping') THEN 1 ELSE 0 END),
 		GROUP_CONCAT(DISTINCT s.agent),
@@ -41,7 +43,7 @@ func (s *Store) ListProjects(userID string, all bool, limit int) ([]protocol.Pro
 		var p protocol.ProjectView
 		var agents sql.NullString
 		var updated int64
-		if err := rows.Scan(&p.HostID, &p.HostName, &p.Cwd, &p.Branch, &p.Sessions, &p.Active, &agents, &updated); err != nil {
+		if err := rows.Scan(&p.HostID, &p.HostName, &p.Cwd, &p.Branch, &p.RepoRoot, &p.RepoURL, &p.Sessions, &p.Active, &agents, &updated); err != nil {
 			return nil, err
 		}
 		p.Name = projectName(p.Cwd)
@@ -69,7 +71,7 @@ func projectName(cwd string) string {
 
 // ---- favorites ----
 
-const favoriteSessionColumns = `s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
+const favoriteSessionColumns = `s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
 	s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning`
 
 func (s *Store) SetSessionFavorite(userID, sessionID string, favorite bool) error {
@@ -149,8 +151,13 @@ func (s *Store) ListNotifications(userID string, limit int) ([]protocol.Notifica
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := s.db.Query(`SELECT id,kind,title,body,run_id,link,created_at,read_at
-		FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ?`, userID, limit)
+	rows, err := s.db.Query(`SELECT n.id,n.kind,n.title,n.body,n.run_id,n.link,n.created_at,n.read_at,
+		COALESCE(r.host_id,''),COALESCE(h.name,''),COALESCE(s.agent,'')
+		FROM notifications n
+		LEFT JOIN runs r ON r.id=n.run_id AND n.run_id<>''
+		LEFT JOIN hosts h ON h.id=r.host_id
+		LEFT JOIN sessions s ON s.id=r.session_id
+		WHERE n.user_id=? ORDER BY n.created_at DESC LIMIT ?`, userID, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -160,7 +167,8 @@ func (s *Store) ListNotifications(userID string, limit int) ([]protocol.Notifica
 		var n protocol.Notification
 		var created int64
 		var read sql.NullInt64
-		if err := rows.Scan(&n.ID, &n.Kind, &n.Title, &n.Body, &n.RunID, &n.Link, &created, &read); err != nil {
+		if err := rows.Scan(&n.ID, &n.Kind, &n.Title, &n.Body, &n.RunID, &n.Link, &created, &read,
+			&n.HostID, &n.HostName, &n.Agent); err != nil {
 			return nil, 0, err
 		}
 		n.CreatedAt = fromMS(created)

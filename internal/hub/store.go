@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   title TEXT NOT NULL DEFAULT '',
   cwd TEXT NOT NULL DEFAULT '',
   git_branch TEXT NOT NULL DEFAULT '',
+  repo_root TEXT NOT NULL DEFAULT '',
+  repo_url TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   message_count INTEGER NOT NULL DEFAULT 0,
@@ -217,6 +219,8 @@ CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, crea
 	// Existing databases predate column-level migrations; SQLite reports a
 	// duplicate-column error which is safe to ignore.
 	_, _ = s.db.Exec(`ALTER TABLE auth_sessions ADD COLUMN step_up_until INTEGER`)
+	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_url TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 
@@ -736,13 +740,14 @@ func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) 
 		if state == "" {
 			state = protocol.StateUnknown
 		}
-		_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,created_at,updated_at,message_count,state,active_elsewhere,warning)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+		_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,repo_root,repo_url,created_at,updated_at,message_count,state,active_elsewhere,warning)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 			ON CONFLICT(host_id,agent,native_id) DO UPDATE SET
 			title=excluded.title, cwd=excluded.cwd, git_branch=excluded.git_branch,
+			repo_root=excluded.repo_root, repo_url=excluded.repo_url,
 			updated_at=excluded.updated_at, message_count=excluded.message_count,
 			state=excluded.state, active_elsewhere=excluded.active_elsewhere, warning=excluded.warning`,
-			id, hostID, sess.Agent, sess.NativeID, sess.Title, sess.Cwd, sess.GitBranch,
+			id, hostID, sess.Agent, sess.NativeID, sess.Title, sess.Cwd, sess.GitBranch, sess.RepoRoot, sess.RepoURL,
 			ms(sess.CreatedAt), ms(sess.UpdatedAt), sess.MessageCount, state, boolInt(sess.ActiveElsewhere), sess.Warning)
 		if err != nil {
 			return 0, 0, err
@@ -777,7 +782,7 @@ func (s *Store) ListSessions(userID, hostID, agent, project, state, query string
 	if offset < 0 {
 		offset = 0
 	}
-	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
+	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
 		WHERE h.revoked_at IS NULL`
@@ -832,7 +837,7 @@ func (s *Store) SessionIDForNative(hostID, agent, nativeID string) (string, erro
 }
 
 func (s *Store) SessionByID(userID, id string, all bool) (protocol.SessionView, error) {
-	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
+	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
 		WHERE s.id=? AND h.revoked_at IS NULL`
@@ -848,7 +853,7 @@ func scanSessionView(row rowScanner) (protocol.SessionView, error) {
 	var v protocol.SessionView
 	var created, updated int64
 	var active int
-	err := row.Scan(&v.ID, &v.HostID, &v.HostName, &v.Agent, &v.NativeID, &v.Title, &v.Cwd, &v.GitBranch,
+	err := row.Scan(&v.ID, &v.HostID, &v.HostName, &v.Agent, &v.NativeID, &v.Title, &v.Cwd, &v.GitBranch, &v.RepoRoot, &v.RepoURL,
 		&created, &updated, &v.MessageCount, &v.State, &active, &v.Warning)
 	v.CreatedAt, v.UpdatedAt = fromMS(created), fromMS(updated)
 	v.ActiveElsewhere = active != 0

@@ -66,12 +66,60 @@ type Session struct {
 	Title           string    `json:"title"`
 	Cwd             string    `json:"cwd"`
 	GitBranch       string    `json:"git_branch,omitempty"`
+	RepoRoot        string    `json:"repo_root,omitempty"`
+	RepoURL         string    `json:"repo_url,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	MessageCount    int       `json:"message_count"`
 	State           string    `json:"state"`
 	ActiveElsewhere bool      `json:"active_elsewhere"`
 	Warning         string    `json:"warning,omitempty"`
+}
+
+// Attachment is a user-supplied file forwarded to the host for a prompt.
+// Only the host writes it to disk; the hub never persists file content.
+type Attachment struct {
+	Name string `json:"name"`
+	MIME string `json:"mime,omitempty"`
+	Data string `json:"data"` // base64
+}
+
+// PromptOptions are optional per-prompt agent settings. Empty values keep the
+// session's existing configuration.
+type PromptOptions struct {
+	Model       string       `json:"model,omitempty"`
+	Provider    string       `json:"provider,omitempty"`
+	Variant     string       `json:"variant,omitempty"`
+	AgentMode   string       `json:"agent_mode,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// ModelOption is one model advertised by a native agent runtime.
+type ModelOption struct {
+	ID             string   `json:"id"`
+	Provider       string   `json:"provider,omitempty"`
+	Name           string   `json:"name"`
+	Variants       []string `json:"variants,omitempty"`
+	DefaultVariant string   `json:"default_variant,omitempty"`
+	Inputs         []string `json:"inputs,omitempty"`
+}
+
+// AgentModeOption is a selectable agent/collaboration mode.
+type AgentModeOption struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// RunOptions are the real capabilities and current settings of a live run.
+type RunOptions struct {
+	Models          []ModelOption     `json:"models"`
+	Modes           []AgentModeOption `json:"modes"`
+	CurrentModel    string            `json:"current_model,omitempty"`
+	CurrentProvider string            `json:"current_provider,omitempty"`
+	CurrentVariant  string            `json:"current_variant,omitempty"`
+	CurrentMode     string            `json:"current_mode,omitempty"`
+	SupportsFiles   bool              `json:"supports_files"`
 }
 
 // Message is one entry of a normalized transcript.
@@ -183,19 +231,21 @@ type Envelope struct {
 	Message    string         `json:"message,omitempty"`
 	ApprovalID string         `json:"approval_id,omitempty"`
 	Decision   string         `json:"decision,omitempty"`
+	Options    *PromptOptions `json:"options,omitempty"`
 }
 
 // ClientEnvelope is sent by the browser over the client WebSocket.
 type ClientEnvelope struct {
-	Type       string `json:"type"`
-	RunID      string `json:"run_id,omitempty"`
-	LastSeq    uint64 `json:"last_seq,omitempty"`
-	Data       []byte `json:"data,omitempty"`
-	Cols       int    `json:"cols,omitempty"`
-	Rows       int    `json:"rows,omitempty"`
-	Text       string `json:"text,omitempty"`
-	ApprovalID string `json:"approval_id,omitempty"`
-	Decision   string `json:"decision,omitempty"`
+	Type       string         `json:"type"`
+	RunID      string         `json:"run_id,omitempty"`
+	LastSeq    uint64         `json:"last_seq,omitempty"`
+	Data       []byte         `json:"data,omitempty"`
+	Cols       int            `json:"cols,omitempty"`
+	Rows       int            `json:"rows,omitempty"`
+	Text       string         `json:"text,omitempty"`
+	ApprovalID string         `json:"approval_id,omitempty"`
+	Decision   string         `json:"decision,omitempty"`
+	Options    *PromptOptions `json:"options,omitempty"`
 }
 
 // ServerEnvelope is sent to the browser over the client WebSocket.
@@ -240,6 +290,8 @@ type SessionView struct {
 	Title           string    `json:"title"`
 	Cwd             string    `json:"cwd"`
 	GitBranch       string    `json:"git_branch,omitempty"`
+	RepoRoot        string    `json:"repo_root,omitempty"`
+	RepoURL         string    `json:"repo_url,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	MessageCount    int       `json:"message_count"`
@@ -274,6 +326,8 @@ type ProjectView struct {
 	Cwd      string    `json:"cwd"`
 	Name     string    `json:"name"`
 	Branch   string    `json:"git_branch,omitempty"`
+	RepoRoot string    `json:"repo_root,omitempty"`
+	RepoURL  string    `json:"repo_url,omitempty"`
 	Sessions int       `json:"sessions"`
 	Active   int       `json:"active"`
 	Agents   []string  `json:"agents"`
@@ -288,6 +342,9 @@ type Notification struct {
 	Body      string    `json:"body"`
 	RunID     string    `json:"run_id,omitempty"`
 	Link      string    `json:"link,omitempty"`
+	HostID    string    `json:"host_id,omitempty"`
+	HostName  string    `json:"host_name,omitempty"`
+	Agent     string    `json:"agent,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	Read      bool      `json:"read"`
 }

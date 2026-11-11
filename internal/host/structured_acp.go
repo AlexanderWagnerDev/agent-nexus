@@ -238,7 +238,10 @@ func (r *ACPRun) send(ev protocol.RunEvent) {
 	_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 }
 
-func (r *ACPRun) Prompt(text string) error {
+func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
+	if options != nil && (options.Model != "" || options.Provider != "" || options.Variant != "" || options.AgentMode != "" || len(options.Attachments) > 0) {
+		return errors.New("this ACP agent does not expose run configuration options")
+	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()

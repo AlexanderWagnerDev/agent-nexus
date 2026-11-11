@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.2.0-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants and a redesigned responsive web client are implemented and runnable. Signed-command mode, PostgreSQL, native apps, split-view orchestration, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.0-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments and review-grade diffs are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -31,7 +31,12 @@ Codex and OpenCode sessions. They show actual tool calls, Markdown, a Git review
 panel and multiple open runs; they are not mockups. The same UI is used on
 desktop, tablet and phone, and the theme is stored per user on the hub.
 
-More views: [tool-call cards](docs/screenshots/chat-tools-dark.png),
+More views: [split workspace](docs/screenshots/workspace-dark.png),
+[split workspace in light mode](docs/screenshots/workspace-light.png),
+[model, reasoning and attachment composer](docs/screenshots/chat-composer-dark.png),
+[side-by-side diff](docs/screenshots/diff-split-dark.png),
+[cross-host repository grouping](docs/screenshots/sessions-repos-dark.png),
+[tool-call cards](docs/screenshots/chat-tools-dark.png),
 [Git context panel](docs/screenshots/chat-context-dark.png),
 [rendered diff](docs/screenshots/chat-diff-dark.png),
 [mobile chat](docs/screenshots/mobile-chat.png),
@@ -52,19 +57,20 @@ More views: [tool-call cards](docs/screenshots/chat-tools-dark.png),
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
 | **Home** | Workspace summary, open agent activity, projects, recent sessions and host status |
-| **Projects** | Sessions grouped by host and normalized working directory, with branch, agents and active counts |
+| **Projects** | Sessions grouped by normalized working directory, with branch, agents and active counts; identical remotes are recognized across hosts and worktrees are counted |
 | **Favorites** | Per-user pinned sessions reflected in the sidebar and session/chat headers |
 | **Themes** | Dark, light and system mode; stored per user on the hub, with an initial system-colored login screen |
 | **Navigation** | Collapsible desktop sidebar, mobile bottom navigation, session tabs and a `Ctrl/Cmd+K` command palette |
 | **Transcripts** | Read-only, paged, Markdown-rendered messages, collapsible tool cards and reasoning; fetched on demand from the host |
 | **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
 | **Control room** | Live view of every open terminal/structured run with state, elapsed time, shared-worktree warnings and quick stop |
-| **Chat** | Streaming text, Markdown/GFM tables, highlighted code blocks with copy, tool summaries, diffs, reasoning, approvals and a resizable context panel |
-| **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt and integrated run status |
+| **Split workspace** | Two independent live chats side by side or stacked, resizable and persisted, with per-pane approvals and mobile stacking |
+| **Chat** | Streaming text, Markdown/GFM tables, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
+| **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, live model/reasoning/agent selectors and bounded attachments gated by real model capabilities |
 | **Search** | Federated transcript search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
 | **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
-| **Notifications** | In-app history with read state and filters, plus content-free Web Push for approvals, completion, failures and disconnects |
+| **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects |
 | **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host |
 | **PWA** | Manifest, service worker, maskable PNG icons, installable on desktop and mobile |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
@@ -92,7 +98,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 Download the latest release binaries or use the multi-arch image:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.2.0-rc.1
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.0-rc.1
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,

@@ -138,11 +138,11 @@ func decodeJSON(r *http.Request, v any) error {
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'")
 		if s.cookieSecure() {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
@@ -883,6 +883,37 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	run.LastEventSeq = s.runEventCursor(run.ID)
 	writeJSON(w, http.StatusOK, run)
+}
+
+func (s *Server) handleRunOptions(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	if startedBy != u.ID && !isAdminRole(u.Role) {
+		writeError(w, http.StatusForbidden, "not your run")
+		return
+	}
+	if !s.hostOnline(run.HostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	params, _ := json.Marshal(map[string]string{"run_id": run.ID})
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, run.HostID, "run.options", params)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var options protocol.RunOptions
+	if err := json.Unmarshal(raw, &options); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	writeJSON(w, http.StatusOK, options)
 }
 
 func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {

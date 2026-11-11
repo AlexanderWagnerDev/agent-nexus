@@ -29,13 +29,15 @@ type CodexRun struct {
 	stdin      io.WriteCloser
 	cancel     context.CancelFunc
 
-	writeMu   sync.Mutex
-	mu        sync.Mutex
-	pending   map[int64]chan json.RawMessage
-	approvals map[int64]string
-	nextID    int64
-	closed    bool
-	state     string
+	writeMu       sync.Mutex
+	mu            sync.Mutex
+	pending       map[int64]chan json.RawMessage
+	approvals     map[int64]string
+	nextID        int64
+	closed        bool
+	state         string
+	currentModel  string
+	currentEffort string
 }
 
 type codexEvent struct {
@@ -306,11 +308,43 @@ func (r *CodexRun) resumeThread(cwd string) error {
 	return err
 }
 
-func (r *CodexRun) Prompt(text string) error {
-	raw, err := r.request("turn/start", map[string]any{
+func (r *CodexRun) Prompt(text string, options *protocol.PromptOptions) error {
+	params := map[string]any{
 		"threadId": r.threadID,
-		"input":    []map[string]string{{"type": "text", "text": text}},
-	}, 30*time.Second)
+		"input":    []map[string]any{{"type": "text", "text": text}},
+	}
+	if options != nil {
+		if options.Model != "" {
+			params["model"] = options.Model
+		}
+		if options.Variant != "" {
+			params["effort"] = options.Variant
+		}
+		if len(options.Attachments) > 0 {
+			files, err := writePromptAttachments(r.id, options.Attachments)
+			if err != nil {
+				return err
+			}
+			input := params["input"].([]map[string]any)
+			for _, file := range files {
+				if strings.HasPrefix(file.MIME, "image/") {
+					input = append(input, map[string]any{"type": "localImage", "path": file.Path})
+				} else {
+					input = append(input, map[string]any{"type": "mention", "name": file.Name, "path": file.Path})
+				}
+			}
+			params["input"] = input
+		}
+		r.mu.Lock()
+		if options.Model != "" {
+			r.currentModel = options.Model
+		}
+		if options.Variant != "" {
+			r.currentEffort = options.Variant
+		}
+		r.mu.Unlock()
+	}
+	raw, err := r.request("turn/start", params, 30*time.Second)
 	if err != nil {
 		r.daemon.log.Warn("codex prompt failed", "run_id", r.id, "error", err)
 		return err
@@ -375,6 +409,73 @@ func parseRequestID(id string) (int64, error) {
 	return n, nil
 }
 
+// Options returns Codex's catalog models and their advertised reasoning
+// efforts. Models are filtered to the non-hidden catalog entries.
+func (r *CodexRun) Options(_ context.Context) (protocol.RunOptions, error) {
+	out := protocol.RunOptions{Models: []protocol.ModelOption{}, Modes: []protocol.AgentModeOption{}}
+	cursor := ""
+	for page := 0; page < 5; page++ {
+		params := map[string]any{"includeHidden": false}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+		raw, err := r.request("model/list", params, 20*time.Second)
+		if err != nil {
+			return out, err
+		}
+		var response struct {
+			Data []struct {
+				ID                        string   `json:"id"`
+				Model                     string   `json:"model"`
+				DisplayName               string   `json:"displayName"`
+				Hidden                    bool     `json:"hidden"`
+				IsDefault                 bool     `json:"isDefault"`
+				DefaultReasoningEffort    string   `json:"defaultReasoningEffort"`
+				InputModalities           []string `json:"inputModalities"`
+				SupportedReasoningEfforts []struct {
+					ReasoningEffort string `json:"reasoningEffort"`
+				} `json:"supportedReasoningEfforts"`
+			} `json:"data"`
+			NextCursor *string `json:"nextCursor"`
+		}
+		if err := json.Unmarshal(raw, &response); err != nil {
+			return out, err
+		}
+		for _, model := range response.Data {
+			if model.Hidden || model.Model == "" {
+				continue
+			}
+			option := protocol.ModelOption{
+				ID: model.Model, Provider: "codex", Name: model.DisplayName,
+				DefaultVariant: model.DefaultReasoningEffort,
+				Inputs:         append([]string(nil), model.InputModalities...),
+			}
+			for _, effort := range model.SupportedReasoningEfforts {
+				if effort.ReasoningEffort != "" {
+					option.Variants = append(option.Variants, effort.ReasoningEffort)
+				}
+			}
+			out.Models = append(out.Models, option)
+			r.mu.Lock()
+			if r.currentModel == "" && model.IsDefault {
+				r.currentModel = model.Model
+				r.currentEffort = model.DefaultReasoningEffort
+			}
+			r.mu.Unlock()
+		}
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		cursor = *response.NextCursor
+	}
+	r.mu.Lock()
+	out.CurrentModel = r.currentModel
+	out.CurrentVariant = r.currentEffort
+	r.mu.Unlock()
+	out.SupportsFiles = len(out.Models) > 0
+	return out, nil
+}
+
 func (r *CodexRun) Stop() {
 	r.mu.Lock()
 	if r.closed {
@@ -387,6 +488,7 @@ func (r *CodexRun) Stop() {
 	if r.cmd != nil && r.cmd.Process != nil {
 		_ = r.cmd.Process.Kill()
 	}
+	cleanupPromptAttachments(r.id)
 }
 
 func (r *CodexRun) handleServerRequest(id int64, method string, params json.RawMessage) {

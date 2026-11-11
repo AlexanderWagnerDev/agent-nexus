@@ -44,7 +44,7 @@ type Daemon struct {
 	connectedAt  atomic.Int64
 
 	gitMu       sync.Mutex
-	gitBranches map[string]gitBranchCache
+	gitBranches map[string]gitRepoCache
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
@@ -59,7 +59,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		starting:     map[string]bool{},
 		startingRuns: map[string]bool{},
 		lastByAgent:  map[string][]protocol.Session{},
-		gitBranches:  map[string]gitBranchCache{},
+		gitBranches:  map[string]gitRepoCache{},
 	}
 	d.adapters = DetectAdapters(logger)
 	return d
@@ -122,7 +122,7 @@ func (d *Daemon) connect(ctx context.Context) error {
 		return fmt.Errorf("dial hub: %w", err)
 	}
 	defer ws.Close(websocket.StatusNormalClosure, "closing")
-	ws.SetReadLimit(16 << 20)
+	ws.SetReadLimit(32 << 20)
 	d.sendMu.Lock()
 	d.ws = ws
 	d.sendMu.Unlock()
@@ -333,7 +333,17 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 	// Fill in branch names for adapters whose store does not record them.
 	// Branches are cached by directory so discovery stays cheap.
 	for i := range out {
-		if out[i].GitBranch == "" && out[i].Cwd != "" {
+		if out[i].Cwd == "" {
+			continue
+		}
+		if out[i].RepoRoot == "" && out[i].RepoURL == "" {
+			repo := d.gitRepo(ctx, out[i].Cwd)
+			if out[i].GitBranch == "" {
+				out[i].GitBranch = repo.branch
+			}
+			out[i].RepoRoot = repo.root
+			out[i].RepoURL = repo.url
+		} else if out[i].GitBranch == "" {
 			out[i].GitBranch = d.gitBranch(ctx, out[i].Cwd)
 		}
 	}
@@ -398,19 +408,19 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		ar := d.acpRuns[msg.RunID]
 		d.runMu.Unlock()
 		if ar != nil {
-			if err := ar.Prompt(msg.Message); err != nil {
+			if err := ar.Prompt(msg.Message, msg.Options); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 			return
 		}
 		if cr != nil {
-			if err := cr.Prompt(msg.Message); err != nil {
+			if err := cr.Prompt(msg.Message, msg.Options); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 			return
 		}
 		if sr != nil {
-			if err := sr.Prompt(msg.Message); err != nil {
+			if err := sr.Prompt(msg.Message, msg.Options); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 		}
@@ -542,6 +552,24 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			return nil, err
 		}
 		return d.gitView(context.Background(), p.Cwd)
+	case "run.options":
+		var p struct {
+			RunID string `json:"run_id"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		d.runMu.Lock()
+		sr := d.structured[p.RunID]
+		cr := d.codexRuns[p.RunID]
+		d.runMu.Unlock()
+		if sr != nil {
+			return sr.Options(context.Background())
+		}
+		if cr != nil {
+			return cr.Options(context.Background())
+		}
+		return protocol.RunOptions{Models: []protocol.ModelOption{}, Modes: []protocol.AgentModeOption{}}, nil
 	default:
 		return nil, fmt.Errorf("unknown method %q", method)
 	}
