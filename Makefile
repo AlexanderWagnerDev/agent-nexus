@@ -14,6 +14,12 @@ lint:
 	gofmt -l .
 	go vet ./...
 	node --check web/assets/app.js
+	node --check web/assets/markdown.js
+	node --check web/assets/chat-format.js
+	node --check web/assets/theme.js
+
+web-test:
+	cd web && npm test
 
 vuln:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

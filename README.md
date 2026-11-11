@@ -1,8 +1,8 @@
 # AgentNexus
 
-A self-hosted, multi-host web dashboard to discover, manage, and resume existing AI coding agent sessions across Windows, Linux, and macOS.
+A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.1.0-rc.1 pre-release.** Hub, host daemon, pairing with SAS confirmation, discovery, transcripts, federated search, terminal resume, OpenCode and Codex structured modes, Claude structured mode through an ACP adapter, passkeys with step-up confirmation, Web Push, transcript export, a live multi-run dashboard and multi-user grants are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.2.0-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants and a redesigned responsive web client are implemented and runnable. Signed-command mode, PostgreSQL, native apps, split-view orchestration, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -18,18 +18,27 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 
 | Dark | Light |
 | --- | --- |
-| ![Dashboard in dark mode](docs/screenshots/dashboard-dark.png) | ![Dashboard in light mode](docs/screenshots/dashboard-light.png) |
-| ![Structured chat with tool calls in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat with tool calls in light mode](docs/screenshots/chat-light.png) |
-| ![Active runs in dark mode](docs/screenshots/multi-agent-dashboard.png) | ![Active runs in light mode](docs/screenshots/runs-light.png) |
+| ![Home in dark mode](docs/screenshots/dashboard-dark.png) | ![Home in light mode](docs/screenshots/dashboard-light.png) |
+| ![Structured chat in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat in light mode](docs/screenshots/chat-light.png) |
+| ![Agent activity in dark mode](docs/screenshots/multi-agent-dashboard.png) | ![Agent activity in light mode](docs/screenshots/runs-light.png) |
+| ![Projects in dark mode](docs/screenshots/projects-dark.png) | ![Projects in light mode](docs/screenshots/projects-light.png) |
 | ![Settings in dark mode](docs/screenshots/settings-dark.png) | ![Settings in light mode](docs/screenshots/settings-light.png) |
 | ![Mobile dashboard in dark mode](docs/screenshots/mobile-dashboard.png) | ![Mobile dashboard in light mode](docs/screenshots/mobile-dashboard-light.png) |
 | ![Sign in in dark mode](docs/screenshots/login-dark.png) | ![Sign in in light mode](docs/screenshots/login-light.png) |
 
-The screenshots were captured from a running hub with a paired Windows host and
-real Codex and OpenCode structured sessions, including a conversation with tool
-calls. They are not mockups. The same UI is used on desktop, tablet and phone;
-the theme is stored per user on the hub. The mobile view of an active structured
-chat is in `docs/screenshots/mobile-chat.png`.
+The screenshots come from a running hub with a paired Windows host and real
+Codex and OpenCode sessions. They show actual tool calls, Markdown, a Git review
+panel and multiple open runs; they are not mockups. The same UI is used on
+desktop, tablet and phone, and the theme is stored per user on the hub.
+
+More views: [tool-call cards](docs/screenshots/chat-tools-dark.png),
+[Git context panel](docs/screenshots/chat-context-dark.png),
+[rendered diff](docs/screenshots/chat-diff-dark.png),
+[mobile chat](docs/screenshots/mobile-chat.png),
+[mobile chat details](docs/screenshots/mobile-chat-details.png),
+[hosts](docs/screenshots/hosts-dark.png),
+[session transcript](docs/screenshots/session-detail-dark.png) and the
+[command palette](docs/screenshots/command-palette.png).
 
 ## What works today
 
@@ -42,22 +51,27 @@ chat is in `docs/screenshots/mobile-chat.png`.
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
-| **Overview** | Cross-host session list with title, project, agent, state and last activity |
-| **Themes** | Dark, light and system mode; the choice is stored per user on the hub and follows every device |
-| **Sidebar** | Navigation plus live host and recent-chat shortcuts |
-| **Transcripts** | Read-only, paged, tool calls collapsible; fetched on demand from the host, never stored on the hub |
+| **Home** | Workspace summary, open agent activity, projects, recent sessions and host status |
+| **Projects** | Sessions grouped by host and normalized working directory, with branch, agents and active counts |
+| **Favorites** | Per-user pinned sessions reflected in the sidebar and session/chat headers |
+| **Themes** | Dark, light and system mode; stored per user on the hub, with an initial system-colored login screen |
+| **Navigation** | Collapsible desktop sidebar, mobile bottom navigation, session tabs and a `Ctrl/Cmd+K` command palette |
+| **Transcripts** | Read-only, paged, Markdown-rendered messages, collapsible tool cards and reasoning; fetched on demand from the host |
 | **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
-| **Runs dashboard** | Live view of every active terminal/structured run the user can see, with state updates over the WebSocket |
-| **Search** | Federated search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
+| **Control room** | Live view of every open terminal/structured run with state, elapsed time, shared-worktree warnings and quick stop |
+| **Chat** | Streaming text, Markdown/GFM tables, highlighted code blocks with copy, tool summaries, diffs, reasoning, approvals and a resizable context panel |
+| **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt and integrated run status |
+| **Search** | Federated transcript search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
-| **Structured mode** | Chat UI with streamed text, tool cards, reasoning, interrupt and remote approvals for OpenCode and Codex; any ACP adapter (for example `claude-agent-acp`) gets the same experience |
-| **Notifications** | Web Push for approvals, completion, failures and host disconnects; content-free payloads |
+| **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
+| **Notifications** | In-app history with read state and filters, plus content-free Web Push for approvals, completion, failures and disconnects |
+| **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host |
+| **PWA** | Manifest, service worker, maskable PNG icons, installable on desktop and mobile |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
-| **Git view** | Read-only `git status` and diff of a session's project directory, executed on the host |
 | **Operations** | Multi-arch GHCR image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
 ### Agent support in this release
@@ -78,7 +92,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 Download the latest release binaries or use the multi-arch image:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.1.0-rc.1
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.2.0-rc.1
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
@@ -198,6 +212,7 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | --- | --- |
 | [docs/INSTALL.md](docs/INSTALL.md) | Beginner installation: Docker/Portainer, host clients, pairing, first chat |
 | [docs/ADMIN.md](docs/ADMIN.md) | Day-2 administration: users, grants, host policy, audit, updates, limitations |
+| [docs/UI-DESIGN.md](docs/UI-DESIGN.md) | Design references, tokens, chat/composer rules and remaining UI gaps |
 | [docs/PLAN.md](docs/PLAN.md) | Requirements, technical decisions (ADRs), work packages |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, protocols, data model, diagrams |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, priorities, milestones, acceptance criteria |

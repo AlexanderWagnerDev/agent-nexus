@@ -19,7 +19,7 @@
     document.documentElement.dataset.themeMode = m;
     document.documentElement.style.colorScheme = r;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', r === 'dark' ? '#141619' : '#f6f7f9');
+    if (meta) meta.setAttribute('content', r === 'dark' ? '#0f1012' : '#f7f7f8');
     if (persist !== false) {
       try { localStorage.setItem(KEY, m); } catch { /* private mode */ }
     }

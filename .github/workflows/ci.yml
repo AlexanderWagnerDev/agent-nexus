@@ -50,6 +50,9 @@ jobs:
         with:
           node-version: 26
       - run: node --check web/assets/app.js
+      - run: node --check web/assets/markdown.js
+      - run: node --check web/assets/chat-format.js
+      - run: node --check web/assets/theme.js
 
   race:
     name: Race detector
@@ -119,6 +122,9 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+      - name: Run renderer and tool-format unit tests
+        working-directory: web
+        run: npm test
       - name: Run browser smoke test
         working-directory: web
         env:

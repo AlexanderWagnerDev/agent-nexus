@@ -1,21 +1,60 @@
 /* AgentNexus browser client — dependency-free ES modules. */
+import { renderMarkdown, highlightCode } from './markdown.js';
+import { describeTool } from './chat-format.js';
+
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 const toastRoot = document.getElementById('toast-root');
 
 const iconPaths = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/>',
   overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   hosts: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
+  projects: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   sessions: '<path d="M4 5h16v11H9l-5 4V5Z"/>',
-  runs: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="m7 9 3 3-3 3M13 16h4"/>',
+  runs: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 16h4"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
   settings: '<path d="M4 7h8M17 7h3M4 17h3M12 17h8M4 12h12M19 12h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/><circle cx="18" cy="12" r="2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/>',
   monitor: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
+  command: '<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/>',
+  bell: '<path d="M6 9a6 6 0 1 1 12 0c0 5 3 6 3 6H3s3-1 3-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  panelLeft: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  panelRight: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-3-5.5 3 1-6.2L3 9.6l6.2-.9Z"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h4a6 6 0 0 0 6-6"/><path d="M18 9a6 6 0 0 1-6 6H8"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check: '<path d="m4 12 5 5L20 6"/>',
+  x: '<path d="m5 5 14 14M19 5 5 19"/>',
+  alert: '<path d="M12 3 2.5 20h19Z"/><path d="M12 9v5M12 17h.01"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  chevronRight: '<path d="m9 6 6 6-6 6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  send: '<path d="m4 12 16-8-6 16-3-6Z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 16h4"/>',
+  file: '<path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13 7 4 4"/>',
+  searchFile: '<path d="M6 3h8l4 4v6"/><path d="M14 3v5h5"/><circle cx="11" cy="16" r="4"/><path d="m14 19 4 4"/>',
+  brain: '<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8V20h3V4Z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8V16a3 3 0 0 1-4 2.8V20h-3"/>',
+  tool: '<path d="M14.5 6.5a4 4 0 0 0-5.6 4.7L4 16.1V20h3.9l4.9-4.9a4 4 0 0 0 4.7-5.6l-2.5 2.5-2.1-2.1Z"/>',
+  bot: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M8 12h.01M16 12h.01M8 16h8"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v7h-7"/>',
+  arrowDown: '<path d="M12 4v16M6 14l6 6 6-6"/>',
+  git: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h4a6 6 0 0 0 6-6M18 9a6 6 0 0 1-6 6H8"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 16-5-5-8 8"/>',
+  web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/>',
+  task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
+  plan: '<path d="M8 4h8v4H8Z"/><path d="M6 6H4v15h16V6h-2"/><path d="M8 12h8M8 16h5"/>',
+  mcp: '<path d="M8 12a4 4 0 0 1 4-4h4a4 4 0 0 1 0 8h-2"/><path d="M16 12a4 4 0 0 1-4 4H8a4 4 0 0 1 0-8h2"/>',
 };
 
-function svgIcon(name, size = 15) {
+function svgIcon(name, size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.overview}</svg>`;
 }
 
@@ -23,6 +62,7 @@ const state = {
   me: null,
   setupRequired: false,
   hubName: 'AgentNexus',
+  version: '',
   settings: { theme: 'system' },
   ws: null,
   wsRetry: 1000,
@@ -30,6 +70,13 @@ const state = {
   wsHandlers: new Set(),
   pageCleanup: null,
   run: null,
+  favorites: new Set(),
+  notifications: [],
+  unread: 0,
+  notifFilter: 'all',
+  openTabs: [],
+  palette: null,
+  notifTimer: null,
 };
 
 /* ---------- helpers ---------- */
@@ -50,6 +97,16 @@ function fmtTime(value) {
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function fmtStamp(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
 function fmtRelative(value) {
   if (!value) return '—';
   const d = new Date(value);
@@ -68,6 +125,66 @@ function fmtRelative(value) {
 
 function shortId(id) {
   return id ? id.slice(0, 10) : '';
+}
+
+const AGENTS = {
+  opencode: { label: 'OpenCode', short: 'OC' },
+  codex: { label: 'Codex', short: 'CX' },
+  claude: { label: 'Claude Code', short: 'CL' },
+  gemini: { label: 'Gemini', short: 'GM' },
+  copilot: { label: 'Copilot', short: 'CP' },
+  goose: { label: 'Goose', short: 'GO' },
+};
+
+function agentMeta(agent) {
+  return AGENTS[String(agent || '').toLowerCase()] || { label: agent || 'Agent', short: String(agent || '?').slice(0, 2).toUpperCase() };
+}
+
+function agentVersion(name, version) {
+  const value = String(version || '').trim();
+  if (!value) return '';
+  return value.replace(new RegExp(`^${String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s-]*(cli[\\s-]*)?`, 'i'), '') || value;
+}
+
+function projectName(cwd) {
+  const clean = String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '');
+  if (!clean) return 'No project';
+  const parts = clean.split('/');
+  return parts[parts.length - 1] || clean;
+}
+
+function cwdKey(cwd) {
+  return String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
+}
+
+function fmtDuration(value) {
+  if (!value) return '—';
+  const ms = typeof value === 'number' ? value : Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function storeGet(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+
+function storeSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
+}
+
+function draftKey(runID) {
+  return `nexus-draft-${runID}`;
+}
+
+function agentGlyph(agent, size = 'normal') {
+  const meta = agentMeta(agent);
+  return `<span class="agent-glyph ${size}" data-agent="${esc(String(agent || 'agent').toLowerCase())}" title="${esc(meta.label)}">${esc(meta.short)}</span>`;
 }
 
 function badge(text, cls = '') {
@@ -222,52 +339,71 @@ function wsSend(msg) {
 /* ---------- shell ---------- */
 
 const navItems = [
-  ['#/', 'Overview', 'overview', 'overview'],
-  ['#/hosts', 'Hosts', 'hosts', 'hosts'],
+  ['#/', 'Home', 'home', 'overview'],
+  ['#/projects', 'Projects', 'projects', 'projects'],
   ['#/sessions', 'Sessions', 'sessions', 'sessions'],
-  ['#/runs', 'Runs', 'runs', 'runs'],
-  ['#/search', 'Search', 'search', 'search'],
+  ['#/runs', 'Active', 'runs', 'runs'],
+  ['#/hosts', 'Hosts', 'hosts', 'hosts'],
   ['#/settings', 'Settings', 'settings', 'settings'],
 ];
 
 function renderShell(active = 'overview') {
   const initials = (state.me?.username || '?').slice(0, 1).toUpperCase();
+  const role = state.me?.role || 'member';
+  const collapsed = storeGet('nexus-sidebar-collapsed', false);
   app.className = '';
   app.innerHTML = `
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">A</div>
-          <div><strong>AgentNexus</strong><small>${esc(state.hubName)}</small></div>
+    <div class="layout ${collapsed ? 'sidebar-collapsed' : ''}" id="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <a class="brand" href="#/" title="AgentNexus home">
+            <span class="brand-mark">A</span>
+            <span class="brand-text"><strong>AgentNexus</strong><small>${esc(state.hubName)}</small></span>
+          </a>
+          <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" title="${collapsed ? 'Expand sidebar' : 'Collapse sidebar'}" aria-label="${collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">${svgIcon('panelLeft')}</button>
         </div>
-        <nav class="nav">
+        <nav class="nav" aria-label="Main navigation">
           ${navItems.map(([href, label, icon, key]) => `
-            <a href="${href}" class="${key === active ? 'active' : ''}">
-              <span class="icon" aria-hidden="true">${svgIcon(icon)}</span><span>${label}</span>
+            <a href="${href}" class="${key === active ? 'active' : ''}" title="${label}">
+              <span class="icon" aria-hidden="true">${svgIcon(icon)}</span><span class="nav-label">${label}</span>
             </a>`).join('')}
         </nav>
-        <div class="sidebar-extra" id="sidebar-extra"></div>
+        <div class="sidebar-extra" id="sidebar-extra"><div class="side-loading"><span class="spinner"></span></div></div>
         <div class="sidebar-foot">
-          <div class="user-chip"><span class="avatar">${esc(initials)}</span><span>${esc(state.me.username)}</span></div>
-          <div class="split">
-            <button class="btn ghost small" id="theme-toggle" title="Switch theme" aria-label="Switch theme">${themeButtonLabel()}</button>
-            <button class="btn ghost small" id="logout">Sign out</button>
+          <div class="user-chip" title="${esc(state.me.username)}">
+            <span class="avatar">${esc(initials)}</span>
+            <span class="user-meta nav-label"><strong>${esc(state.me.username)}</strong><small>${esc(role)}</small></span>
+            <button class="icon-btn user-logout" id="logout" type="button" title="Sign out" aria-label="Sign out">${svgIcon('external')}</button>
           </div>
         </div>
       </aside>
       <main class="main">
         <header class="topbar">
-          <div><h1 id="page-title">Overview</h1><div class="sub" id="page-sub"></div></div>
+          <div class="topbar-title">
+            <button class="icon-btn mobile-nav" id="mobile-nav" type="button" aria-label="Open navigation">${svgIcon('menu')}</button>
+            <div><h1 id="page-title">Home</h1><div class="sub" id="page-sub"></div></div>
+          </div>
           <div class="topbar-actions" id="page-actions"></div>
+          <div class="topbar-tools">
+            <button class="command-trigger" id="command-trigger" type="button" aria-label="Search or jump to">
+              ${svgIcon('search')}<span>Search or jump to…</span><kbd>Ctrl K</kbd>
+            </button>
+            <button class="icon-btn" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch theme">${themeIcon()}</button>
+            <button class="icon-btn notification-button" id="notif-toggle" type="button" title="Notifications" aria-label="Notifications">
+              ${svgIcon('bell')}<span class="notification-badge" id="notif-badge"></span>
+            </button>
+          </div>
         </header>
+        <div class="tabs-bar" id="tabs-bar"></div>
         <div class="view" id="view"></div>
+        <div class="notif-popover" id="notif-panel" hidden></div>
       </main>
     </div>`;
   document.getElementById('logout').addEventListener('click', logout);
-  loadSidebar().catch(() => {});
-  state.wsHandlers.add((msg) => {
-    if (msg.type === 'host.updated' || msg.type === 'sessions.changed') loadSidebar().catch(() => {});
-  });
+  document.getElementById('mobile-nav')?.addEventListener('click', () => document.getElementById('layout').classList.toggle('mobile-sidebar-open'));
+  document.getElementById('sidebar-toggle')?.addEventListener('click', toggleSidebar);
+  document.getElementById('command-trigger')?.addEventListener('click', openPalette);
+  document.getElementById('notif-toggle')?.addEventListener('click', toggleNotifications);
   document.getElementById('theme-toggle')?.addEventListener('click', async () => {
     const order = ['system', 'dark', 'light'];
     const current = state.settings.theme || 'system';
@@ -279,26 +415,87 @@ function renderShell(active = 'overview') {
       toast(err.message, true);
     }
   });
+  loadSidebar().catch(() => {});
+  loadNotifications().catch(() => {});
+  let sidebarTimer = null;
+  state.wsHandlers.add((msg) => {
+    if (msg.type === 'host.updated' || msg.type === 'sessions.changed' || msg.type === 'run.state' || msg.type === 'run.exit') {
+      clearTimeout(sidebarTimer);
+      sidebarTimer = setTimeout(() => loadSidebar().catch(() => {}), 700);
+    }
+    if (msg.type === 'run.exit' || msg.type === 'run.error' || (msg.type === 'run.event' && msg.event?.type === 'approval.requested')) {
+      setTimeout(() => loadNotifications().catch(() => {}), 500);
+    }
+  });
+  renderTabs();
+  if (state.notifTimer) clearInterval(state.notifTimer);
+  state.notifTimer = setInterval(() => { if (state.me) loadNotifications().catch(() => {}); }, 30000);
   connectWS();
+}
+
+function themeIcon() {
+  const mode = state.settings.theme || 'system';
+  return svgIcon(mode === 'dark' ? 'moon' : mode === 'light' ? 'sun' : 'monitor');
+}
+
+function toggleSidebar() {
+  const layout = document.getElementById('layout');
+  if (!layout) return;
+  const collapsed = layout.classList.toggle('sidebar-collapsed');
+  storeSet('nexus-sidebar-collapsed', collapsed);
+  const button = document.getElementById('sidebar-toggle');
+  if (button) {
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+  }
+}
+
+function sidebarSession(s) {
+  return `<a class="side-row side-session" href="#/sessions/${esc(s.id)}" title="${esc(s.title || 'Untitled session')}">
+    <span class="side-state ${s.state === 'running' ? 'running' : s.state === 'waiting_for_input' ? 'waiting' : ''}"></span>
+    ${agentGlyph(s.agent, 'small')}
+    <span class="truncate">${esc(s.title || 'Untitled session')}</span>
+  </a>`;
 }
 
 async function loadSidebar() {
   const box = document.getElementById('sidebar-extra');
   if (!box) return;
   try {
-    const [{ hosts }, { sessions }] = await Promise.all([api('/hosts'), api('/sessions?limit=6')]);
-    const hostRows = hosts.slice(0, 6).map((h) => `<a class="side-row" href="#/hosts" title="${esc(h.name)}"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span><span class="truncate">${esc(h.name)}</span></a>`).join('');
-    const chatRows = sessions.slice(0, 6).map((s) => `<a class="side-row" href="#/sessions/${esc(s.id)}" title="${esc(s.title || '')}"><span class="side-dot ${s.state === 'running' || s.state === 'waiting_for_input' ? 'on' : ''}"></span><span class="side-agent">${esc({ opencode: 'OC', codex: 'CX', claude: 'CL', gemini: 'GM' }[s.agent] || (s.agent || '?').slice(0, 2).toUpperCase())}</span><span class="truncate">${esc(s.title || 'Untitled session')}</span></a>`).join('');
+    const [{ hosts }, { sessions, has_more }, { projects }, favorites] = await Promise.all([
+      api('/hosts'),
+      api('/sessions?limit=200'),
+      api('/projects?limit=40'),
+      api('/favorites'),
+    ]);
+    state.favorites = new Set(Object.keys(favorites.ids || {}));
+    const active = sessions.filter((s) => s.state === 'running' || s.state === 'waiting_for_input').slice(0, 5);
+    const recent = sessions.slice(0, 6);
+    const pinned = favorites.sessions || [];
+    const projectGroups = (projects || []).slice(0, 6).map((p) => {
+      const items = sessions.filter((s) => s.host_id === p.host_id && cwdKey(s.cwd) === cwdKey(p.cwd)).slice(0, 3);
+      return `<details class="side-project" ${p.active ? 'open' : ''}>
+        <summary title="${esc(p.cwd)}">
+          <span class="side-project-name">${svgIcon('folder')}<span class="truncate">${esc(p.name)}</span></span>
+          ${p.active ? `<span class="count active">${p.active}</span>` : `<span class="count">${p.sessions}</span>`}
+          ${svgIcon('chevronRight')}
+        </summary>
+        <div class="side-project-meta">${esc(p.host_name)}${p.branch ? ` · ${esc(p.branch)}` : ''}</div>
+        ${items.map(sidebarSession).join('')}
+        <a class="side-more" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">All ${p.sessions} sessions</a>
+      </details>`;
+    }).join('');
+    const hostRows = hosts.slice(0, 5).map((h) => `<a class="side-row" href="#/hosts" title="${esc(h.name)}"><span class="side-state ${h.status === 'online' ? 'online' : ''}"></span><span class="truncate">${esc(h.name)}</span><span class="side-meta">${(h.agents || []).length}</span></a>`).join('');
     box.innerHTML = `
-      <div class="side-section"><div class="side-head"><span>Hosts</span></div>${hostRows || '<div class="side-empty">No hosts yet</div>'}</div>
-      <div class="side-section"><div class="side-head"><span>Recent chats</span></div>${chatRows || '<div class="side-empty">No sessions yet</div>'}</div>`;
-  } catch { box.innerHTML = ''; }
-}
-
-function themeButtonLabel() {
-  const mode = state.settings.theme || 'system';
-  const icon = mode === 'dark' ? 'moon' : mode === 'light' ? 'sun' : 'monitor';
-  return `${svgIcon(icon, 13)} ${mode[0].toUpperCase() + mode.slice(1)}`;
+      ${active.length ? `<div class="side-section"><div class="side-head"><span>Active now</span><span class="side-count">${active.length}</span></div>${active.map(sidebarSession).join('')}</div>` : ''}
+      ${pinned.length ? `<div class="side-section"><div class="side-head"><span>Pinned</span></div>${pinned.slice(0, 5).map(sidebarSession).join('')}</div>` : ''}
+      <div class="side-section"><div class="side-head"><span>Projects</span><a href="#/projects">All</a></div>${projectGroups || '<div class="side-empty">No projects discovered yet</div>'}</div>
+      <div class="side-section"><div class="side-head"><span>Recent</span>${has_more ? '<span class="side-count">latest</span>' : ''}</div>${recent.map(sidebarSession).join('') || '<div class="side-empty">No sessions yet</div>'}</div>
+      <div class="side-section"><div class="side-head"><span>Hosts</span><a href="#/hosts">Manage</a></div>${hostRows || '<div class="side-empty">No hosts paired</div>'}</div>`;
+  } catch {
+    box.innerHTML = '<div class="side-empty">Could not load workspace.</div>';
+  }
 }
 
 async function saveTheme(theme) {
@@ -306,7 +503,283 @@ async function saveTheme(theme) {
   state.settings = { ...state.settings, theme: saved.theme };
   window.NexusTheme?.apply(saved.theme);
   const button = document.getElementById('theme-toggle');
-  if (button) button.innerHTML = themeButtonLabel();
+  if (button) {
+    button.innerHTML = themeIcon();
+    button.title = `Theme: ${saved.theme}`;
+  }
+}
+
+/* ---------- notifications ---------- */
+
+function notificationIcon(kind) {
+  return svgIcon({ approval: 'alert', failed: 'alert', disconnected: 'hosts', completed: 'check' }[kind] || 'bell');
+}
+
+async function loadNotifications() {
+  const data = await api('/notifications?limit=40');
+  state.notifications = data.notifications || [];
+  state.unread = data.unread || 0;
+  updateNotificationBadge();
+  const panel = document.getElementById('notif-panel');
+  if (panel && !panel.hidden) renderNotificationPanel();
+}
+
+function updateNotificationBadge() {
+  const badgeNode = document.getElementById('notif-badge');
+  if (!badgeNode) return;
+  badgeNode.textContent = state.unread > 99 ? '99+' : String(state.unread || '');
+  badgeNode.classList.toggle('visible', state.unread > 0);
+  const toggle = document.getElementById('notif-toggle');
+  toggle?.classList.toggle('has-unread', state.unread > 0);
+  toggle?.setAttribute('aria-label', state.unread ? `Notifications, ${state.unread} unread` : 'Notifications');
+}
+
+function renderNotificationPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  const items = state.notifications.filter((n) => state.notifFilter === 'unread' ? !n.read : true);
+  panel.innerHTML = `
+    <div class="notif-head"><strong>Notifications</strong><button class="btn ghost small" id="notif-read-all" ${state.unread ? '' : 'disabled'}>Mark all read</button></div>
+    <div class="notif-filter segmented" role="group" aria-label="Filter notifications">
+      <button class="segment ${state.notifFilter === 'all' ? 'active' : ''}" data-notif-filter="all" type="button">All</button>
+      <button class="segment ${state.notifFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread" type="button">Unread${state.unread ? ` (${state.unread})` : ''}</button>
+    </div>
+    <div class="notif-list">${items.length ? items.map((n) => `
+      <a class="notif-item ${n.read ? '' : 'unread'}" href="${esc(n.link || '#/')}" data-notif-id="${esc(n.id)}">
+        <span class="notif-icon ${esc(n.kind)}">${notificationIcon(n.kind)}</span>
+        <span class="notif-copy"><strong>${esc(n.title)}</strong><small>${esc(n.body)}</small><time>${esc(fmtRelative(n.created_at))}</time></span>
+      </a>`).join('') : `<div class="notif-empty">${state.notifFilter === 'unread' ? 'Nothing unread.' : 'No notifications yet. Run completions, failures and approvals will appear here.'}</div>`}</div>
+    <div class="notif-foot"><a href="#/settings">Notification settings</a><span>${state.unread} unread</span></div>`;
+  panel.querySelectorAll('[data-notif-filter]').forEach((button) => button.addEventListener('click', () => {
+    state.notifFilter = button.dataset.notifFilter;
+    renderNotificationPanel();
+  }));
+  document.getElementById('notif-read-all')?.addEventListener('click', async () => {
+    const data = await api('/notifications/read', { method: 'POST', body: {} });
+    state.unread = data.unread;
+    state.notifications = state.notifications.map((n) => ({ ...n, read: true }));
+    updateNotificationBadge();
+    renderNotificationPanel();
+  });
+  panel.querySelectorAll('[data-notif-id]').forEach((link) => link.addEventListener('click', async () => {
+    const id = link.dataset.notifId;
+    const target = state.notifications.find((n) => n.id === id);
+    state.notifications = state.notifications.map((n) => n.id === id ? { ...n, read: true } : n);
+    if (target && !target.read) state.unread = Math.max(0, state.unread - 1);
+    updateNotificationBadge();
+    api('/notifications/read', { method: 'POST', body: { id } }).catch(() => {});
+    panel.hidden = true;
+  }));
+}
+
+async function toggleNotifications() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  if (!panel.hidden) { panel.hidden = true; return; }
+  panel.hidden = false;
+  renderNotificationPanel();
+  try { await loadNotifications(); } catch { /* keep cached list */ }
+}
+
+/* ---------- command palette ---------- */
+
+function rememberRecent(entry) {
+  const recent = storeGet('nexus-recent', []);
+  const next = [entry, ...recent.filter((item) => item.id !== entry.id)].slice(0, 12);
+  storeSet('nexus-recent', next);
+}
+
+function paletteActions() {
+  return [
+    { label: 'New session', hint: 'Start an agent on an online host', icon: 'plus', run: newSessionPicker },
+    { label: 'Home', hint: 'Overview and active work', icon: 'home', run: () => { location.hash = '#/'; } },
+    { label: 'Projects', hint: 'Grouped by repository and worktree', icon: 'projects', run: () => { location.hash = '#/projects'; } },
+    { label: 'Sessions', hint: 'All discovered native sessions', icon: 'sessions', run: () => { location.hash = '#/sessions'; } },
+    { label: 'Active runs', hint: 'Terminal and structured runs', icon: 'runs', run: () => { location.hash = '#/runs'; } },
+    { label: 'Hosts', hint: 'Paired machines and agent inventory', icon: 'hosts', run: () => { location.hash = '#/hosts'; } },
+    { label: 'Search transcripts', hint: 'Federated search across hosts', icon: 'search', run: () => { location.hash = '#/search'; } },
+    { label: 'Settings', hint: 'Appearance, notifications, devices', icon: 'settings', run: () => { location.hash = '#/settings'; } },
+  ];
+}
+
+function paletteSession(s) {
+  return {
+    label: s.title || 'Untitled session',
+    hint: `${agentMeta(s.agent).label} · ${s.host_name} · ${projectName(s.cwd)}`,
+    icon: 'sessions',
+    run: () => { location.hash = `#/sessions/${s.id}`; },
+  };
+}
+
+function renderPaletteResults(items) {
+  const box = document.getElementById('palette-results');
+  if (!box) return;
+  state.palette.items = items;
+  if (state.palette.index >= items.length) state.palette.index = Math.max(0, items.length - 1);
+  box.innerHTML = items.length ? items.map((item, index) => `
+    <button class="palette-row ${index === state.palette.index ? 'selected' : ''}" data-palette-index="${index}" type="button">
+      <span class="palette-icon">${svgIcon(item.icon || 'sessions')}</span>
+      <span class="palette-copy"><strong>${esc(item.label)}</strong><small>${esc(item.hint || '')}</small></span>
+      ${index === state.palette.index ? '<kbd>↵</kbd>' : ''}
+    </button>`).join('') : '<div class="palette-empty">No matches.</div>';
+  box.querySelectorAll('[data-palette-index]').forEach((button) => button.addEventListener('click', () => {
+    const item = items[Number(button.dataset.paletteIndex)];
+    closePalette();
+    item?.run();
+  }));
+}
+
+function closePalette() {
+  modalRoot.innerHTML = '';
+  state.palette = null;
+}
+
+async function openPalette() {
+  if (state.palette) return;
+  state.palette = { index: 0, items: [], timer: null };
+  const actions = paletteActions();
+  const recent = storeGet('nexus-recent', []).map((entry) => ({
+    ...entry,
+    hint: entry.hint || 'Recently opened',
+    icon: 'sessions',
+    run: () => { location.hash = entry.href || `#/sessions/${entry.id}`; },
+  }));
+  modalRoot.innerHTML = `
+    <div class="palette-backdrop" data-palette-backdrop>
+      <div class="palette" role="dialog" aria-modal="true" aria-label="Search or jump to">
+        <div class="palette-input">${svgIcon('search')}<input id="palette-input" autocomplete="off" spellcheck="false" placeholder="Search sessions, projects, hosts…" aria-label="Search"><kbd>Esc</kbd></div>
+        <div class="palette-results" id="palette-results"></div>
+        <div class="palette-foot"><span>↑↓ navigate</span><span>↵ open</span><span>Ctrl K toggle</span></div>
+      </div>
+    </div>`;
+  renderPaletteResults([...actions, ...recent]);
+  const input = document.getElementById('palette-input');
+  const backdrop = modalRoot.querySelector('[data-palette-backdrop]');
+  backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closePalette(); });
+  input.addEventListener('input', () => {
+    clearTimeout(state.palette.timer);
+    const query = input.value.trim();
+    if (!query) {
+      renderPaletteResults([...paletteActions(), ...recent]);
+      return;
+    }
+    state.palette.timer = setTimeout(async () => {
+      try {
+        const { sessions } = await api(`/sessions?limit=12&q=${encodeURIComponent(query)}`);
+        if (!state.palette) return;
+        renderPaletteResults([...paletteActions().filter((a) => a.label.toLowerCase().includes(query.toLowerCase())), ...sessions.map(paletteSession)]);
+      } catch { /* keep previous results */ }
+    }, 160);
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { closePalette(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      const count = state.palette.items.length;
+      if (count) state.palette.index = (state.palette.index + delta + count) % count;
+      renderPaletteResults(state.palette.items);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const item = state.palette.items[state.palette.index];
+      if (item) { closePalette(); item.run(); }
+    }
+  });
+  input.focus();
+}
+
+/* ---------- session tabs ---------- */
+
+function loadTabs() {
+  state.openTabs = storeGet('nexus-tabs', []);
+}
+
+function saveTabs() {
+  storeSet('nexus-tabs', state.openTabs);
+  renderTabs();
+}
+
+function openTab(entry) {
+  if (!entry?.id) return;
+  const key = entry.key || entry.id;
+  entry.key = key;
+  state.openTabs = [entry, ...state.openTabs.filter((tab) => (tab.key || tab.id) !== key)].slice(0, 8);
+  saveTabs();
+}
+
+function closeTab(key) {
+  state.openTabs = state.openTabs.filter((tab) => (tab.key || tab.id) !== key);
+  saveTabs();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabs-bar');
+  if (!bar) return;
+  if (!state.openTabs.length) {
+    bar.innerHTML = '';
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  bar.innerHTML = `<div class="tabs-scroll">${state.openTabs.map((tab) => {
+    const key = tab.key || tab.id;
+    const href = tab.href || (tab.kind === 'session' ? `#/sessions/${esc(tab.id)}` : `#/runs/${esc(tab.id)}`);
+    const active = location.hash === href;
+    return `<a class="tab ${active ? 'active' : ''}" href="${href}" title="${esc(tab.title || '')}">
+      ${agentGlyph(tab.agent, 'tiny')}<span class="tab-title">${esc(tab.title || 'Untitled')}</span>
+      <button class="tab-close" type="button" data-close-tab="${esc(key)}" aria-label="Close tab">${svgIcon('x', 13)}</button>
+    </a>`;
+  }).join('')}</div>`;
+  bar.querySelectorAll('[data-close-tab]').forEach((button) => button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTab(button.dataset.closeTab);
+  }));
+}
+
+function installGlobalUi() {
+  if (state.uiInstalled) return;
+  state.uiInstalled = true;
+  loadTabs();
+  document.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (state.palette) closePalette(); else openPalette();
+    }
+    if (event.key === 'Escape') {
+      if (state.palette) closePalette();
+      const panel = document.getElementById('notif-panel');
+      if (panel) panel.hidden = true;
+      document.getElementById('layout')?.classList.remove('mobile-sidebar-open');
+      const chatPage = document.getElementById('chat-page');
+      if (chatPage?.classList.contains('context-open')) {
+        chatPage.classList.remove('context-open');
+        storeSet('nexus-context-open', false);
+      }
+    }
+  });
+  document.addEventListener('click', (event) => {
+    const panel = document.getElementById('notif-panel');
+    const toggle = document.getElementById('notif-toggle');
+    if (panel && !panel.hidden && !panel.contains(event.target) && !toggle?.contains(event.target)) panel.hidden = true;
+  });
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('.md-copy');
+    if (!button) return;
+    const code = button.closest('.md-code')?.querySelector('code');
+    if (!code) return;
+    copyText(code.textContent || '');
+    button.textContent = 'Copied';
+    setTimeout(() => { button.textContent = 'Copy'; }, 1400);
+  });
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+    copyText(button.dataset.copy || '');
+  });
+  window.addEventListener('hashchange', renderTabs);
 }
 
 async function loadUserTheme() {
@@ -326,6 +799,7 @@ function setPage(title, sub = '', actions = '') {
 function activeFromHash() {
   const h = location.hash || '#/';
   if (h.startsWith('#/hosts')) return 'hosts';
+  if (h.startsWith('#/projects')) return 'projects';
   if (h.startsWith('#/sessions')) return 'sessions';
   if (h.startsWith('#/runs')) return 'runs';
   if (h.startsWith('#/search')) return 'search';
@@ -450,6 +924,8 @@ function renderAuth(mode, error = '') {
 async function logout() {
   try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
   state.me = null;
+  state.openTabs = [];
+  storeSet('nexus-tabs', []);
   disconnectWS();
   renderAuth('login');
 }
@@ -464,9 +940,12 @@ async function route() {
   }
   state.wsHandlers.clear();
   state.run = null;
+  const view = document.getElementById('view');
+  if (view) view.className = 'view';
   const hash = location.hash || '#/';
   try {
     if (hash.startsWith('#/hosts')) return await pageHosts();
+    if (hash.startsWith('#/projects')) return await pageProjects();
     if (hash.startsWith('#/sessions/')) return await pageSession(hash.split('/')[2]);
     if (hash.startsWith('#/sessions')) return await pageSessions();
     if (hash === '#/runs') return await pageRuns();
@@ -479,42 +958,82 @@ async function route() {
     return await pageOverview();
   } catch (err) {
     if (err.status === 401) return;
-    const view = document.getElementById('view');
-    if (view) view.innerHTML = `<div class="notice error">${esc(err.message)}</div>`;
+    const target = document.getElementById('view');
+    if (target) target.innerHTML = `<div class="notice error">${esc(err.message)}</div>`;
+  } finally {
+    renderTabs();
   }
 }
 
 async function pageOverview() {
   renderShell('overview');
-  const view = setPage('Overview', 'All of your coding agents, across every paired machine.', '<button class="btn primary small" id="overview-new">New session</button><a class="btn small" href="#/sessions">All sessions</a>');
+  const view = setPage('Home', 'Your coding agents across every paired machine.', '<button class="btn primary small" id="overview-new">New session</button><a class="btn small" href="#/runs">Control room</a>');
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-  const [{ hosts }, { sessions }] = await Promise.all([
+  const [{ hosts }, { sessions }, { projects }, { runs }] = await Promise.all([
     api('/hosts'),
-    api('/sessions?limit=500'),
+    api('/sessions?limit=80'),
+    api('/projects?limit=200'),
+    api('/runs'),
   ]);
   document.getElementById('overview-new').addEventListener('click', newSessionPicker);
-  const recent = sessions.slice(0, 8);
-  const attention = sessions.filter((s) => s.state === 'waiting_for_input' || s.state === 'running');
+  const online = hosts.filter((h) => h.status === 'online');
+  const totalSessions = projects.reduce((sum, project) => sum + project.sessions, 0);
   const agents = new Set();
   hosts.forEach((h) => (h.agents || []).forEach((a) => agents.add(a.name)));
+  const activeRuns = runs.slice(0, 6);
+  const liveRuns = runs.filter((r) => r.state === 'running' || r.state === 'starting' || r.state === 'waiting_for_input');
+  const openWorktrees = new Set(runs.map((r) => cwdKey(r.cwd)).filter(Boolean)).size;
   view.innerHTML = `
-    <div class="stats">
-      <div class="stat"><span class="value">${hosts.filter((h) => h.status === 'online').length}<span class="muted" style="font-size:12px">/${hosts.length}</span></span><span class="label">Hosts online</span><span class="delta">${hosts.length ? 'connected' : 'pair your first machine'}</span></div>
-      <div class="stat"><span class="value">${sessions.length}</span><span class="label">Recent sessions</span><span class="delta">across all hosts</span></div>
-      <div class="stat"><span class="value">${attention.length}</span><span class="label">Need attention</span><span class="delta">running or waiting</span></div>
-      <div class="stat"><span class="value">${agents.size}</span><span class="label">Agent types</span><span class="delta">${[...agents].map(esc).join(', ') || 'none detected'}</span></div>
+    <div class="home-head">
+      <div>
+        <h2 class="home-title">Your workspace</h2>
+        <p class="home-sub">${online.length ? `${online.length} machine${online.length === 1 ? '' : 's'} online` : 'No machine online'} · ${openWorktrees} worktree${openWorktrees === 1 ? '' : 's'} with open runs · ${agents.size} agent type${agents.size === 1 ? '' : 's'}</p>
+      </div>
+      <div class="home-stats">
+        <span><strong>${totalSessions}</strong> sessions</span>
+        <span><strong>${projects.length}</strong> projects</span>
+        <span><strong>${liveRuns.length}</strong> working</span>
+      </div>
     </div>
 
-    <div class="grid cols-2 mt-3" style="align-items:start">
+    <section class="home-section">
+      <div class="section-head"><h2>Agent activity</h2><a class="small" href="#/runs">Open control room</a></div>
+      ${activeRuns.length ? `<div class="run-board">${activeRuns.map(runCard).join('')}</div>` : `<div class="home-empty"><span>${svgIcon('bot', 22)}</span><div><strong>No open agent runs</strong><p>Resume a native session or start a new agent on an online host.</p></div><button class="btn primary small" id="home-new">New session</button></div>`}
+    </section>
+
+    <div class="home-columns">
       <section>
-        <div class="section-head"><h2>Recent sessions</h2><a class="small" href="#/sessions">View all</a></div>
-        ${sessions.length ? `<div class="list">${recent.map(sessionRow).join('')}</div>` : `<div class="card empty"><strong>No sessions yet</strong>Pair a host and AgentNexus will discover existing agent sessions automatically.</div>`}
+        <div class="section-head"><h2>Projects</h2><a class="small" href="#/projects">All projects</a></div>
+        ${projects.length ? `<div class="project-list">${projects.slice(0, 7).map(projectRow).join('')}</div>` : '<div class="card empty"><strong>No projects yet</strong>Pair a host and native sessions will be discovered automatically.</div>'}
       </section>
       <section>
-        <div class="section-head"><h2>Hosts</h2><a class="small" href="#/hosts">Manage</a></div>
-        ${hosts.length ? `<div class="list">${hosts.map(hostRowCompact).join('')}</div>` : `<div class="card empty"><strong>No hosts</strong>Open Hosts to create a pairing code.</div>`}
+        <div class="section-head"><h2>Recent sessions</h2><a class="small" href="#/sessions">All sessions</a></div>
+        ${sessions.length ? `<div class="session-list">${sessions.slice(0, 7).map(sessionRow).join('')}</div>` : '<div class="card empty"><strong>No sessions</strong>Pair a host that already has coding-agent history.</div>'}
       </section>
-    </div>`;
+    </div>
+
+    <section class="home-section">
+      <div class="section-head"><h2>Hosts</h2><a class="small" href="#/hosts">Manage hosts</a></div>
+      ${hosts.length ? `<div class="host-strip">${hosts.map((h) => `<a class="host-pill" href="#/hosts"><span class="side-state ${h.status === 'online' ? 'online' : ''}"></span><span>${esc(h.name)}</span><small>${esc(h.os)}/${esc(h.arch)} · ${(h.agents || []).length} agents</small></a>`).join('')}</div>` : '<div class="card empty"><strong>No hosts</strong>Pair your first machine to start discovering sessions.</div>'}
+    </section>`;
+  document.getElementById('home-new')?.addEventListener('click', newSessionPicker);
+}
+
+function runCard(run) {
+  return `<a class="run-card" href="#/runs/${esc(run.id)}">
+    <div class="run-card-head">${agentGlyph(run.agent)}${stateBadge(run.state)}<span class="run-elapsed">${fmtDuration(run.started_at)}</span></div>
+    <div class="run-card-title">${esc(run.session_title || 'Untitled session')}</div>
+    <div class="run-card-meta">${esc(projectName(run.cwd))} <span>·</span> ${esc(run.host_name || run.host_id)} <span>·</span> ${esc(run.mode)}</div>
+  </a>`;
+}
+
+function projectRow(p) {
+  return `<a class="project-row" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">
+    <span class="project-row-icon">${svgIcon('folder', 17)}</span>
+    <span class="project-row-main"><strong>${esc(p.name)}</strong><small>${esc(p.host_name)}${p.branch ? ` · ${esc(p.branch)}` : ''} · ${p.sessions} sessions</small></span>
+    <span class="project-row-agents">${(p.agents || []).slice(0, 3).map((agent) => agentGlyph(agent, 'tiny')).join('')}${p.active ? `<span class="active-pill">${p.active} active</span>` : ''}</span>
+    <span class="project-row-time">${esc(fmtRelative(p.last_at))}</span>
+  </a>`;
 }
 
 function hostRowCompact(h) {
@@ -525,12 +1044,14 @@ function hostRowCompact(h) {
 }
 
 function sessionRow(s) {
-  return `<a class="list-row" href="#/sessions/${esc(s.id)}">
-    <div style="min-width:0">
-      <div class="title">${esc(s.title || 'Untitled session')}</div>
-      <div class="sub"><span>${esc(s.host_name)}</span><span>${esc(s.cwd || '')}</span><span>${fmtRelative(s.updated_at)}</span></div>
-    </div>
-    <div class="right">${agentBadge(s.agent)}${stateBadge(s.state)}</div>
+  return `<a class="session-row" href="#/sessions/${esc(s.id)}">
+    ${agentGlyph(s.agent)}
+    <span class="session-row-main">
+      <strong>${esc(s.title || 'Untitled session')}</strong>
+      <small>${esc(projectName(s.cwd))} <span>·</span> ${esc(s.host_name)} <span>·</span> ${esc(fmtRelative(s.updated_at))}</small>
+    </span>
+    ${s.git_branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(s.git_branch)}</span>` : ''}
+    ${stateBadge(s.state)}
   </a>`;
 }
 
@@ -554,8 +1075,9 @@ async function pageHosts() {
         <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'waiting_for_input' : h.status)}</div>
         <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · seen ${esc(fmtRelative(h.last_seen))}</div>
       </div>
-      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(a.version)}</span>`).join('') || '<span class="chip">no agents</span>'}</div>
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || '<span class="chip">no agents</span>'}</div>
       <div class="host-actions">
+        <button class="btn small ghost" data-host-details="${esc(h.id)}">Details</button>
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>New session</button>
         <button class="btn small" data-share-host="${esc(h.id)}">Share</button>
         <button class="btn small danger" data-revoke-host="${esc(h.id)}">Revoke</button>
@@ -571,6 +1093,26 @@ async function pageHosts() {
     } catch (err) {
       toast(err.message, true);
     }
+  }));
+  view.querySelectorAll('[data-host-details]').forEach((b) => b.addEventListener('click', () => {
+    const h = hosts.find((host) => host.id === b.dataset.hostDetails);
+    if (!h) return;
+    const policy = h.policy || {};
+    modal(`
+      <div class="modal-title-row"><h2>${esc(h.name)}</h2>${badge(h.pending ? 'pending' : h.status, h.pending ? 'waiting_for_input' : h.status)}</div>
+      <p class="hint">Host identity and the policy enforced locally by nexusd. The hub cannot override these limits.</p>
+      <div class="meta-list">
+        <div><span>Host ID</span><strong class="mono-small">${esc(h.id)}</strong></div>
+        <div><span>Platform</span><strong>${esc(h.os)}/${esc(h.arch)}</strong></div>
+        <div><span>Daemon</span><strong>${esc(h.version || 'unknown')}</strong></div>
+        <div><span>Last seen</span><strong>${esc(fmtTime(h.last_seen))}</strong></div>
+        <div><span>Allowed roots</span><strong>${esc((policy.allowed_roots || []).join(', ') || 'not reported')}</strong></div>
+        <div><span>Allowed agents</span><strong>${esc((policy.allowed_agents || []).join(', ') || 'all detected')}</strong></div>
+        <div><span>New / fork</span><strong>${policy.allow_new_sessions === false ? 'new blocked' : 'new allowed'} · ${policy.allow_fork === false ? 'fork blocked' : 'fork allowed'}</strong></div>
+      </div>
+      <div class="aside-label mt-2">Detected agents</div>
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || '<span class="chip">none</span>'}</div>
+      <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`);
   }));
   view.querySelectorAll('[data-share-host]').forEach((b) => b.addEventListener('click', () => shareHostDialog(hosts.find((h) => h.id === b.dataset.shareHost))));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {
@@ -656,20 +1198,32 @@ async function newSessionDialog(host) {
     <h2>New session on ${esc(host?.name || 'host')}</h2>
     <p class="hint">The agent starts in a directory permitted by the host policy. Permission-bypass flags are rejected on the host.</p>
     <form class="form" id="new-session-form">
-      <label class="label">Agent<select class="select" name="agent">${agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)} — ${esc(a.version)}</option>`).join('')}</select></label>
+      <label class="label">Agent<select class="select" name="agent" id="new-agent">${agents.map((a) => `<option value="${esc(a.name)}" data-structured="${(a.capabilities || []).includes('structured') ? '1' : '0'}">${esc(agentMeta(a.name).label)} — ${esc(agentVersion(a.name, a.version))}</option>`).join('')}</select></label>
+      <label class="label">Mode<select class="select" name="mode" id="new-mode"><option value="structured">Structured chat</option><option value="terminal">Terminal</option></select></label>
       <label class="label">Working directory<input class="input" name="cwd" list="project-options" placeholder="C:\\Users\\me\\project or /home/me/project" required><datalist id="project-options">${projects.map((p) => `<option value="${esc(p)}"></option>`).join('')}</datalist></label>
       <div class="notice info">The host enforces its own <code>allowed_roots</code>; a path outside them is rejected even if this form accepts it.</div>
       <div class="modal-actions">
         <button class="btn ghost" type="button" data-close>Cancel</button>
-        <button class="btn primary" type="submit">Start terminal</button>
+        <button class="btn primary" type="submit">Start session</button>
       </div>
     </form>`);
+  const agentSelect = document.getElementById('new-agent');
+  const modeSelect = document.getElementById('new-mode');
+  const syncMode = () => {
+    const option = agentSelect.selectedOptions[0];
+    const structured = option?.dataset.structured === '1';
+    modeSelect.querySelector('option[value=structured]').disabled = !structured;
+    if (!structured) modeSelect.value = 'terminal';
+  };
+  agentSelect.addEventListener('change', syncMode);
+  modeSelect.value = agentSelect.selectedOptions[0]?.dataset.structured === '1' ? 'structured' : 'terminal';
+  syncMode();
   document.getElementById('new-session-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
     try {
       const run = await api(`/hosts/${host.id}/runs`, { method: 'POST', body: {
-        agent: form.get('agent'), cwd: form.get('cwd'), mode: 'terminal', cols: 120, rows: 32,
+        agent: form.get('agent'), cwd: form.get('cwd'), mode: form.get('mode'), cols: 120, rows: 32,
       } });
       closeModal();
       location.hash = `#/runs/${run.id}`;
@@ -679,105 +1233,243 @@ async function newSessionDialog(host) {
   });
 }
 
+async function pageProjects() {
+  renderShell('projects');
+  const view = setPage('Projects', 'Working directories discovered from native sessions, grouped by host and worktree.', '<button class="btn primary small" id="projects-new">New session</button>');
+  view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const { projects } = await api('/projects?limit=500');
+  document.getElementById('projects-new').addEventListener('click', newSessionPicker);
+  const render = (filter = '') => {
+    const list = document.getElementById('project-list');
+    if (!list) return;
+    const query = filter.trim().toLowerCase();
+    const filtered = projects.filter((p) => !query || `${p.name} ${p.cwd} ${p.host_name} ${p.branch}`.toLowerCase().includes(query));
+    list.innerHTML = filtered.length ? `<div class="project-grid">${filtered.map((p) => `
+      <a class="project-card" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">
+        <div class="project-icon">${svgIcon('folder', 20)}</div>
+        <div class="project-main">
+          <div class="project-title">${esc(p.name)}${p.active ? `<span class="active-pill">${p.active} active</span>` : ''}${p.active > 1 ? `<span class="warn-pill" title="More than one agent is active in this working tree">shared worktree</span>` : ''}</div>
+          <div class="project-path">${esc(p.cwd)}</div>
+          <div class="project-meta">${esc(p.host_name)}${p.branch ? ` · ${svgIcon('branch', 12)} ${esc(p.branch)}` : ''} · ${p.sessions} session${p.sessions === 1 ? '' : 's'} · ${esc(fmtRelative(p.last_at))}</div>
+        </div>
+        <div class="project-agents">${(p.agents || []).slice(0, 4).map((agent) => agentGlyph(agent, 'small')).join('')}</div>
+        <span class="project-arrow">${svgIcon('chevronRight')}</span>
+      </a>`).join('')}</div>` : `<div class="card empty"><strong>No projects match</strong>Try a different filter or wait for a host to reconnect.</div>`;
+  };
+  view.innerHTML = `
+    <div class="toolbar">
+      <input class="input grow" id="projects-filter" placeholder="Filter projects, paths, hosts or branches…">
+      <span class="toolbar-count">${projects.length} worktree${projects.length === 1 ? '' : 's'}</span>
+    </div>
+    <div id="project-list"></div>`;
+  document.getElementById('projects-filter').addEventListener('input', (event) => render(event.target.value));
+  render();
+}
+
 async function pageSessions() {
   renderShell('sessions');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
-  const view = setPage('Sessions', 'Discovered natively from each host; nothing is copied or rewritten.');
+  const [{ hosts }] = await Promise.all([api('/hosts')]);
+  const view = setPage('Sessions', 'Discovered natively from each host; nothing is copied or rewritten.', '<button class="btn primary small" id="sessions-new">New session</button>');
   view.innerHTML = `
-    <div class="toolbar">
-      <input class="input grow" id="filter-q" placeholder="Filter title or project..." value="${esc(params.get('q') || '')}">
-      <select class="select" id="filter-agent"><option value="">All agents</option>${['claude', 'codex', 'opencode', 'gemini'].map((a) => `<option ${params.get('agent') === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
-      <select class="select" id="filter-state"><option value="">All states</option>${['running', 'waiting_for_input', 'idle', 'completed', 'failed', 'unknown'].map((s) => `<option ${params.get('state') === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      <button class="btn" id="apply-filter">Apply</button>
+    <div class="filterbar">
+      <label class="search-field">${svgIcon('search')}<input class="input" id="filter-q" placeholder="Filter title, project or path…" value="${esc(params.get('q') || '')}"></label>
+      <select class="select" id="filter-agent"><option value="">All agents</option>${['claude', 'codex', 'opencode', 'gemini'].map((a) => `<option value="${a}" ${params.get('agent') === a ? 'selected' : ''}>${agentMeta(a).label}</option>`).join('')}</select>
+      <select class="select" id="filter-host"><option value="">All hosts</option>${hosts.map((h) => `<option value="${esc(h.id)}" ${params.get('host') === h.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>
+      <select class="select" id="filter-state"><option value="">Any state</option>${['running', 'waiting_for_input', 'idle', 'completed', 'failed', 'unknown'].map((s) => `<option value="${s}" ${params.get('state') === s ? 'selected' : ''}>${s.replaceAll('_', ' ')}</option>`).join('')}</select>
+      <span class="filter-count" id="session-count"></span>
     </div>
-    <div id="session-list"><div class="empty"><span class="spinner"></span></div></div>`;
-  const load = async () => {
+    <div class="project-filter" id="project-filter" hidden></div>
+    <div id="session-list"><div class="empty"><span class="spinner"></span></div></div>
+    <div class="load-more" id="session-more"></div>`;
+  document.getElementById('sessions-new').addEventListener('click', newSessionPicker);
+  let offset = 0;
+  let sessions = [];
+  let hasMore = false;
+  const project = params.get('project') || '';
+  const clearProject = () => {
+    const node = document.getElementById('project-filter');
+    if (!node) return;
+    node.hidden = !project;
+    node.innerHTML = project ? `<span>${svgIcon('folder', 13)}${esc(projectName(project))}</span><code>${esc(project)}</code><button class="icon-btn" id="clear-project" type="button" aria-label="Clear project filter">${svgIcon('x', 13)}</button>` : '';
+    document.getElementById('clear-project')?.addEventListener('click', () => {
+      const url = new URL(location.href);
+      url.hash = '#/sessions';
+      location.href = url.toString();
+    });
+  };
+  const render = () => {
+    const list = document.getElementById('session-list');
+    if (!list) return;
+    document.getElementById('session-count').textContent = `${sessions.length}${hasMore ? '+' : ''} shown`;
+    if (!sessions.length) {
+      list.innerHTML = '<div class="card empty"><strong>No sessions match</strong>Try another filter, or wait for a host to reconnect.</div>';
+      document.getElementById('session-more').innerHTML = '';
+      return;
+    }
+    const groups = new Map();
+    for (const s of sessions) {
+      const key = `${s.host_id}|${cwdKey(s.cwd)}`;
+      if (!groups.has(key)) groups.set(key, { name: projectName(s.cwd), cwd: s.cwd, host: s.host_name, branch: s.git_branch, rows: [] });
+      groups.get(key).rows.push(s);
+    }
+    list.innerHTML = [...groups.values()].map((g) => `
+      <section class="session-group">
+        <div class="session-group-head">
+          <span>${svgIcon('folder', 14)}<strong>${esc(g.name)}</strong><code>${esc(g.cwd)}</code></span>
+          <span>${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted">${esc(g.host)} · ${g.rows.length}</span></span>
+        </div>
+        <div class="session-list">${g.rows.map((s) => `
+          <a class="session-row" href="#/sessions/${esc(s.id)}">
+            ${agentGlyph(s.agent)}
+            <span class="session-row-main"><strong>${esc(s.title || 'Untitled session')}</strong><small>${esc(fmtRelative(s.updated_at))} · ${s.message_count || 0} messages</small></span>
+            ${stateBadge(s.state)}
+          </a>`).join('')}</div>
+      </section>`).join('');
+    document.getElementById('session-more').innerHTML = hasMore ? '<button class="btn" id="load-more-sessions">Load more</button>' : '';
+    document.getElementById('load-more-sessions')?.addEventListener('click', () => load(false).catch((e) => toast(e.message, true)));
+  };
+  const load = async (reset = true) => {
+    if (reset) { offset = 0; sessions = []; document.getElementById('session-list').innerHTML = '<div class="empty"><span class="spinner"></span></div>'; }
     const q = new URLSearchParams();
     const query = document.getElementById('filter-q').value.trim();
     if (query) q.set('q', query);
     const agent = document.getElementById('filter-agent').value;
     if (agent) q.set('agent', agent);
+    const host = document.getElementById('filter-host').value;
+    if (host) q.set('host', host);
     const stateFilter = document.getElementById('filter-state').value;
     if (stateFilter) q.set('state', stateFilter);
-    q.set('limit', '500');
+    if (project) q.set('project', project);
+    q.set('limit', '100');
+    q.set('offset', String(offset));
     const data = await api('/sessions?' + q.toString());
-    const list = document.getElementById('session-list');
-    if (!list) return;
-    list.innerHTML = data.sessions.length
-      ? `<div class="list">${data.sessions.map(sessionRow).join('')}</div>`
-      : `<div class="card empty"><strong>No sessions match</strong>Try a different filter, or wait for a host to reconnect.</div>`;
-    history.replaceState(null, '', '#/sessions' + (q.toString() ? '?' + q.toString() : ''));
+    sessions = sessions.concat(data.sessions || []);
+    offset += (data.sessions || []).length;
+    hasMore = Boolean(data.has_more);
+    const historyParams = new URLSearchParams(q);
+    historyParams.delete('limit');
+    historyParams.delete('offset');
+    history.replaceState(null, '', '#/sessions' + (historyParams.toString() ? '?' + historyParams.toString() : ''));
+    render();
   };
-  document.getElementById('apply-filter').addEventListener('click', () => load().catch((e) => toast(e.message, true)));
-  document.getElementById('filter-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') load().catch((err) => toast(err.message, true)); });
-  state.wsHandlers.add((msg) => { if (msg.type === 'sessions.changed') load().catch(() => {}); });
+  let filterTimer = null;
+  const schedule = () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => load().catch((e) => toast(e.message, true)), 220); };
+  document.getElementById('filter-q').addEventListener('input', schedule);
+  for (const id of ['filter-agent', 'filter-host', 'filter-state']) document.getElementById(id).addEventListener('change', () => load().catch((e) => toast(e.message, true)));
+  state.wsHandlers.add((msg) => { if (msg.type === 'sessions.changed') schedule(); });
+  clearProject();
   await load();
 }
 
 async function pageSession(id) {
   renderShell('sessions');
-  const view = setPage('Session', 'Read-only transcript fetched on demand from the host.', '<a class="btn small" href="#/sessions">Back</a>');
+  const view = setPage('Session', 'Loading transcript…', '<a class="btn small" href="#/sessions">Back</a>');
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const s = await api(`/sessions/${id}`);
-  setPage(s.title || 'Session', `${s.host_name} · ${s.agent} · ${s.cwd || 'unknown directory'}`, `
-    <button class="btn small" id="resume-session">Resume terminal</button>
-    <button class="btn small" id="git-session">Git diff</button>
-    ${s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="structured-session">Structured chat</button>' : ''}
-    ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork</button>' : ''}
-    <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=markdown">Export MD</a>
-    <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=json">JSON</a>
+  const agent = agentMeta(s.agent);
+  openTab({ id: s.id, key: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.title || 'Untitled session', agent: s.agent });
+  rememberRecent({ id: s.id, title: s.title || 'Untitled session', agent: s.agent, hint: `${agent.label} · ${s.host_name} · ${projectName(s.cwd)}`, href: `#/sessions/${s.id}` });
+  const title = s.title || 'Session';
+  setPage(title, `${projectName(s.cwd)} · ${agent.label} · ${s.host_name}`, `
+    <button class="btn small" id="favorite-session">${svgIcon('star')} ${state.favorites.has(s.id) ? 'Pinned' : 'Pin'}</button>
+    <button class="btn small" id="resume-session">${svgIcon('terminal')} Terminal</button>
+    ${s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude' ? `<button class="btn small primary" id="structured-session">${svgIcon('bot')} Open chat</button>` : ''}
     <a class="btn small ghost" href="#/sessions">Back</a>`);
+  const favorite = async (on) => {
+    await api(`/sessions/${s.id}/favorite`, { method: on ? 'PUT' : 'DELETE' });
+    if (on) state.favorites.add(s.id); else state.favorites.delete(s.id);
+    const button = document.getElementById('favorite-session');
+    if (button) button.innerHTML = `${svgIcon('star')} ${on ? 'Pinned' : 'Pin'}`;
+    loadSidebar().catch(() => {});
+  };
+  document.getElementById('favorite-session').addEventListener('click', () => favorite(!state.favorites.has(s.id)).catch((e) => toast(e.message, true)));
   document.getElementById('resume-session').addEventListener('click', () => startRun(s, false, 'terminal'));
-  document.getElementById('git-session').addEventListener('click', async () => {
+  document.getElementById('structured-session')?.addEventListener('click', () => startRun(s, false, 'structured'));
+  const openGit = async () => {
     try {
       const g = await api(`/sessions/${s.id}/git`);
       modal(`
-        <h2>Git status — ${esc(s.cwd)}</h2>
-        <p class="hint">Read-only status and diff from the host. No files are modified.</p>
-        <h3>Status</h3><pre class="secret">${esc(g.status || '(clean)')}</pre>
-        <h3 class="mt-2">Diff stat</h3><pre class="secret">${esc(g.stat || '(none)')}</pre>
-        <h3 class="mt-2">Diff</h3><pre class="secret" style="max-height:45vh;overflow:auto">${esc(g.diff || '(none)')}</pre>
+        <div class="modal-title-row"><h2>Git changes</h2><span class="mono-small">${esc(g.branch || '')}</span></div>
+        <p class="hint">Read-only status and diff from <code>${esc(s.cwd)}</code>. No files are modified.</p>
+        ${g.root ? `<div class="meta-row"><span>Repository</span><code>${esc(g.root)}</code></div>` : ''}
+        <div class="git-stat"><pre>${esc(g.status?.trim() || '(clean working tree)')}</pre>${g.stat ? `<pre class="muted">${esc(g.stat)}</pre>` : ''}</div>
+        ${g.diff ? `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(g.diff, 'diff')}</code></pre></div>` : '<div class="empty compact">No uncommitted changes.</div>'}
         <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`);
     } catch (err) { toast(err.message, true); }
-  });
-  document.getElementById('structured-session')?.addEventListener('click', () => startRun(s, false, 'structured'));
-  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
+  };
   view.innerHTML = `
-    <div class="card mb-2">
-      <div class="split wrap">
-        ${agentBadge(s.agent)} ${stateBadge(s.state)} ${s.active_elsewhere ? badge('active elsewhere', 'waiting_for_input') : ''}
-        <span class="mono-small">${esc(s.cwd || '')}</span>
-        <span class="right small muted">created ${fmtTime(s.created_at)} · updated ${fmtTime(s.updated_at)} · ${s.message_count || 0} messages</span>
-      </div>
-      ${s.warning ? `<div class="notice mt-1">${esc(s.warning)}</div>` : ''}
-    </div>
-    <div id="transcript" class="transcript"><div class="empty"><span class="spinner"></span></div></div>
-    <div class="load-more" id="load-more-wrap"></div>`;
+    <div class="detail-layout">
+      <section class="detail-main">
+        <div class="session-banner">
+          ${agentGlyph(s.agent)}
+          <div class="session-banner-main">
+            <strong>${esc(title)}</strong>
+            <span class="session-banner-path">${esc(s.cwd || 'unknown directory')}</span>
+          </div>
+          ${stateBadge(s.state)}
+          <span class="session-banner-meta">${s.message_count || 0} messages · updated ${esc(fmtRelative(s.updated_at))}</span>
+        </div>
+        ${s.warning ? `<div class="notice mt-1">${esc(s.warning)}</div>` : ''}
+        <div id="transcript" class="transcript"><div class="empty"><span class="spinner"></span></div></div>
+        <div class="load-more" id="load-more-wrap"></div>
+      </section>
+      <aside class="detail-aside">
+        <div class="aside-section">
+          <div class="aside-label">Session</div>
+          <div class="meta-list">
+            <div><span>Agent</span><strong>${esc(agent.label)}</strong></div>
+            <div><span>Host</span><strong>${esc(s.host_name)}</strong></div>
+            <div><span>Created</span><strong>${esc(fmtTime(s.created_at))}</strong></div>
+            <div><span>Updated</span><strong>${esc(fmtTime(s.updated_at))}</strong></div>
+          </div>
+        </div>
+        <div class="aside-section">
+          <div class="aside-label">Native identity</div>
+          <div class="copy-line"><code>${esc(s.native_id || s.id)}</code><button class="icon-btn" data-copy="${esc(s.native_id || s.id)}" title="Copy native id">${svgIcon('copy', 14)}</button></div>
+          <div class="copy-line"><code>${esc(s.cwd || '')}</code><button class="icon-btn" data-copy="${esc(s.cwd || '')}" title="Copy working directory">${svgIcon('copy', 14)}</button></div>
+          ${s.git_branch ? `<div class="branch-chip wide">${svgIcon('branch', 13)}${esc(s.git_branch)}</div>` : ''}
+        </div>
+        <div class="aside-section">
+          <div class="aside-label">Actions</div>
+          <div class="aside-actions">
+            <button class="btn small" id="git-session">${svgIcon('git')} Review changes</button>
+            ${s.agent === 'codex' || s.agent === 'claude' ? '<button class="btn small" id="fork-session">Fork session</button>' : ''}
+            <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=markdown">${svgIcon('file')} Export Markdown</a>
+            <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=json">Export JSON</a>
+          </div>
+        </div>
+        <div class="aside-section">
+          <div class="aside-label">Native continuity</div>
+          <p class="aside-note">Continuing this conversation reopens the agent's own native session. The original CLI can still resume it afterwards.</p>
+        </div>
+      </aside>
+    </div>`;
+  document.getElementById('git-session').addEventListener('click', openGit);
+  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
   let offset = 0;
   const append = async () => {
     const box = document.getElementById('transcript');
-    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${offset}&limit=80`);
+    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${offset}&limit=100`);
     if (offset === 0) box.innerHTML = '';
-    box.insertAdjacentHTML('beforeend', tr.messages.length ? tr.messages.map(renderMessage).join('') : '<div class="empty"><strong>No readable messages</strong>The host could not parse this transcript.</div>');
+    box.insertAdjacentHTML('beforeend', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : (!offset ? '<div class="empty"><strong>No readable messages</strong>The host could not parse this transcript.</div>' : ''));
     offset = tr.next || 0;
-    document.getElementById('load-more-wrap').innerHTML = tr.next ? '<button class="btn" id="load-more">Load more</button>' : '';
+    document.getElementById('load-more-wrap').innerHTML = tr.next ? '<button class="btn" id="load-more">Load earlier messages</button>' : '';
     document.getElementById('load-more')?.addEventListener('click', () => append().catch((e) => toast(e.message, true)));
   };
   await append();
 }
 
-function renderMessage(m) {
+function renderTranscriptMessage(m, agent = 'agent') {
+  if (m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
   if (m.kind === 'tool_call' || m.kind === 'tool_result') {
-    const title = m.kind === 'tool_call' ? (m.tool_name || 'tool call') : 'tool result';
-    const input = m.tool_input || '';
-    const output = m.tool_output || '';
-    return `<div class="msg tool"><div class="role">${esc(m.role)}</div><details class="tool">
-      <summary><strong>${esc(title)}</strong><span class="muted">${esc(input || output).slice(0, 140)}</span></summary>
-      ${input ? `<pre>${esc(input)}</pre>` : ''}
-      ${output ? `<pre>${esc(output)}</pre>` : ''}
-    </details></div>`;
+    const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '');
+    return historyToolCard(described, m);
   }
-  return `<div class="msg ${esc(m.role)}"><div class="role">${esc(m.role)}</div><div class="body">${esc(m.text || '')}</div></div>`;
+  if (m.role === 'user') {
+    return `<article class="turn turn-user"><div class="turn-meta"><span>You</span><time>${esc(fmtStamp(m.timestamp))}</time></div><div class="turn-body">${esc(m.text || '')}</div></article>`;
+  }
+  return `<article class="turn turn-assistant"><div class="turn-meta">${agentGlyph(agent, 'small')}<span class="agent-name">${esc(agentMeta(agent).label)}</span><time>${esc(fmtStamp(m.timestamp))}</time></div><div class="turn-body md">${renderMarkdown(m.text || '')}</div></article>`;
 }
 
 async function startRun(session, fork, mode = 'terminal') {
@@ -864,6 +1556,8 @@ async function pageSettings() {
               <span><strong>${label}</strong><small>${hint}</small></span>
             </button>`).join('')}
         </div>
+        <div class="meta-row"><span>Language</span><strong>English</strong></div>
+        <p class="hint mt-1">The interface is English-only in this release; strings are not externalized for translation yet.</p>
       </section>
       <section class="card">
         <h2 class="mt-0">Account</h2>
@@ -882,7 +1576,7 @@ async function pageSettings() {
       </section>
       <section class="card">
         <h2 class="mt-0">${isAdmin ? 'Administration' : 'About'}</h2>
-        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">Users & roles</a><a class="btn small" href="#/audit">Audit log</a><a class="btn small" href="#/devices">All devices</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)}. Sessions stay on your hosts; the hub stores metadata.</p>`}
+        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">Users & roles</a><a class="btn small" href="#/audit">Audit log</a><a class="btn small" href="#/devices">All devices</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)} · version ${esc(state.version || 'unknown')}. Sessions stay on your hosts; the hub stores metadata.</p>`}
       </section>
     </div>`;
   view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {
@@ -1107,200 +1801,446 @@ async function pageAudit() {
       </div>`).join('')}</div>`;
 }
 
+function toolIcon(kind) {
+  return { terminal: 'terminal', read: 'file', edit: 'edit', write: 'edit', search: 'searchFile', web: 'web', git: 'git', test: 'check', todo: 'plan', task: 'task', mcp: 'mcp', image: 'image' }[kind] || 'tool';
+}
+
+function outputBlock(text) {
+  const value = String(text || '');
+  if (!value) return '';
+  if (/^(diff --git|@@ )/m.test(value) && /^[+-]/m.test(value)) {
+    return `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(value, 'diff')}</code></pre></div>`;
+  }
+  return `<pre class="tool-output">${esc(value)}</pre>`;
+}
+
+function toolCardHtml(described, status = 'done') {
+  const detail = described.detail ? `<code>${esc(described.detail)}</code>` : '';
+  const statusMark = status === 'running'
+    ? '<span class="spinner tiny"></span>Running'
+    : status === 'error'
+      ? `${svgIcon('alert', 13)}Failed`
+      : `${svgIcon('check', 13)}Done`;
+  const commandBlock = described.command && described.kind === 'terminal'
+    ? `<div class="tool-block"><div class="tool-label">Command</div><pre class="tool-pre">${esc(described.command)}</pre></div>`
+    : '';
+  const pathBlock = described.path && described.kind !== 'terminal' && described.kind !== 'edit' && described.kind !== 'write'
+    ? `<div class="tool-block"><div class="tool-label">Path</div><pre class="tool-pre">${esc(described.path)}</pre></div>`
+    : '';
+  const diffBlock = described.diff
+    ? `<div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">changes</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(described.diff, 'diff')}</code></pre></div>`
+    : '';
+  const output = described.kind !== 'edit' && described.output ? `<div class="tool-block"><div class="tool-label">Output</div>${outputBlock(described.output)}</div>` : '';
+  const hasStructured = commandBlock || pathBlock || diffBlock || output;
+  const raw = described.inputText && described.inputText !== '{}' && described.inputText !== 'null'
+    ? `<details class="tool-raw"><summary>Raw input</summary><pre>${esc(described.inputText)}</pre></details>`
+    : '';
+  return `<details class="tool-card ${status}" ${status === 'error' ? 'open' : ''}>
+    <summary>
+      <span class="tool-icon">${svgIcon(toolIcon(described.kind), 15)}</span>
+      <span class="tool-line"><strong>${esc(described.label)}</strong>${detail}</span>
+      <span class="tool-state ${status}">${statusMark}</span>
+      <span class="tool-chevron">${svgIcon('chevronDown', 14)}</span>
+    </summary>
+    <div class="tool-body">${hasStructured ? commandBlock + pathBlock + diffBlock + output : '<div class="tool-empty">No further details.</div>'}${raw}</div>
+  </details>`;
+}
+
+function historyToolCard(described, message) {
+  const status = message.kind === 'tool_result' && /(^|\n)(error|failed|exit code [1-9])/i.test(message.tool_output || '') ? 'error' : 'done';
+  return toolCardHtml(described, status);
+}
+
+function reasoningHtml(text) {
+  return `<details class="reasoning-card"><summary>${svgIcon('brain', 14)}<span>Thinking</span><span class="reasoning-toggle">${svgIcon('chevronDown', 13)}</span></summary><div class="reasoning-body md">${renderMarkdown(text)}</div></details>`;
+}
+
+function workingHtml() {
+  return `<div class="working-indicator" id="working-indicator"><span class="working-dots"><i></i><i></i><i></i></span><span>Agent is working</span></div>`;
+}
+
+function renderTranscriptMessages(messages, agent = 'agent') {
+  const html = [];
+  for (let i = 0; i < messages.length; i += 1) {
+    const message = messages[i];
+    if (message.kind === 'tool_call') {
+      const next = messages[i + 1];
+      const output = next?.kind === 'tool_result' ? (next.tool_output || '') : '';
+      if (next?.kind === 'tool_result') i += 1;
+      const described = describeTool(message.tool_name || 'Tool', message.tool_input || '', output);
+      html.push(historyToolCard(described, { ...message, tool_output: output }));
+    } else if (message.kind === 'tool_result') {
+      const described = describeTool(message.tool_name || 'Tool result', '', message.tool_output || '');
+      html.push(historyToolCard(described, message));
+    } else {
+      html.push(renderTranscriptMessage(message, agent));
+    }
+  }
+  return html.join('');
+}
+
 async function pageStructuredRun(id, run) {
-  setPage('Structured chat', `run ${shortId(run.id)} · ${run.mode} mode`, `<button class="btn small danger" id="stop-run">Stop run</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
+  let session = null;
+  if (run.session_id) {
+    session = await api(`/sessions/${encodeURIComponent(run.session_id)}`).catch(() => null);
+  }
+  const agent = agentMeta(run.agent || session?.agent);
+  const title = session?.title || run.session_title || 'Structured chat';
+  const cwd = session?.cwd || run.cwd || '';
+  const branch = session?.git_branch || run.git_branch || '';
+  const host = run.host_name || session?.host_name || run.host_id;
+  const contextDefault = storeGet('nexus-context-open', window.innerWidth >= 1180);
+  setPage(title, `${projectName(cwd)} · ${agent.label} · ${host}`, `
+    <button class="btn small ghost icon-mobile" id="chat-context-toggle" title="Toggle session details" aria-label="Toggle session details">${svgIcon('panelRight')} <span>Details</span></button>
+    <button class="btn small danger icon-mobile" id="stop-run" title="Stop this run" aria-label="Stop this run">${svgIcon('stop')} <span>Stop</span></button>
+    <a class="btn small ghost icon-mobile" href="#/sessions" title="All sessions" aria-label="All sessions">${svgIcon('sessions')} <span>Sessions</span></a>`);
+  openTab({ id, key: session?.id || id, kind: 'run', href: `#/runs/${id}`, title, agent: run.agent || session?.agent });
+  rememberRecent({ id, title, agent: run.agent || session?.agent, hint: `${agent.label} · ${host} · ${projectName(cwd)}`, href: `#/runs/${id}` });
   const view = document.getElementById('view');
+  view.className = 'view chat-view';
   view.innerHTML = `
-    <div class="chat-layout">
-    <div class="card mb-2">
-      <div class="run-head">
-        <div class="split wrap"><span id="chat-state" class="badge running">running</span>${agentBadge(run.agent || 'agent')}<span class="mono-small">host ${esc(shortId(run.host_id))}</span></div>
-        <div class="small muted" id="run-note">Connecting...</div>
-      </div>
-      <div class="notice info small">Structured mode drives the agent's local server or ACP adapter. Tool approvals are forwarded here; the native session stays resumable in the terminal.</div>
-    </div>
-    <div id="approval-banner"></div>
-    <div class="chat" id="chat"><div class="chat-empty" id="chat-empty">Send a prompt to continue this native session.</div></div>
-    <form class="prompt-bar" id="prompt-form">
-      <textarea class="input" id="prompt-text" rows="2" enterkeyhint="send" autocomplete="off" placeholder="Ask the agent to continue... (Ctrl+Enter to send)"></textarea>
-      <div class="prompt-actions">
-        <button class="btn primary" type="submit" id="send-prompt">Send</button>
-        <button class="btn" type="button" id="interrupt-run">Interrupt</button>
-      </div>
-    </form>
+    <div class="chat-page ${contextDefault ? 'context-open' : ''}" id="chat-page">
+      <section class="chat-main">
+        <div class="chat-statusbar">
+          <span class="badge running" id="chat-state">${esc((run.state || 'starting').replaceAll('_', ' '))}</span>
+          <span class="chat-agent">${agentGlyph(run.agent || session?.agent)}${esc(agent.label)}</span>
+          <span class="chat-sep">·</span>
+          <span class="chat-host">${esc(host)}</span>
+          ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
+          <span class="chat-connection" id="run-note"><span class="connection-dot"></span>Connecting…</span>
+        </div>
+        <div class="chat-scroll" id="chat">
+          <div class="chat-inner">
+            <div id="history-top"></div>
+            <div id="messages" class="messages"></div>
+            <div id="working-slot"></div>
+          </div>
+        </div>
+        <div class="composer-wrap">
+          <button class="jump-latest" id="jump-latest" type="button" hidden>${svgIcon('arrowDown', 14)} Jump to latest</button>
+          <div id="approval-banner" class="approval-slot"></div>
+          <form class="composer" id="prompt-form">
+            <textarea id="prompt-text" rows="1" placeholder="Message ${esc(agent.label)}…" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
+            <div class="composer-bar">
+              <div class="composer-info">${agentGlyph(run.agent || session?.agent, 'small')}<span>${esc(agent.label)}</span><span class="composer-pill">${esc(run.mode)}</span><span class="composer-pill host-pill">${esc(host)}</span></div>
+              <div class="composer-actions">
+                <span class="composer-hint">Enter to send · Shift+Enter newline</span>
+                <button class="icon-btn composer-stop" id="interrupt-run" type="button" title="Interrupt current turn" aria-label="Interrupt current turn" hidden>${svgIcon('stop')}</button>
+                <button class="send-button" id="send-prompt" type="submit" title="Send message" aria-label="Send message">${svgIcon('send')}</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+      <aside class="chat-context" id="chat-context">
+        <div class="context-head"><strong>Session</strong><button class="icon-btn" id="context-close" type="button" aria-label="Close details">${svgIcon('x')}</button></div>
+        <div class="context-body">
+          <section class="context-section">
+            <div class="aside-label">Run</div>
+            <div class="meta-list">
+              <div><span>State</span><strong id="context-state">${esc((run.state || 'starting').replaceAll('_', ' '))}</strong></div>
+              <div><span>Agent</span><strong>${esc(agent.label)}</strong></div>
+              <div><span>Mode</span><strong>${esc(run.mode)}</strong></div>
+              <div><span>Host</span><strong>${esc(host)}</strong></div>
+              <div><span>Started</span><strong>${esc(fmtTime(run.started_at))}</strong></div>
+            </div>
+          </section>
+          <section class="context-section">
+            <div class="aside-label">Native session</div>
+            ${session ? `<div class="meta-list">
+              <div><span>Messages</span><strong>${session.message_count || 0}</strong></div>
+              <div><span>Updated</span><strong>${esc(fmtRelative(session.updated_at))}</strong></div>
+            </div>
+            <div class="copy-line"><code>${esc(session.native_id || session.id)}</code><button class="icon-btn" data-copy="${esc(session.native_id || session.id)}" title="Copy native id">${svgIcon('copy', 14)}</button></div>
+            <div class="copy-line"><code>${esc(cwd)}</code><button class="icon-btn" data-copy="${esc(cwd)}" title="Copy working directory">${svgIcon('copy', 14)}</button></div>` : '<p class="aside-note">This run was started without a discovered native session.</p>'}
+          </section>
+          <section class="context-section">
+            <div class="aside-label">Git</div>
+            <div id="context-git"><button class="btn small block" id="context-git-load">Load working tree changes</button></div>
+          </section>
+          <section class="context-section">
+            <div class="aside-label">Actions</div>
+            <div class="aside-actions">
+              ${session ? `<button class="btn small" id="context-pin">${svgIcon('star')} ${state.favorites.has(session.id) ? 'Unpin session' : 'Pin session'}</button><a class="btn small" href="#/sessions/${esc(session.id)}">${svgIcon('file')} Read-only transcript</a><button class="btn small" id="context-terminal">${svgIcon('terminal')} Terminal mode</button><a class="btn small" href="/api/v1/sessions/${esc(session.id)}/export?format=markdown">Export Markdown</a>` : ''}
+            </div>
+          </section>
+          <section class="context-section">
+            <div class="aside-label">Continuity</div>
+            <p class="aside-note">This chat drives the agent's native session. You can return to the same session in the original CLI, and the transcript stays on the host.</p>
+          </section>
+        </div>
+      </aside>
+      <div class="context-resizer" id="context-resizer" title="Drag to resize details"></div>
+      <div class="chat-scrim" id="chat-scrim"></div>
     </div>`;
+
   const chat = document.getElementById('chat');
-  const empty = document.getElementById('chat-empty');
-  const stateBadge = document.getElementById('chat-state');
+  const messagesEl = document.getElementById('messages');
+  const historyTop = document.getElementById('history-top');
+  const workingSlot = document.getElementById('working-slot');
+  const stateNode = document.getElementById('chat-state');
+  const contextState = document.getElementById('context-state');
   const note = document.getElementById('run-note');
-  const banner = document.getElementById('approval-banner');
+  const approval = document.getElementById('approval-banner');
   const form = document.getElementById('prompt-form');
   const textarea = document.getElementById('prompt-text');
-  const assistantBodies = new Map();
-  const toolCards = new Map();
-  let lastSeq = 0;
+  const sendButton = document.getElementById('send-prompt');
+  const stopButton = document.getElementById('interrupt-run');
+  const jumpButton = document.getElementById('jump-latest');
+  const chatPage = document.getElementById('chat-page');
+  const contextWidth = Math.min(520, Math.max(240, Number(storeGet('nexus-context-width', 320)) || 320));
+  chatPage.style.setProperty('--context-width', `${contextWidth}px`);
+  const resizer = document.getElementById('context-resizer');
+  let resizing = false;
+  resizer.addEventListener('pointerdown', (event) => {
+    if (window.innerWidth <= 1100) return;
+    resizing = true;
+    resizer.setPointerCapture(event.pointerId);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  });
+  resizer.addEventListener('pointermove', (event) => {
+    if (!resizing) return;
+    const width = Math.min(520, Math.max(240, window.innerWidth - event.clientX));
+    chatPage.style.setProperty('--context-width', `${width}px`);
+  });
+  const endResize = () => {
+    if (!resizing) return;
+    resizing = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    const width = Number.parseInt(getComputedStyle(chatPage).getPropertyValue('--context-width'), 10);
+    if (Number.isFinite(width)) storeSet('nexus-context-width', width);
+  };
+  resizer.addEventListener('pointerup', endResize);
+  resizer.addEventListener('pointercancel', endResize);
+  const assistantRecords = new Map();
+  const toolRecords = new Map();
+  const reasoningRecords = new Map();
+  const completedMessages = new Set();
+  const initialCursor = run.last_event_seq || 0;
+  let lastSeq = initialCursor;
   let subscribedGen = 0;
-  let currentAssistant = '';
+  let skipReplay = true;
+  let historyOffset = 0;
+  let historyTotal = 0;
+  let autoScroll = true;
+  let currentState = run.state || 'starting';
 
-  const scroll = () => { chat.scrollTop = chat.scrollHeight; };
+  const setContext = (open) => {
+    chatPage.classList.toggle('context-open', open);
+    storeSet('nexus-context-open', open);
+  };
+  document.getElementById('chat-context-toggle').addEventListener('click', () => setContext(!chatPage.classList.contains('context-open')));
+  document.getElementById('context-close').addEventListener('click', () => setContext(false));
+  document.getElementById('chat-scrim').addEventListener('click', () => setContext(false));
+
+  const isNearBottom = () => chat.scrollHeight - chat.scrollTop - chat.clientHeight < 90;
+  const scrollBottom = (force = false) => {
+    if (force || autoScroll) {
+      chat.scrollTop = chat.scrollHeight;
+      jumpButton.hidden = true;
+    } else {
+      jumpButton.hidden = false;
+    }
+  };
+  chat.addEventListener('scroll', () => {
+    autoScroll = isNearBottom();
+    jumpButton.hidden = autoScroll;
+  });
+  jumpButton.addEventListener('click', () => {
+    autoScroll = true;
+    scrollBottom(true);
+  });
+
   const setState = (state) => {
+    currentState = state || 'unknown';
     run.state = state;
-    stateBadge.textContent = (state || 'unknown').replaceAll('_', ' ');
-    stateBadge.className = 'badge ' + (state || 'unknown');
+    const label = (state || 'unknown').replaceAll('_', ' ');
+    stateNode.textContent = label;
+    stateNode.className = 'badge ' + (state || 'unknown');
+    if (contextState) contextState.textContent = label;
+    const busy = state === 'running' || state === 'starting';
+    stopButton.hidden = !busy;
+    workingSlot.innerHTML = busy ? workingHtml() : '';
+    const topStop = document.getElementById('stop-run');
+    topStop.hidden = !busy;
+    topStop.disabled = !busy;
+    scrollBottom();
   };
   setState(run.state || 'starting');
+
   const appendUser = (text) => {
-    empty?.remove();
-    const node = document.createElement('div');
-    node.className = 'chat-msg user';
-    node.innerHTML = '<div class="chat-role">you</div><div class="chat-body"></div>';
-    node.querySelector('.chat-body').textContent = text;
-    chat.appendChild(node);
-    scroll();
+    const article = document.createElement('article');
+    article.className = 'turn turn-user';
+    article.innerHTML = `<div class="turn-meta"><span>You</span><time>${esc(fmtStamp(new Date()))}</time></div><div class="turn-body"></div>`;
+    article.querySelector('.turn-body').textContent = text;
+    messagesEl.appendChild(article);
+    scrollBottom();
   };
-  const assistantBody = (messageID) => {
+
+  const assistantRecord = (messageID) => {
     const key = messageID || 'assistant';
-    if (assistantBodies.has(key)) return assistantBodies.get(key);
-    empty?.remove();
-    const node = document.createElement('div');
-    node.className = 'chat-msg assistant';
-    node.innerHTML = '<div class="chat-role">agent</div><div class="chat-body"></div>';
-    chat.appendChild(node);
-    const body = node.querySelector('.chat-body');
-    assistantBodies.set(key, body);
-    return body;
-  };
-  const appendAssistantText = (messageID, text, replace = false) => {
-    const body = assistantBody(messageID);
-    if (replace) body.textContent = text;
-    else body.textContent += text;
-    scroll();
-  };
-  const toolCard = (callID, name, input) => {
-    const key = callID || ('tool-' + Math.random());
-    if (toolCards.has(key)) return toolCards.get(key);
-    empty?.remove();
-    const details = document.createElement('details');
-    details.className = 'tool chat-tool';
-    details.open = true;
-    details.innerHTML = `<summary><strong>${esc(name || 'tool')}</strong><span class="muted">${esc((input || '').slice(0, 120))}</span></summary><pre class="tool-input"></pre><pre class="tool-output"></pre>`;
-    details.querySelector('.tool-input').textContent = input || '';
-    chat.appendChild(details);
-    const rec = { node: details, input: details.querySelector('.tool-input'), output: details.querySelector('.tool-output') };
-    toolCards.set(key, rec);
-    scroll();
+    if (assistantRecords.has(key)) return assistantRecords.get(key);
+    const article = document.createElement('article');
+    article.className = 'turn turn-assistant';
+    article.innerHTML = `<div class="turn-meta">${agentGlyph(run.agent || session?.agent, 'small')}<span>${esc(agent.label)}</span><time>${esc(fmtStamp(new Date()))}</time></div><div class="turn-body md"></div>`;
+    messagesEl.appendChild(article);
+    const rec = { node: article, body: article.querySelector('.turn-body'), raw: '', timer: null, rendered: '' };
+    assistantRecords.set(key, rec);
     return rec;
   };
-  const loadHistory = async () => {
-    if (!run.session_id) return;
-    if (chat.querySelector('.chat-msg, .tool')) return;
-    try {
-      const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
-      const total = head.total || 0;
-      if (!total) return;
-      const limit = Math.min(500, total);
-      const offset = Math.max(0, total - limit);
-      const tr = total > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
-      if (chat.querySelector('.chat-msg, .tool')) return;
-      if (total > limit) {
-        const noteNode = document.createElement('div');
-        noteNode.className = 'notice info small';
-        noteNode.textContent = `Showing the latest ${limit} of ${total} messages from the native session.`;
-        chat.appendChild(noteNode);
-      }
-      let index = 0;
-      for (const message of tr.messages || []) {
-        const key = `history-${index++}`;
-        if (message.kind === 'tool_call' || message.kind === 'tool_result') {
-          const rec = toolCard(key, message.tool_name || 'tool', message.tool_input || '');
-          if (message.tool_output) rec.output.textContent = message.tool_output;
-          rec.node.querySelector('summary').innerHTML = `<strong>${esc(message.tool_name || 'tool')}</strong>`;
-        } else if (message.role === 'user') {
-          const text = message.text || '';
-          if (!/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(text)) {
-            appendUser(text);
-          }
-        } else if ((message.text || '').trim()) {
-          appendAssistantText(key, message.text, true);
-        }
-      }
-      scroll();
-    } catch { /* history is optional; live events still work */ }
-  };
-  setTimeout(loadHistory, 900);
 
-  const showApproval = (ev) => {    const resources = (ev.resources || []).join('\n');
-    banner.innerHTML = `<div class="approval-card">
-      <div class="split"><strong>Approval needed</strong><span class="badge waiting_for_input">${esc(ev.action || 'permission')}</span></div>
-      <pre>${esc(resources || ev.text || '')}</pre>
-      <div class="split"><button class="btn primary small" id="approve-once">Allow once</button><button class="btn danger small" id="deny-once">Deny</button></div>
-    </div>`;
-    document.getElementById('approve-once').onclick = () => {
-      wsSend({ type: 'approval', run_id: id, approval_id: ev.approval_id, decision: 'once' });
-      banner.innerHTML = '';
+  const renderAssistant = (rec, immediate = false) => {
+    const paint = () => {
+      if (rec.rendered === rec.raw) return;
+      rec.rendered = rec.raw;
+      rec.body.innerHTML = renderMarkdown(rec.raw);
+      scrollBottom();
     };
-    document.getElementById('deny-once').onclick = () => {
-      wsSend({ type: 'approval', run_id: id, approval_id: ev.approval_id, decision: 'reject' });
-      banner.innerHTML = '';
-    };
-    note.textContent = 'Waiting for your approval';
-    scroll();
+    if (immediate) {
+      clearTimeout(rec.timer);
+      paint();
+      return;
+    }
+    if (rec.timer) return;
+    rec.timer = setTimeout(() => {
+      rec.timer = null;
+      paint();
+    }, 70);
   };
-  const handleEvent = (ev) => {
-    if (!ev || (ev.seq && ev.seq <= lastSeq)) return;
-    if (ev.seq) lastSeq = Math.max(lastSeq, ev.seq);
-    switch (ev.type) {
+
+  const appendAssistantText = (messageID, text, replace = false) => {
+    const rec = assistantRecord(messageID);
+    if (replace && text) rec.raw = text;
+    else if (text) rec.raw += text;
+    renderAssistant(rec, replace);
+  };
+
+  const updateTool = (callID, name, input, output, status) => {
+    const key = callID || ('tool-' + toolRecords.size);
+    let rec = toolRecords.get(key);
+    if (!rec) {
+      rec = { name: name || 'tool', input: input || '', output: '', status: 'running', node: null };
+      toolRecords.set(key, rec);
+    }
+    if (name) rec.name = name;
+    if (input !== undefined) rec.input = input || '';
+    if (output !== undefined) rec.output = output || '';
+    if (status) rec.status = status;
+    const described = describeTool(rec.name, rec.input, rec.output);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = toolCardHtml(described, rec.status);
+    const node = wrapper.firstElementChild;
+    if (rec.node) {
+      node.open = rec.node.open || rec.status === 'error';
+      rec.node.replaceWith(node);
+    } else {
+      messagesEl.appendChild(node);
+    }
+    rec.node = node;
+    scrollBottom();
+  };
+
+  const updateReasoning = (messageID, text) => {
+    if (!text) return;
+    const key = messageID || 'reasoning';
+    let rec = reasoningRecords.get(key);
+    if (!rec) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = reasoningHtml(text);
+      const node = wrapper.firstElementChild;
+      messagesEl.appendChild(node);
+      rec = { node, raw: text, timer: null };
+      reasoningRecords.set(key, rec);
+    } else {
+      rec.raw += text;
+      if (rec.timer) return;
+      rec.timer = setTimeout(() => {
+        rec.timer = null;
+        rec.node.querySelector('.reasoning-body').innerHTML = renderMarkdown(rec.raw);
+        scrollBottom();
+      }, 80);
+    }
+  };
+
+  const showApproval = (event) => {
+    const resources = (event.resources || []).join('\n');
+    const card = document.createElement('div');
+    card.className = 'approval-card';
+    card.innerHTML = `
+      <div class="approval-head">${svgIcon('alert', 16)}<strong>Approval required</strong><span class="badge waiting_for_input">${esc(event.action || 'permission')}</span></div>
+      ${resources || event.text ? `<pre>${esc(resources || event.text)}</pre>` : ''}
+      <div class="approval-actions"><button class="btn small primary" data-approval="once">Allow once</button><button class="btn small danger" data-approval="reject">Deny</button></div>`;
+    card.querySelectorAll('[data-approval]').forEach((button) => button.addEventListener('click', () => {
+      wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision: button.dataset.approval });
+      card.remove();
+      noteText('Approval sent');
+    }));
+    approval.appendChild(card);
+    autoScroll = true;
+    scrollBottom(true);
+    noteText('Waiting for your approval');
+    setState('waiting_for_input');
+  };
+
+  const noteText = (text, live = false) => {
+    note.innerHTML = `<span class="connection-dot ${live ? 'live' : ''}"></span>${esc(text)}`;
+  };
+
+  const appendError = (text) => {
+    const node = document.createElement('div');
+    node.className = 'chat-error';
+    node.innerHTML = `${svgIcon('alert', 15)}<div><strong>Run error</strong><pre>${esc(text)}</pre></div>`;
+    messagesEl.appendChild(node);
+    scrollBottom(true);
+  };
+
+  const handleEvent = (event) => {
+    if (!event || (event.seq && event.seq <= lastSeq)) return;
+    if (event.seq) lastSeq = Math.max(lastSeq, event.seq);
+    switch (event.type) {
       case 'message.started':
-        currentAssistant = ev.message_id || currentAssistant;
-        assistantBody(ev.message_id);
+        assistantRecord(event.message_id);
         break;
       case 'message.delta':
-        currentAssistant = ev.message_id || currentAssistant;
-        appendAssistantText(ev.message_id, ev.text || '');
+        appendAssistantText(event.message_id, event.text || '');
         break;
-      case 'message.completed':
-        appendAssistantText(ev.message_id, ev.text || '', true);
+      case 'message.completed': {
+        const key = event.message_id || 'assistant';
+        if (completedMessages.has(key)) break;
+        completedMessages.add(key);
+        appendAssistantText(event.message_id, event.text || '', true);
+        renderAssistant(assistantRecord(event.message_id), true);
         break;
+      }
       case 'reasoning':
-        if (ev.text) {
-          const details = document.createElement('details');
-          details.className = 'tool chat-tool';
-          details.innerHTML = `<summary><strong>reasoning</strong></summary><pre></pre>`;
-          details.querySelector('pre').textContent = ev.text;
-          chat.appendChild(details);
-          scroll();
-        }
+        updateReasoning(event.message_id, event.text || '');
         break;
-      case 'tool.started': {
-        const rec = toolCard(ev.call_id, ev.tool_name, ev.tool_input);
-        if (ev.tool_input) rec.input.textContent = ev.tool_input;
+      case 'tool.started':
+        updateTool(event.call_id, event.tool_name, event.tool_input, undefined, 'running');
         break;
-      }
-      case 'tool.input': {
-        const rec = toolCard(ev.call_id, ev.tool_name, '');
-        rec.input.textContent = ev.tool_input || '';
+      case 'tool.input':
+        updateTool(event.call_id, undefined, event.tool_input, undefined, 'running');
         break;
-      }
-      case 'tool.completed': {
-        const rec = toolCard(ev.call_id, 'tool', '');
-        rec.output.textContent = ev.error ? ('error: ' + ev.error) : (ev.tool_output || '');
-        rec.node.querySelector('summary').innerHTML = `<strong>${esc(ev.error ? 'tool failed' : 'tool completed')}</strong>`;
+      case 'tool.completed':
+        updateTool(event.call_id, undefined, undefined, event.error ? `error: ${event.error}` : (event.tool_output || ''), event.error ? 'error' : 'done');
         break;
-      }
       case 'approval.requested':
-        showApproval(ev);
+        showApproval(event);
         break;
       case 'approval.resolved':
-        banner.innerHTML = '';
-        note.textContent = 'Approval resolved: ' + (ev.decision || '');
+        approval.innerHTML = '';
+        noteText(`Approval ${event.decision || 'resolved'}`, true);
         break;
       case 'run.state':
-        setState(ev.state);
-        note.textContent = ev.state === 'idle' ? 'Agent is idle — you can send another prompt.' : `state: ${ev.state}`;
+        setState(event.state);
+        noteText(event.state === 'idle' ? 'Idle — ready for your next message' : `Agent ${event.state.replaceAll('_', ' ')}`, event.state === 'running');
         break;
       case 'run.error':
         setState('failed');
-        note.textContent = ev.error || 'run failed';
+        noteText(event.error || 'run failed');
+        appendError(event.error || 'run failed');
         break;
     }
   };
@@ -1308,28 +2248,99 @@ async function pageStructuredRun(id, run) {
   const handler = (msg) => {
     if (msg.run_id !== id && msg.type !== 'ready') return;
     if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
-    if (msg.type === 'run.state') setState(msg.state);
+    if (msg.type === 'run.state') {
+      setState(msg.state);
+      noteText(msg.state === 'idle' ? 'Idle — ready for your next message' : `Agent ${msg.state.replaceAll('_', ' ')}`, msg.state === 'running');
+    }
     if (msg.type === 'run.exit') {
       setState(msg.state || 'exited');
-      note.textContent = msg.message || 'run exited';
+      noteText(msg.message || 'Run exited');
     }
     if (msg.type === 'error') toast(msg.error || 'error', true);
   };
   state.wsHandlers.add(handler);
+
   const sendSubscribe = () => {
-    if (wsSend({ type: 'subscribe', run_id: id, last_seq: lastSeq })) subscribedGen = state.wsGen;
-  };
-  sendSubscribe();
-  const timer = setInterval(() => {
-    if (!state.me) { clearInterval(timer); return; }
-    if (state.ws?.readyState === WebSocket.OPEN) {
-      if (subscribedGen !== state.wsGen) sendSubscribe();
-      note.textContent = note.textContent === 'Connecting...' ? 'Connected. Send a prompt.' : note.textContent;
+    const last = skipReplay ? Number.MAX_SAFE_INTEGER : Math.max(lastSeq, initialCursor);
+    if (wsSend({ type: 'subscribe', run_id: id, last_seq: last })) {
+      subscribedGen = state.wsGen;
+      skipReplay = false;
     }
-  }, 500);
+  };
 
-  api(`/runs/${id}/lease`, { method: 'POST' }).catch((err) => { note.textContent = 'Read-only: ' + err.message; });
+  const loadEarlier = async () => {
+    if (!historyOffset) return;
+    const before = chat.scrollHeight;
+    const top = chat.scrollTop;
+    const start = Math.max(0, historyOffset - 120);
+    const tr = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${start}&limit=${historyOffset - start}`);
+    if (tr.messages?.length) {
+      messagesEl.insertAdjacentHTML('afterbegin', renderTranscriptMessages(tr.messages, run.agent || session?.agent));
+      chat.scrollTop = top + (chat.scrollHeight - before);
+    }
+    historyOffset = start;
+    historyTop.innerHTML = historyOffset > 0
+      ? `<button class="btn small ghost history-button" id="load-earlier">Load earlier messages (${historyOffset.toLocaleString()} remaining)</button>`
+      : '';
+    document.getElementById('load-earlier')?.addEventListener('click', () => loadEarlier().catch((err) => toast(err.message, true)));
+  };
 
+  const loadHistory = async () => {
+    if (!run.session_id) return;
+    try {
+      const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
+      historyTotal = head.total || 0;
+      if (!historyTotal) return;
+      const limit = Math.min(200, historyTotal);
+      const offset = Math.max(0, historyTotal - limit);
+      const tr = historyTotal > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
+      historyOffset = offset;
+      messagesEl.innerHTML = renderTranscriptMessages((tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')), run.agent || session?.agent);
+      historyTop.innerHTML = offset > 0
+        ? `<button class="btn small ghost history-button" id="load-earlier">Load earlier messages (${offset.toLocaleString()} remaining)</button>`
+        : '';
+      document.getElementById('load-earlier')?.addEventListener('click', () => loadEarlier().catch((err) => toast(err.message, true)));
+      autoScroll = true;
+      scrollBottom(true);
+    } catch { /* history is optional */ }
+  };
+
+  api(`/runs/${id}/lease`, { method: 'POST' }).then(() => {
+    noteText('You have control of this run', true);
+  }).catch((err) => {
+    noteText('Read-only: ' + err.message);
+    textarea.disabled = true;
+    sendButton.disabled = true;
+  });
+
+  document.getElementById('stop-run').addEventListener('click', async () => {
+    try { await api(`/runs/${id}/stop`, { method: 'POST' }); toast('Stopping run'); }
+    catch (err) { toast(err.message, true); }
+  });
+  stopButton.addEventListener('click', () => {
+    wsSend({ type: 'interrupt', run_id: id });
+    noteText('Interrupt requested');
+  });
+
+  const draft = storeGet(draftKey(id), '');
+  if (draft) textarea.value = draft;
+  const autosize = () => {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(220, textarea.scrollHeight)}px`;
+  };
+  autosize();
+  textarea.addEventListener('input', () => {
+    autosize();
+    storeSet(draftKey(id), textarea.value);
+  });
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  textarea.addEventListener('keydown', (event) => {
+    if (event.isComposing) return;
+    if (event.key === 'Enter' && !event.shiftKey && (!coarsePointer || event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const text = textarea.value.trim();
@@ -1340,22 +2351,57 @@ async function pageStructuredRun(id, run) {
     }
     appendUser(text);
     textarea.value = '';
+    storeSet(draftKey(id), '');
+    autosize();
+    autoScroll = true;
     setState('running');
+    noteText('Agent is working', true);
+    scrollBottom(true);
   });
-  textarea.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      form.requestSubmit();
+
+  if (session) {
+    document.getElementById('context-pin').addEventListener('click', async () => {
+      const on = !state.favorites.has(session.id);
+      try {
+        await api(`/sessions/${session.id}/favorite`, { method: on ? 'PUT' : 'DELETE' });
+        if (on) state.favorites.add(session.id); else state.favorites.delete(session.id);
+        document.getElementById('context-pin').innerHTML = `${svgIcon('star')} ${on ? 'Unpin session' : 'Pin session'}`;
+        loadSidebar().catch(() => {});
+      } catch (err) { toast(err.message, true); }
+    });
+    document.getElementById('context-terminal').addEventListener('click', () => startRun(session, false, 'terminal'));
+  }
+  const loadGit = async () => {
+    if (!session) return;
+    const box = document.getElementById('context-git');
+    box.innerHTML = '<div class="empty compact"><span class="spinner"></span></div>';
+    try {
+      const g = await api(`/sessions/${session.id}/git`);
+      box.innerHTML = `
+        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
+        ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
+        <pre class="git-status">${esc(g.status?.trim() || 'Clean working tree')}</pre>
+        ${g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : ''}
+        ${g.diff ? `<details class="git-diff"><summary>Show diff</summary><div class="md-code diff-view"><div class="md-code-head"><span class="md-code-lang">diff</span><button class="md-copy" type="button">Copy</button></div><pre><code>${highlightCode(g.diff, 'diff')}</code></pre></div></details>` : ''}`;
+    } catch (err) {
+      box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><button class="btn small block mt-1" id="context-git-load">Try again</button>`;
     }
+  };
+  document.getElementById('context-git').addEventListener('click', (event) => {
+    if (event.target.closest('#context-git-load') || event.target.closest('#git-refresh')) loadGit();
   });
-  document.getElementById('interrupt-run').addEventListener('click', () => {
-    wsSend({ type: 'interrupt', run_id: id });
-    note.textContent = 'Interrupt requested';
-  });
-  document.getElementById('stop-run').addEventListener('click', async () => {
-    try { await api(`/runs/${id}/stop`, { method: 'POST' }); toast('Stopping run'); }
-    catch (err) { toast(err.message, true); }
-  });
+
+  await loadHistory().catch(() => {});
+  sendSubscribe();
+  const timer = setInterval(() => {
+    if (!state.me) { clearInterval(timer); return; }
+    if (state.ws?.readyState === WebSocket.OPEN) {
+      if (subscribedGen !== state.wsGen) sendSubscribe();
+      if (note.textContent.includes('Connecting')) noteText('Connected. Send a message.');
+    } else {
+      noteText('Reconnecting…');
+    }
+  }, 800);
 
   state.pageCleanup = () => {
     clearInterval(timer);
@@ -1363,38 +2409,85 @@ async function pageStructuredRun(id, run) {
   };
   textarea.focus();
 }
-
 async function pageRuns() {
   renderShell('runs');
-  const view = setPage('Active runs', 'Live terminal and structured runs across every host you can see.', '<a class="btn small" href="#/sessions">All sessions</a>');
-  view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const view = setPage('Control room', 'All active terminal and structured runs across your machines.', '<button class="btn primary small" id="runs-new">New session</button><a class="btn small" href="#/sessions">All sessions</a>');
+  view.innerHTML = `
+    <div class="control-summary" id="run-summary"></div>
+    <div class="filterbar compact">
+      <div class="segmented" id="run-filter" role="group" aria-label="Filter runs">
+        <button class="segment active" data-run-filter="all">All</button>
+        <button class="segment" data-run-filter="running">Running</button>
+        <button class="segment" data-run-filter="waiting_for_input">Waiting</button>
+      </div>
+      <span class="filter-count" id="run-count"></span>
+    </div>
+    <div id="runs-list"><div class="empty"><span class="spinner"></span></div></div>`;
+  document.getElementById('runs-new').addEventListener('click', newSessionPicker);
+  let runs = [];
+  let filter = 'all';
   let timer = null;
-  const load = async () => {
-    const { runs } = await api('/runs');
+  const render = () => {
     const box = document.getElementById('runs-list');
     if (!box) return;
-    box.innerHTML = runs.length ? `<div class="list">${runs.map((run) => `
-      <div class="run-row">
-        <div class="run-main">
-          <div class="title">${esc(run.session_title || 'Untitled session')}</div>
-          <div class="sub"><span>${esc(run.host_name || run.host_id)}</span><span>${esc(run.mode)}</span><span>${esc(fmtRelative(run.started_at))}</span><span class="mono-small">run ${esc(shortId(run.id))}</span></div>
-        </div>
-        <div class="run-meta">${agentBadge(run.agent || 'agent')}${stateBadge(run.state)}</div>
-        <div class="run-actions">
+    const running = runs.filter((r) => r.state === 'running' || r.state === 'starting').length;
+    const waiting = runs.filter((r) => r.state === 'waiting_for_input').length;
+    document.getElementById('run-summary').innerHTML = `
+      <div><strong>${runs.length}</strong><span>open runs</span></div>
+      <div><strong>${running}</strong><span>working</span></div>
+      <div><strong class="${waiting ? 'warn' : ''}">${waiting}</strong><span>waiting for you</span></div>
+      <div><strong>${new Set(runs.map((r) => r.host_id)).size}</strong><span>hosts</span></div>`;
+    document.getElementById('run-count').textContent = `${runs.length} open run${runs.length === 1 ? '' : 's'}`;
+    const visible = runs.filter((r) => filter === 'all' || (filter === 'running' ? (r.state === 'running' || r.state === 'starting') : r.state === filter));
+    if (!visible.length) {
+      box.innerHTML = `<div class="card empty"><strong>${runs.length ? 'No runs in this state' : 'No active runs'}</strong>${runs.length ? 'Choose another filter.' : 'Resume a native session or start a new agent on an online host.'}</div>`;
+      return;
+    }
+    const shared = new Map();
+    for (const r of runs) {
+      if (!r.cwd) continue;
+      const key = `${r.host_id}|${cwdKey(r.cwd)}`;
+      shared.set(key, (shared.get(key) || 0) + 1);
+    }
+    box.innerHTML = `<div class="run-control-grid">${visible.map((run) => {
+      const key = `${run.host_id}|${cwdKey(run.cwd)}`;
+      return `<article class="run-control">
+        <div class="run-control-head">${agentGlyph(run.agent)}${stateBadge(run.state)}<span class="run-elapsed">${fmtDuration(run.started_at)}</span></div>
+        <a class="run-control-title" href="#/runs/${esc(run.id)}">${esc(run.session_title || 'Untitled session')}</a>
+        <div class="run-control-meta">${svgIcon('folder', 13)}${esc(projectName(run.cwd))}<span>·</span>${esc(run.host_name || run.host_id)}<span>·</span>${esc(run.mode)}</div>
+        ${(shared.get(key) || 0) > 1 ? `<div class="shared-warning">${svgIcon('alert', 13)} ${shared.get(key)} agents share this worktree</div>` : ''}
+        <div class="run-control-actions">
           <a class="btn small" href="#/runs/${esc(run.id)}">Open</a>
-          ${run.session_id ? `<a class="btn small" href="#/sessions/${esc(run.session_id)}">Session</a>` : ''}
+          ${run.session_id ? `<a class="btn small ghost" href="#/sessions/${esc(run.session_id)}">Transcript</a>` : ''}
+          <button class="btn small danger right" data-stop-run="${esc(run.id)}">Stop</button>
         </div>
-      </div>`).join('')}</div>` : '<div class="card empty"><strong>No active runs</strong>Resume a session or start a new one on an online host.</div>';
+      </article>`;
+    }).join('')}</div>`;
+    box.querySelectorAll('[data-stop-run]').forEach((button) => button.addEventListener('click', async () => {
+      try { await api(`/runs/${button.dataset.stopRun}/stop`, { method: 'POST' }); toast('Stopping run'); }
+      catch (err) { toast(err.message, true); }
+    }));
+  };
+  const load = async () => {
+    const data = await api('/runs');
+    runs = data.runs || [];
+    render();
   };
   const schedule = () => {
     clearTimeout(timer);
     timer = setTimeout(() => load().catch(() => {}), 400);
   };
+  document.getElementById('run-filter').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-run-filter]');
+    if (!button) return;
+    filter = button.dataset.runFilter;
+    document.querySelectorAll('#run-filter .segment').forEach((node) => node.classList.toggle('active', node === button));
+    render();
+  });
   state.wsHandlers.add((msg) => {
     if (msg.type === 'run.state' || msg.type === 'run.exit' || msg.type === 'run.error' ||
         msg.type === 'sessions.changed' || msg.type === 'host.updated') schedule();
   });
-  view.innerHTML = '<div id="runs-list"><div class="empty"><span class="spinner"></span></div></div>';
   await load();
 }
 
@@ -1403,39 +2496,43 @@ async function pageRun(id) {
   const run = await api(`/runs/${id}`);
   state.run = run;
   if (run.mode === 'structured') return pageStructuredRun(id, run);
-  setPage('Terminal', `run ${shortId(run.id)} · ${run.mode} mode`, `<button class="btn small danger" id="stop-run">Stop run</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
+  const title = run.session_title || 'Terminal';
+  openTab({ id, key: run.session_id || id, kind: 'run', href: `#/runs/${id}`, title, agent: run.agent });
+  rememberRecent({ id, title, agent: run.agent, hint: `${agentMeta(run.agent).label} · ${run.host_name || run.host_id} · terminal`, href: `#/runs/${id}` });
+  setPage(title, `Terminal · ${projectName(run.cwd)} · ${run.host_name || run.host_id}`, `<button class="btn small danger" id="stop-run">${svgIcon('stop')} Stop</button><a class="btn small ghost" href="#/sessions">Sessions</a>`);
   const view = document.getElementById('view');
   view.innerHTML = `
-    <div class="card mb-2">
-      <div class="run-head">
-        <div class="split wrap">${stateBadge(run.state)}<span class="mono-small">host ${esc(shortId(run.host_id))}</span><span class="mono-small">lease ${esc(shortId(run.lease_device_id || ''))}</span></div>
-        <div class="small muted" id="run-note">Connecting...</div>
+    <div class="terminal-page">
+      <div class="terminal-statusbar">
+        ${stateBadge(run.state)}
+        ${agentGlyph(run.agent)}
+        <span>${esc(agentMeta(run.agent).label)}</span><span class="chat-sep">·</span><span>${esc(projectName(run.cwd))}</span><span class="chat-sep">·</span><span>${esc(run.host_name || run.host_id)}</span>
+        <span class="chat-connection right" id="run-note"><span class="connection-dot"></span>Connecting…</span>
       </div>
-      <div class="notice info small">Resuming the agent's own TUI in a PTY. The session remains native; typing is only accepted from the controller lease.</div>
-    </div>
-    <div class="terminal-shell">
-      <div class="terminal-bar"><span class="dot" id="term-dot"></span><span id="term-status">disconnected</span><span class="right mono-small">${esc(run.id)}</span></div>
-      <div class="terminal" id="terminal"></div>
-      <div class="keybar">
-        <button class="btn small" data-key="esc">Esc</button>
-        <button class="btn small" data-key="tab">Tab</button>
-        <button class="btn small" data-key="ctrl-c">Ctrl-C</button>
-        <button class="btn small" data-key="up">↑</button>
-        <button class="btn small" data-key="down">↓</button>
-        <button class="btn small" data-key="left">←</button>
-        <button class="btn small" data-key="right">→</button>
-        <button class="btn small" data-key="enter">Enter</button>
+      <div class="terminal-shell">
+        <div class="terminal-bar"><span class="dot" id="term-dot"></span><span id="term-status">disconnected</span><span class="right mono-small">lease ${esc(shortId(run.lease_device_id || 'none'))} · ${esc(run.id)}</span></div>
+        <div class="terminal" id="terminal"></div>
+        <div class="keybar">
+          <button class="btn small" data-key="esc">Esc</button>
+          <button class="btn small" data-key="tab">Tab</button>
+          <button class="btn small" data-key="ctrl-c">Ctrl-C</button>
+          <button class="btn small" data-key="up">↑</button>
+          <button class="btn small" data-key="down">↓</button>
+          <button class="btn small" data-key="left">←</button>
+          <button class="btn small" data-key="right">→</button>
+          <button class="btn small" data-key="enter">Enter</button>
+        </div>
       </div>
     </div>`;
   const term = new Terminal({
     cursorBlink: true,
-    fontFamily: 'Cascadia Code, SFMono-Regular, Consolas, monospace',
+    fontFamily: 'JetBrains Mono, Cascadia Code, SFMono-Regular, Consolas, monospace',
     fontSize: 13,
-    lineHeight: 1.2,
+    lineHeight: 1.25,
     theme: {
-      background: '#05080b', foreground: '#dbe7f3', cursor: '#5eead4', selectionBackground: '#1e4a45',
-      black: '#0b0f14', red: '#fb7185', green: '#4ade80', yellow: '#fbbf24', blue: '#7dd3fc',
-      magenta: '#c4b5fd', cyan: '#5eead4', white: '#e8eef5',
+      background: '#0f1114', foreground: '#e7e8ea', cursor: '#7d8cf8', selectionBackground: '#2a3352',
+      black: '#15171b', red: '#e06c75', green: '#7bbf8a', yellow: '#d6b26f', blue: '#7d9df8',
+      magenta: '#b49af8', cyan: '#7cc7c7', white: '#e7e8ea',
     },
     scrollback: 10000,
     allowProposedApi: false,
@@ -1732,6 +2829,7 @@ async function enablePush() {
 }
 
 async function boot() {
+  installGlobalUi();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   const pairToken = new URLSearchParams(location.search).get('pair');
   if (pairToken) return renderDevicePair(pairToken);
@@ -1739,6 +2837,7 @@ async function boot() {
     const status = await api('/setup/status', { allow401: true });
     state.setupRequired = status.setup_required;
     state.hubName = status.hub_name || state.hubName;
+    state.version = status.version || state.version;
     if (status.setup_required) return renderAuth('setup');
     try {
       state.me = await api('/me', { allow401: true });

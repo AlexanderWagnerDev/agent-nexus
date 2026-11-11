@@ -99,10 +99,29 @@ async function run() {
     await page.waitForFunction(() => document.documentElement.dataset.themeMode === 'system');
     assert((await themeOf(page)).mode === 'system', 'system mode was not stored');
 
-    for (const route of ['#/', '#/hosts', '#/sessions', '#/runs', '#/search', '#/settings']) {
+    for (const route of ['#/', '#/projects', '#/hosts', '#/sessions', '#/runs', '#/search', '#/settings']) {
       await page.goto(`${baseURL}/${route}`, { waitUntil: 'networkidle' });
       assert(await page.locator('#view').count(), `view missing for ${route}`);
     }
+
+    await page.goto(`${baseURL}/#/`, { waitUntil: 'networkidle' });
+    await page.keyboard.press('Control+K');
+    await page.waitForSelector('#palette-input');
+    assert((await page.locator('.palette-row').count()) > 0, 'command palette has no actions');
+    await page.fill('#palette-input', 'settings');
+    await page.waitForTimeout(500);
+    assert((await page.locator('.palette-row').count()) > 0, 'command palette search returned nothing');
+    await page.keyboard.press('Escape');
+    assert(await page.locator('#palette-input').count() === 0, 'command palette did not close');
+
+    await page.click('#sidebar-toggle');
+    assert(await page.locator('#layout.sidebar-collapsed').count() === 1, 'sidebar did not collapse');
+    await page.click('#sidebar-toggle');
+
+    assert(await page.locator('#notif-toggle').count() === 1, 'notification button missing');
+    await page.click('#notif-toggle');
+    await page.waitForSelector('#notif-panel:not([hidden])');
+    await page.keyboard.press('Escape');
 
     const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const phone = await mobile.newPage();
@@ -112,6 +131,9 @@ async function run() {
     const overflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert(!overflow, 'mobile layout has horizontal overflow');
     assert(await phone.locator('.nav a[href="#/settings"]').isVisible(), 'settings navigation is not visible on mobile');
+    assert(await phone.locator('.nav a[href="#/hosts"]').isVisible(), 'hosts navigation is not visible on mobile');
+    await phone.goto(`${baseURL}/#/projects`, { waitUntil: 'networkidle' });
+    assert(await phone.locator('#view').count(), 'projects view missing on mobile');
     await desktop.close();
     await mobile.close();
     console.log('browser smoke test passed');
