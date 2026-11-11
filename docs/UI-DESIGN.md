@@ -145,8 +145,8 @@ tool output scroll inside their own containers.
   controls; only OpenCode and Codex implement the capability endpoints.
 - Agent catalogs can be large; the model selector groups by provider and offers
   a lightweight fuzzy filter without an extra dependency.
-- The Markdown renderer is intentionally small; footnotes, nested task lists and
-  complex tables may fall back to plain text.
+- The Markdown renderer supports GFM tables, footnotes and nested task lists.
+  Raw HTML remains escaped and is never interpreted.
 - No formal WCAG 2.2 AA audit has been performed. Semantic controls, labels,
   focus styles, reduced-motion handling and contrast were reviewed manually.
 - The renderer and tool formatting have unit tests; chat behavior is verified by

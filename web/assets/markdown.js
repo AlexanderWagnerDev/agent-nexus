@@ -123,36 +123,52 @@ function splitTableRow(line) {
   return value.split('|').map((cell) => cell.trim());
 }
 
-function renderTable(header, rows) {
-  const head = splitTableRow(header).map((cell) => `<th>${inline(cell)}</th>`).join('');
-  const body = rows.map((row) => `<tr>${splitTableRow(row).map((cell) => `<td>${inline(cell)}</td>`).join('')}</tr>`).join('');
+function renderTable(header, rows, defs = null) {
+  const head = splitTableRow(header).map((cell) => `<th>${inline(cell, defs)}</th>`).join('');
+  const body = rows.map((row) => `<tr>${splitTableRow(row).map((cell) => `<td>${inline(cell, defs)}</td>`).join('')}</tr>`).join('');
   return `<div class="table-wrap md-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-function renderList(lines, ordered) {
+function renderList(lines, ordered, defs = null) {
   const items = [];
+  let nested = [];
+  const flushNested = () => {
+    if (!nested.length || !items.length) { nested = []; return; }
+    const childOrdered = /^\s*\d+\.\s+/.test(nested[0]);
+    const child = renderList(nested, childOrdered, defs);
+    items[items.length - 1] = items[items.length - 1].replace(/<\/li>$/, `${child}</li>`);
+    nested = [];
+  };
   for (const line of lines) {
-    const match = ordered ? line.match(/^\s*\d+\.\s+(.*)$/) : line.match(/^\s*[-*+]\s+(.*)$/);
-    if (match) {
-      let text = match[1];
+    const marker = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+    if (marker) {
+      if (marker[1].length >= 2 && items.length) {
+        nested.push(line.replace(/^\s{2,}/, ''));
+        continue;
+      }
+      flushNested();
+      let text = marker[3];
       const task = text.match(/^\[( |x|X)\]\s+(.*)$/);
       items.push(task
-        ? `<li class="task"><span class="task-check">${task[1].toLowerCase() === 'x' ? 'x' : ''}</span>${inline(task[2])}</li>`
-        : `<li>${inline(text)}</li>`);
+        ? `<li class="task"><span class="task-check">${task[1].toLowerCase() === 'x' ? 'x' : ''}</span>${inline(task[2], defs)}</li>`
+        : `<li>${inline(text, defs)}</li>`);
+    } else if (nested.length) {
+      nested.push(line);
     } else if (items.length) {
-      items[items.length - 1] = items[items.length - 1].replace(/<\/li>$/, `<br>${inline(line.trim())}</li>`);
+      items[items.length - 1] = items[items.length - 1].replace(/<\/li>$/, `<br>${inline(line.trim(), defs)}</li>`);
     }
   }
+  flushNested();
   return ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`;
 }
 
-function renderBlocks(source) {
+function renderBlocks(source, defs = null) {
   const lines = String(source ?? '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let paragraph = [];
   const flush = () => {
     if (!paragraph.length) return;
-    out.push(`<p>${paragraph.map((line) => inline(line)).join('<br>')}</p>`);
+    out.push(`<p>${paragraph.map((line) => inline(line, defs)).join('<br>')}</p>`);
     paragraph = [];
   };
   for (let i = 0; i < lines.length; i += 1) {
@@ -174,7 +190,7 @@ function renderBlocks(source) {
     if (heading) {
       flush();
       const level = Math.min(4, heading[1].length);
-      out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      out.push(`<h${level}>${inline(heading[2], defs)}</h${level}>`);
       continue;
     }
     if (/^\s*(?:---+|\*\*\*+)\s*$/.test(line)) { flush(); out.push('<hr>'); continue; }
@@ -186,7 +202,7 @@ function renderBlocks(source) {
         i += 1;
       }
       i -= 1;
-      out.push(`<blockquote>${renderBlocks(quote.join('\n'))}</blockquote>`);
+      out.push(`<blockquote>${renderBlocks(quote.join('\n'), defs)}</blockquote>`);
       continue;
     }
     if (/^\s*[-*+]\s+/.test(line)) {
@@ -197,7 +213,7 @@ function renderBlocks(source) {
         i += 1;
       }
       i -= 1;
-      out.push(renderList(list, false));
+      out.push(renderList(list, false, defs));
       continue;
     }
     if (/^\s*\d+\.\s+/.test(line)) {
@@ -208,7 +224,7 @@ function renderBlocks(source) {
         i += 1;
       }
       i -= 1;
-      out.push(renderList(list, true));
+      out.push(renderList(list, true, defs));
       continue;
     }
     if (line.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
@@ -221,7 +237,7 @@ function renderBlocks(source) {
         i += 1;
       }
       i -= 1;
-      out.push(renderTable(header, rows));
+      out.push(renderTable(header, rows, defs));
       continue;
     }
     paragraph.push(line);
@@ -230,7 +246,7 @@ function renderBlocks(source) {
   return out.join('\n');
 }
 
-function inline(text) {
+function inline(text, defs = null) {
   let source = escapeHtml(text);
   const tokens = [];
   const stash = (html) => {
@@ -238,6 +254,11 @@ function inline(text) {
     return `\uE000${tokens.length - 1}\uE001`;
   };
   source = source.replace(/`([^`\n]+)`/g, (_match, code) => stash(`<code>${code}</code>`));
+  if (defs && defs.size) {
+    source = source.replace(/\[\^([A-Za-z0-9_.-]+)\]/g, (match, id) => defs.has(id)
+      ? stash(`<sup class="footnote-ref"><a href="#fn-${id}" id="fnref-${id}">${id}</a></sup>`)
+      : match);
+  }
   source = source.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, (_match, label, url) =>
     stash(`<a href="${url}" target="_blank" rel="noreferrer noopener">${label}</a>`));
   source = source.replace(/(^|[\s(])((?:https?:\/\/)[^\s<)]+)/g, (_match, lead, url) =>
@@ -251,5 +272,21 @@ function inline(text) {
 
 /** Render Markdown to safe HTML. */
 export function renderMarkdown(source) {
-  return renderBlocks(source);
+  const defs = new Map();
+  const body = [];
+  for (const line of String(source ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    const definition = line.match(/^\[\^([A-Za-z0-9_.-]+)\]:\s*(.*)$/);
+    if (definition) {
+      defs.set(definition[1], definition[2]);
+      continue;
+    }
+    body.push(line);
+  }
+  let html = renderBlocks(body.join('\n'), defs.size ? defs : null);
+  if (defs.size) {
+    const items = [...defs.entries()].map(([id, text]) =>
+      `<li id="fn-${id}">${inline(text, defs)} <a class="footnote-back" href="#fnref-${id}" aria-label="${t('Back to reference')}">&#8617;</a></li>`).join('');
+    html += `<section class="footnotes"><hr><ol>${items}</ol></section>`;
+  }
+  return html;
 }

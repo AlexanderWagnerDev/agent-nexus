@@ -42,7 +42,7 @@ tested versus what is still open.
   clean. Statement coverage is 53.1% in `internal/hub` and 50.4% in
   `internal/host`, including HTTP/WebSocket/RBAC/grant tests, a fake-hub host
   link with terminal runs, policy rejection, Codex JSON-RPC and Gemini search.
-- 24 JavaScript unit tests pass; the browser smoke test and the axe-core scan
+- 27 JavaScript unit tests pass; the browser smoke test and the axe-core scan
   pass on desktop and mobile in English and German.
 - Store benchmarks at 10,000 sessions: full snapshot replacement 1.42 s,
   listing 500 sessions 140 ms, project aggregation 197 ms.

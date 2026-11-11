@@ -663,6 +663,10 @@ Object.assign(de, {
   'The alpha has no release feed. Update checks resume after the first approved version.': 'Die Alpha hat keinen Release-Feed. Update-Prüfungen laufen nach der ersten freigegebenen Version wieder.',
 });
 
+Object.assign(de, {
+  'Back to reference': 'Zurück zur Referenz',
+});
+
 const supported = ['en', 'de'];
 let lang = 'en';
 

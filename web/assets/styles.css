@@ -748,7 +748,12 @@ td.mono, th.mono { font-family: var(--font-mono); font-size: 11px; }
 .md h4 { font-size: 15px; }
 .md ul, .md ol { margin: .4em 0 .75em; padding-left: 1.35em; }
 .md li { margin: .18em 0; }
-.md li.task { list-style: none; margin-left: -1.1em; display: flex; gap: 6px; align-items: flex-start; }
+.md li.task { list-style: none; margin-left: -1.1em; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+.md li.task > ul, .md li.task > ol { flex: 1 0 100%; margin: .25em 0 .2em 20px; }
+.md .footnotes { margin-top: 1.4em; color: var(--muted); font-size: 12.5px; }
+.md .footnotes ol { padding-left: 1.5em; }
+.md .footnote-ref a { text-decoration: none; font-size: 10px; padding: 0 1px; }
+.md .footnote-back { margin-left: 4px; text-decoration: none; }
 .task-check { width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 3px; display: inline-grid; place-items: center; font-size: 9px; color: var(--accent); margin-top: 4px; flex: 0 0 auto; }
 .md blockquote { margin: .7em 0; padding: .1em 0 .1em 12px; border-left: 2px solid var(--accent-line); color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }

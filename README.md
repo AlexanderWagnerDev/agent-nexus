@@ -84,7 +84,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
 | **Control room** | Live view of every open terminal/structured run with state, elapsed time, shared-worktree warnings and quick stop |
 | **Split workspace** | Two independent live chats side by side or stacked, resizable and persisted, with per-pane approvals and mobile stacking |
-| **Chat** | Streaming text, Markdown/GFM tables, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
+| **Chat** | Streaming text, Markdown/GFM tables, footnotes, nested task lists, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
 | **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, a searchable model picker with favorites/recent models, live reasoning/agent selectors and bounded attachments gated by real model capabilities |
 | **Search** | Federated transcript search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |

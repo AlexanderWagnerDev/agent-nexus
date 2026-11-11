@@ -55,6 +55,29 @@ test('escapes attribute-breaking quotes', () => {
   assert.equal(escapeHtml('" onmouseover="x'), '&quot; onmouseover=&quot;x');
 });
 
+test('renders footnotes with back references', () => {
+  const html = renderMarkdown('A claim.[^1]\n\n[^1]: The source with **detail**.');
+  assert.ok(html.includes('footnote-ref'));
+  assert.ok(html.includes('href="#fn-1"'));
+  assert.ok(html.includes('<section class="footnotes">'));
+  assert.ok(html.includes('<li id="fn-1">'));
+  assert.ok(html.includes('<strong>detail</strong>'));
+});
+
+test('footnote content is escaped', () => {
+  const html = renderMarkdown('x[^a]\n\n[^a]: <img src=x onerror=alert(1)>');
+  assert.ok(html.includes('&lt;img'));
+  assert.ok(!html.includes('<img'));
+});
+
+test('renders nested task lists', () => {
+  const html = renderMarkdown('- [ ] parent\n  - [x] child');
+  assert.ok(html.includes('class="task"'));
+  assert.ok(html.includes('child'));
+  assert.ok(html.includes('<ul><li class="task">'));
+  assert.ok(html.includes('task-check">x'));
+});
+
 test('parses JSON tool input and summarises a shell command', () => {
   const described = describeTool('bash', '{"command":"npm test","description":"Run tests"}');
   assert.equal(described.kind, 'terminal');
