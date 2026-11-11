@@ -43,10 +43,11 @@ sessions.
 - New screenshots must be generated from the synthetic demo hub in
   `web/e2e/demo/`. Existing screenshots are being replaced as the demo fixture
   grows.
-- **Git history:** earlier commits contain a personal display name and personal
-  email addresses in author/committer metadata. They are not in the current
-  files. A history rewrite is prepared but **not executed** because it changes
-  every commit SHA and requires separate maintainer approval. See
+- **Git history:** 13 commits carry a personal display name and 72 commits use a
+  personal email domain in author/committer metadata. Earlier commits also
+  contain screenshots from a real development machine. They are not in the
+  current tree. A history rewrite is prepared but **not executed** because it
+  changes every commit SHA and requires separate maintainer approval. See
   [HISTORY-REWRITE.md](HISTORY-REWRITE.md).
 
 ## Pre-publication checklist

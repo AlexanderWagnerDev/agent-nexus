@@ -4,6 +4,12 @@ A self-hosted control plane to discover, manage, and continue existing AI coding
 
 > **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging, hub-visible update status, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
+**No releases or tags are published during alpha.** All earlier pre-release
+tags and GitHub releases were withdrawn before the first public version was
+approved. The repository stays private, and nothing is tagged or released
+without the maintainer's explicit approval. See
+[docs/RELEASING.md](docs/RELEASING.md) for the locked procedure.
+
 ## Why AgentNexus?
 
 Developers increasingly run several terminal-based coding agents — Claude Code, Codex CLI, OpenCode, Gemini CLI and others — on several machines at once: a workstation, a laptop, a home server, a build box. Every agent keeps its own local session history in its own format, and every vendor offers (at most) its own single-agent remote access. Nobody gives you one place to answer:
