@@ -1,0 +1,48 @@
+name: Fuzz (manual and nightly)
+
+# Short fuzz runs are too slow for every pull request. This job is opt-in and
+# nightly; failures keep the generated corpus as an artifact for triage.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.target }})
+    runs-on: avrea-ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: ./internal/host, target: FuzzClaudeContent }
+          - { pkg: ./internal/host, target: FuzzCodexContent }
+          - { pkg: ./internal/host, target: FuzzGeminiText }
+          - { pkg: ./internal/host, target: FuzzOpenCodeSnippet }
+          - { pkg: ./internal/host, target: FuzzCodexRequestID }
+          - { pkg: ./internal/protocol, target: FuzzEnvelopeDecode }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run ${{ matrix.target }} for 30 seconds
+        run: go test ${{ matrix.pkg }} -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime=30s
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: fuzz-corpus-${{ matrix.target }}
+          path: |
+            internal/host/testdata/fuzz
+            internal/protocol/testdata/fuzz
+          retention-days: 14
+          if-no-files-found: ignore
