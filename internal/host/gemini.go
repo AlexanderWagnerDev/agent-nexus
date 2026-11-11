@@ -151,8 +151,49 @@ func (a *GeminiAdapter) Transcript(ctx context.Context, nativeID string, offset,
 	return protocol.Transcript{}, fmt.Errorf("gemini session %s not found", nativeID)
 }
 
-func (a *GeminiAdapter) Search(context.Context, string, int) ([]protocol.SearchHit, error) {
-	return nil, nil
+func (a *GeminiAdapter) Search(ctx context.Context, query string, limit int) ([]protocol.SearchHit, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return nil, nil
+	}
+	var hits []protocol.SearchHit
+	for _, path := range a.files() {
+		if ctx.Err() != nil {
+			return hits, ctx.Err()
+		}
+		if len(hits) >= limit {
+			break
+		}
+		s, err := a.readSession(path)
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var doc map[string]any
+		if json.Unmarshal(data, &doc) != nil {
+			continue
+		}
+		messages, _ := doc["messages"].([]any)
+		for _, raw := range messages {
+			m, _ := raw.(map[string]any)
+			text := geminiText(m["content"])
+			if text == "" || !strings.Contains(strings.ToLower(text), q) {
+				continue
+			}
+			hits = append(hits, protocol.SearchHit{
+				NativeID: s.NativeID, Agent: "gemini", Title: s.Title,
+				Snippet: searchSnippet(text, query), At: s.UpdatedAt,
+			})
+			break
+		}
+	}
+	return hits, nil
 }
 
 func (a *GeminiAdapter) BuildCommand(action Action) (Command, error) {

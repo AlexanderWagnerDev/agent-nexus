@@ -3,7 +3,6 @@ package host
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,16 +74,7 @@ func searchJSONL(ctx context.Context, root, agent, query string, limit int, extr
 			if strings.TrimSpace(text) == "" {
 				continue
 			}
-			idx := strings.Index(strings.ToLower(text), q)
-			start := idx - 80
-			if start < 0 {
-				start = 0
-			}
-			end := idx + len(query) + 120
-			if end > len(text) {
-				end = len(text)
-			}
-			snippet := strings.TrimSpace(strings.ReplaceAll(text[start:end], "\n", " "))
+			snippet := searchSnippet(text, query)
 			hits = append(hits, protocol.SearchHit{NativeID: nativeID, Agent: agent, Title: title, Snippet: snippet, At: ts})
 			if len(hits) >= limit {
 				return filepath.SkipAll
@@ -93,6 +83,24 @@ func searchJSONL(ctx context.Context, root, agent, query string, limit int, extr
 		return nil
 	})
 	return hits, err
+}
+
+// searchSnippet returns a compact window around the first case-insensitive
+// match. It is shared by the JSONL and document-based search adapters.
+func searchSnippet(text, query string) string {
+	idx := strings.Index(strings.ToLower(text), strings.ToLower(query))
+	if idx < 0 {
+		idx = 0
+	}
+	start := idx - 80
+	if start < 0 {
+		start = 0
+	}
+	end := idx + len(query) + 120
+	if end > len(text) {
+		end = len(text)
+	}
+	return strings.TrimSpace(strings.ReplaceAll(text[start:end], "\n", " "))
 }
 
 func sessionIDFromFilename(path string) string {
@@ -108,11 +116,6 @@ func sessionIDFromFilename(path string) string {
 		}
 	}
 	return name
-}
-
-func jsonString(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
 }
 
 func sliceContains(items []string, want string) bool {
