@@ -39,9 +39,12 @@ tested versus what is still open.
 ### Alpha verification (2026-11-11)
 
 - Go unit and integration tests pass; `go vet`, `gofmt` and staticcheck are
-  clean. Statement coverage is 53.1% in `internal/hub` and 50.4% in
-  `internal/host`, including HTTP/WebSocket/RBAC/grant tests, a fake-hub host
-  link with terminal runs, policy rejection, Codex JSON-RPC and Gemini search.
+  clean. Statement coverage is 68.8% in `internal/hub` and 66.7% in
+  `internal/host`. Coverage includes HTTP/WebSocket/RBAC/grant tests, a scripted
+  fake host that answers transcript, search, git, export and run requests, a
+  fake-hub host link with terminal runs, a re-executed fake OpenCode server,
+  Codex app-server and ACP agent for structured starts, policy rejection, Codex
+  JSON-RPC and Gemini search.
 - 27 JavaScript unit tests pass; the browser smoke test and the axe-core scan
   pass on desktop and mobile in English and German.
 - Store benchmarks at 10,000 sessions: full snapshot replacement 1.42 s,

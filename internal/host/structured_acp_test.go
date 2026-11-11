@@ -117,3 +117,146 @@ func TestACPRunApprovalInterruptAndStop(t *testing.T) {
 		t.Fatalf("empty acp text: %q", got)
 	}
 }
+
+func newACPRunForTest(opts ...func(*ACPRun)) *ACPRun {
+	r := &ACPRun{
+		id: "run-1", sessionID: "session-1",
+		daemon:    &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+		approvals: map[string]chan string{}, state: protocol.StateIdle,
+	}
+	r.cancel = func() {}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+func TestACPSessionUpdateEvents(t *testing.T) {
+	r := newACPRunForTest()
+	messageID := "m1"
+	chunk := acp.SessionUpdateAgentMessageChunk{Content: acp.TextBlock("hello"), MessageId: &messageID}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{AgentMessageChunk: &chunk}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{AgentMessageChunk: &chunk}}); err != nil {
+		t.Fatal(err)
+	}
+	empty := acp.SessionUpdateAgentMessageChunk{Content: acp.ContentBlock{}}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{AgentMessageChunk: &empty}}); err != nil {
+		t.Fatal(err)
+	}
+	thought := acp.SessionUpdateAgentThoughtChunk{Content: acp.TextBlock("thinking")}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{AgentThoughtChunk: &thought}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.thought.String(); got != "thinking" {
+		t.Fatalf("thought: %q", got)
+	}
+	title := "Run tests"
+	tool := acp.SessionUpdateToolCall{ToolCallId: "c1", Title: title, RawInput: map[string]any{"command": "go test"}}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCall: &tool}}); err != nil {
+		t.Fatal(err)
+	}
+	completed := acp.ToolCallStatusCompleted
+	update := acp.SessionToolCallUpdate{ToolCallId: "c1", Status: &completed, RawOutput: "ok"}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
+		t.Fatal(err)
+	}
+	failed := acp.ToolCallStatusFailed
+	update = acp.SessionToolCallUpdate{ToolCallId: "c2", Status: &failed, Content: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock("boom"))}}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
+		t.Fatal(err)
+	}
+	update = acp.SessionToolCallUpdate{ToolCallId: "c3", RawInput: map[string]any{"path": "x"}}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestACPRequestPermissionApprovedAndCancelled(t *testing.T) {
+	r := newACPRunForTest()
+	title := "Write file"
+	request := acp.RequestPermissionRequest{
+		SessionId: "session-1",
+		ToolCall:  acp.ToolCallUpdate{ToolCallId: "c1", Title: &title, RawInput: map[string]any{"path": "a.txt"}},
+		Options: []acp.PermissionOption{
+			{OptionId: "yes", Kind: acp.PermissionOptionKindAllowOnce},
+			{OptionId: "no", Kind: acp.PermissionOptionKindRejectOnce},
+		},
+	}
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		r.mu.Lock()
+		var id string
+		for key := range r.approvals {
+			id = key
+		}
+		r.mu.Unlock()
+		if id != "" {
+			_ = r.ReplyApproval(id, "once")
+		}
+	}()
+	resp, err := r.RequestPermission(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Outcome.Selected == nil || string(resp.Outcome.Selected.OptionId) != "yes" {
+		t.Fatalf("approved outcome: %+v", resp.Outcome)
+	}
+
+	request.Options = nil
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	resp, err = r.RequestPermission(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Outcome.Cancelled == nil {
+		t.Fatalf("cancelled outcome: %+v", resp.Outcome)
+	}
+}
+
+func TestACPPromptInterruptAndFileGuards(t *testing.T) {
+	r := newACPRunForTest()
+	if err := r.Prompt("hello", &protocol.PromptOptions{Model: "m"}); err == nil {
+		t.Fatal("ACP options were accepted")
+	}
+	r.closed = true
+	if err := r.Prompt("hello", nil); err == nil {
+		t.Fatal("closed run accepted a prompt")
+	}
+	if err := r.Interrupt(); err == nil {
+		t.Fatal("closed run accepted an interrupt")
+	}
+	r.closed = false
+	r.active = true
+	if err := r.Prompt("hello", nil); err == nil {
+		t.Fatal("busy run accepted a prompt")
+	}
+	r.active = false
+	r.conn = nil
+	if _, err := r.ReadTextFile(context.Background(), acp.ReadTextFileRequest{}); err == nil {
+		t.Fatal("read text file was supported")
+	}
+	if _, err := r.WriteTextFile(context.Background(), acp.WriteTextFileRequest{}); err == nil {
+		t.Fatal("write text file was supported")
+	}
+	if _, err := r.CreateTerminal(context.Background(), acp.CreateTerminalRequest{}); err == nil {
+		t.Fatal("create terminal was supported")
+	}
+	if _, err := r.KillTerminal(context.Background(), acp.KillTerminalRequest{}); err == nil {
+		t.Fatal("kill terminal was supported")
+	}
+	if _, err := r.TerminalOutput(context.Background(), acp.TerminalOutputRequest{}); err == nil {
+		t.Fatal("terminal output was supported")
+	}
+	if _, err := r.ReleaseTerminal(context.Background(), acp.ReleaseTerminalRequest{}); err == nil {
+		t.Fatal("release terminal was supported")
+	}
+	if _, err := r.WaitForTerminalExit(context.Background(), acp.WaitForTerminalExitRequest{}); err == nil {
+		t.Fatal("wait for terminal exit was supported")
+	}
+}

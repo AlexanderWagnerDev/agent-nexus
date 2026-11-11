@@ -30,7 +30,7 @@ This document is the single source of truth for **what** AgentNexus must do (req
   scripted runs, host update staging, split-view, changes-page, model-picker and
   diff browser QA, transcript export against a 1,000+ message session, an
   online backup restore, and 10,000-session store benchmarks. Statement
-  coverage is 53.1% in `internal/hub` and 50.4% in `internal/host`.
+  coverage is 68.8% in `internal/hub` and 66.7% in `internal/host`.
 - **Measured here (Windows, AMD EPYC 7543, SQLite):** full replacement of
   10,000 session rows 1.42 s; listing 500 of 10,000 sessions 140 ms; project
   aggregation over 10,000 sessions 197 ms. These are store-level measurements,

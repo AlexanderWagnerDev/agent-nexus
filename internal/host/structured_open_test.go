@@ -248,3 +248,39 @@ func TestStructuredHandleEvent(t *testing.T) {
 	}
 	run.Stop()
 }
+
+func TestStructuredStreamEvents(t *testing.T) {
+	t.Setenv("APPDATA", t.TempDir())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user, pass, ok := r.BasicAuth(); !ok || user != "opencode" || pass != "secret" {
+			t.Errorf("basic auth: %q %q %v", user, pass, ok)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: message\n")
+		_, _ = io.WriteString(w, "data: not-json\n\n")
+		_, _ = io.WriteString(w, `data: {"type":"session.text.ended","data":{"sessionID":"s1","assistantMessageID":"m1","text":"hello"}}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"type":"session.status","data":{"sessionID":"s1","status":{"type":"busy"}}}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"type":"ignored","data":{"sessionID":"other","text":"nope"}}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"type":"bad","data":"not-an-object"}`+"\n\n")
+	}))
+	defer server.Close()
+	run, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {})
+	run.baseURL = server.URL
+	run.password = "secret"
+	run.id = "run-stream"
+	run.sessionID = "s1"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	run.streamEvents(ctx)
+	if got := run.currentState(); got != protocol.StateRunning {
+		t.Fatalf("state after stream: %q", got)
+	}
+
+	broken, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {})
+	broken.baseURL = "http://127.0.0.1:1"
+	broken.password = "secret"
+	broken.streamEvents(ctx)
+	if broken.currentState() != protocol.StateIdle {
+		t.Fatalf("broken stream changed state: %q", broken.currentState())
+	}
+}
