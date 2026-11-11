@@ -48,6 +48,9 @@ sessions.
   release-note blobs were removed from all commits; the synthetic screenshots
   were re-added in one commit. No real name or personal email is reachable in
   the published history.
+- **GitHub retention:** a force-push does not immediately erase server-side
+  objects. Old commits can still be fetched by SHA until GitHub Support purges
+  them. This must happen before the repository becomes public.
 
 ## Pre-publication checklist
 

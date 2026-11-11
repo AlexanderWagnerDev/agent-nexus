@@ -51,7 +51,9 @@ The exact values are intentionally **not** written down in this file.
 
 - Old commit SHAs no longer resolve in the repository. External links to them
   are dead, which is expected.
-- GitHub may retain unreachable objects for a while. GitHub Support can purge
-  cached views if required.
+- GitHub may retain unreachable objects and still serve old commits by SHA for
+  a while after a force-push. This was observed through the API. Before the
+  repository is made public, ask GitHub Support to purge unreachable objects
+  and cached views, and provide the old `main` SHA plus the rewritten SHA.
 - The mirror backup must stay offline and private until the maintainer confirms
   the result, then be deleted.
