@@ -45,11 +45,6 @@ type StructuredRun struct {
 	state     string
 }
 
-type toolState struct {
-	name  string
-	input string
-}
-
 func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpec) {
 	fail := func(msg string) {
 		d.log.Warn("structured run rejected", "run_id", spec.RunID, "error", msg)

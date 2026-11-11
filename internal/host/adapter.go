@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -33,19 +32,4 @@ type Adapter interface {
 	Transcript(ctx context.Context, nativeID string, offset, limit int) (protocol.Transcript, error)
 	Search(ctx context.Context, query string, limit int) ([]protocol.SearchHit, error)
 	BuildCommand(Action) (Command, error)
-}
-
-// baseAdapter provides a no-op search so adapters only implement what they
-// support. Search degrades gracefully.
-type baseAdapter struct{}
-
-func (baseAdapter) Search(context.Context, string, int) ([]protocol.SearchHit, error) {
-	return nil, nil
-}
-
-func clampTime(t time.Time) time.Time {
-	if t.IsZero() {
-		return time.Now().UTC()
-	}
-	return t.UTC()
 }

@@ -266,11 +266,6 @@ func commandFor(path string, args []string) (string, []string) {
 	return path, args
 }
 
-func execFor(path string, args ...string) *exec.Cmd {
-	name, argv := commandFor(path, args)
-	return exec.Command(name, argv...)
-}
-
 func versionOf(path string, timeout time.Duration) string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

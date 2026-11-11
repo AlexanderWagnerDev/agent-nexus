@@ -17,12 +17,7 @@ test-race:
 lint:
 	gofmt -l .
 	go vet ./...
-	node --check web/assets/app.js
-	node --check web/assets/i18n.js
-	node --check web/assets/markdown.js
-	node --check web/assets/chat-format.js
-	node --check web/assets/diff.js
-	node --check web/assets/theme.js
+	node web/scripts/check-syntax.mjs
 
 web-test:
 	cd web && npm test

@@ -1015,16 +1015,6 @@ func mustJSON(v any) []byte {
 	return b
 }
 
-func trimScheme(origin string) string {
-	if i := len("http://"); len(origin) > i && origin[:i] == "http://" {
-		return origin[i:]
-	}
-	if i := len("https://"); len(origin) > i && origin[:i] == "https://" {
-		return origin[i:]
-	}
-	return origin
-}
-
 func major(v string) string {
 	for i, c := range v {
 		if c == '.' {

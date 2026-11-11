@@ -31,12 +31,6 @@ const (
 	ctxStepUp
 )
 
-type authInfo struct {
-	User   User
-	Device Device
-	Token  string
-}
-
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(cookieName)
