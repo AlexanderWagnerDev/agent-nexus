@@ -27,7 +27,7 @@ const (
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.3.4"
+var Version = "0.3.5"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.

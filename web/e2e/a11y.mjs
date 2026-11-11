@@ -11,6 +11,7 @@ const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8788';
 const username = process.env.E2E_USER || 'owner';
 const password = process.env.E2E_PASSWORD || 'correct-horse-battery';
 const runID = process.env.RUN_ID || '';
+const lang = process.env.E2E_LANG || '';
 
 async function login(page) {
   await page.goto(`${baseURL}/`, { waitUntil: 'domcontentloaded' });
@@ -43,9 +44,14 @@ async function scan(page, label) {
 }
 
 const browser = await chromium.launch(process.env.E2E_CHROME ? { executablePath: process.env.E2E_CHROME } : {});
+async function newContext(options) {
+  const context = await browser.newContext(options);
+  if (lang) await context.addInitScript((value) => localStorage.setItem('nexus-lang', value), lang);
+  return context;
+}
 let failures = 0;
 try {
-  const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const desktop = await newContext({ viewport: { width: 1440, height: 900 } });
   const page = await desktop.newPage();
   await login(page);
   const routes = [
@@ -61,7 +67,7 @@ try {
   }
   await desktop.close();
 
-  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const mobile = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const phone = await mobile.newPage();
   await login(phone);
   for (const [route, label] of [['#/', 'home'], ['#/sessions', 'sessions'], ['#/settings', 'settings']]) {

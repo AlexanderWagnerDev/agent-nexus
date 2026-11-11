@@ -1,0 +1,697 @@
+/* Minimal two-language UI dictionary. English is the source language and the
+   key; a missing German entry falls back to English. */
+
+const de = {
+  // shell / navigation
+  Home: 'Start',
+  Projects: 'Projekte',
+  Sessions: 'Sessions',
+  Active: 'Aktiv',
+  Hosts: 'Hosts',
+  Settings: 'Einstellungen',
+  Pinned: 'Angeheftet',
+  Recent: 'Zuletzt',
+  Latest: 'Neueste',
+  All: 'Alle',
+  Manage: 'Verwalten',
+  'Active now': 'Jetzt aktiv',
+  'Search or jump to…': 'Suchen oder springen…',
+  'Switch theme': 'Design wechseln',
+  Notifications: 'Benachrichtigungen',
+  'Open navigation': 'Navigation öffnen',
+  'Sign out': 'Abmelden',
+  'Collapse sidebar': 'Seitenleiste einklappen',
+  'Expand sidebar': 'Seitenleiste ausklappen',
+  'Main navigation': 'Hauptnavigation',
+  'No projects discovered yet': 'Noch keine Projekte erkannt',
+  'No sessions yet': 'Noch keine Sessions',
+  'No hosts paired': 'Keine Hosts gekoppelt',
+  'Could not load workspace.': 'Arbeitsbereich konnte nicht geladen werden.',
+  'All {n} sessions': 'Alle {n} Sessions',
+
+  // roles
+  owner: 'Eigentümer',
+  admin: 'Administrator',
+  member: 'Mitglied',
+  viewer: 'Betrachter',
+
+  // auth
+  'Your agents. Your machines. One place.': 'Deine Agenten. Deine Rechner. Ein Ort.',
+  'Self-hosted · no telemetry · transcript content stays on your hosts': 'Selbst gehostet · keine Telemetrie · Transkripte bleiben auf deinen Hosts',
+  'Sign in to your hub': 'Anmeldung an deinem Hub',
+  'Create the owner account': 'Eigentümer-Konto anlegen',
+  'This hub has no users yet. Choose a strong password; you can enroll a passkey or authenticator after signing in.':
+    'Dieser Hub hat noch keine Benutzer. Wähle ein starkes Passwort; Passkey oder Authenticator kannst du nach der Anmeldung einrichten.',
+  Username: 'Benutzername',
+  Password: 'Passwort',
+  'Create hub': 'Hub anlegen',
+  'First-run setup': 'Ersteinrichtung',
+  'Creating...': 'Wird angelegt…',
+  'Save your authenticator secret': 'Authenticator-Secret speichern',
+  'TOTP is optional until you confirm it. Scan this URI with an authenticator app, or copy the secret. You can enrol later in Devices.':
+    'TOTP ist optional, bis du es bestätigst. Scanne diese URI mit einer Authenticator-App oder kopiere das Secret. Du kannst es später unter Geräte einrichten.',
+  'otpauth URI': 'otpauth-URI',
+  'Copy secret': 'Secret kopieren',
+  'I saved it': 'Ich habe es gespeichert',
+  'Sign in': 'Anmelden',
+  'Use your owner account. Authenticator code is required once TOTP is enabled.':
+    'Melde dich mit deinem Eigentümer-Konto an. Sobald TOTP aktiviert ist, wird der Authenticator-Code benötigt.',
+  'Authenticator code': 'Authenticator-Code',
+  '(if enabled)': '(falls aktiviert)',
+  'Sign in with a passkey': 'Mit Passkey anmelden',
+  'Enter your username first': 'Gib zuerst deinen Benutzernamen ein',
+  'Signing in...': 'Anmeldung läuft…',
+  'Loading AgentNexus...': 'AgentNexus wird geladen…',
+  'Copied to clipboard': 'In die Zwischenablage kopiert',
+  'Could not copy': 'Kopieren fehlgeschlagen',
+
+  // overview
+  'Your workspace': 'Dein Arbeitsbereich',
+  'Agent activity': 'Agenten-Aktivität',
+  'Open control room': 'Kontrollraum öffnen',
+  'No open agent runs': 'Keine laufenden Agenten',
+  'Resume a native session or start a new agent on an online host.':
+    'Setze eine native Session fort oder starte einen neuen Agenten auf einem Online-Host.',
+  'New session': 'Neue Session',
+  'All projects': 'Alle Projekte',
+  'All sessions': 'Alle Sessions',
+  'Recent sessions': 'Zuletzt verwendete Sessions',
+  'Manage hosts': 'Hosts verwalten',
+  'No projects yet': 'Noch keine Projekte',
+  'Pair a host and native sessions will be discovered automatically.':
+    'Koppel einen Host; native Sessions werden automatisch erkannt.',
+  sessions: 'Sessions',
+  projects: 'Projekte',
+  working: 'in Arbeit',
+  'machine online': 'Rechner online',
+  'machines online': 'Rechner online',
+  'No machine online': 'Kein Rechner online',
+  'worktree with open runs': 'Worktree mit laufenden Runs',
+  'worktrees with open runs': 'Worktrees mit laufenden Runs',
+  'agent type': 'Agententyp',
+  'agent types': 'Agententypen',
+  just_now: 'gerade eben',
+  'm ago': 'Min. her',
+  'h ago': 'Std. her',
+  'd ago': 'T. her',
+
+  // generic
+  'Search or jump to': 'Suchen oder springen',
+  Back: 'Zurück',
+  Close: 'Schließen',
+  Cancel: 'Abbrechen',
+  Save: 'Speichern',
+  Delete: 'Löschen',
+  Copy: 'Kopieren',
+  Search: 'Suchen',
+  Loading: 'Lädt',
+  'No results': 'Keine Ergebnisse',
+  'Read-only': 'Nur lesen',
+
+  // sessions
+  Sessions: 'Sessions',
+  'Search sessions…': 'Sessions durchsuchen…',
+  'Filter by agent': 'Nach Agent filtern',
+  'Filter by host': 'Nach Host filtern',
+  'Filter by state': 'Nach Status filtern',
+  'All agents': 'Alle Agenten',
+  'All hosts': 'Alle Hosts',
+  'Any state': 'Jeder Status',
+  'No sessions match': 'Keine Sessions gefunden',
+  'Try a different filter or wait for a host to reconnect.':
+    'Ändere den Filter oder warte, bis sich ein Host wieder verbindet.',
+  Pin: 'Anheften',
+  Pinned: 'Angeheftet',
+  Terminal: 'Terminal',
+  'Open chat': 'Chat öffnen',
+  Back: 'Zurück',
+  Agent: 'Agent',
+  Host: 'Host',
+  Created: 'Erstellt',
+  Updated: 'Aktualisiert',
+  'Native identity': 'Native Identität',
+  'Copy native id': 'Native ID kopieren',
+  'Copy working directory': 'Arbeitsverzeichnis kopieren',
+  Actions: 'Aktionen',
+  'Review changes': 'Änderungen prüfen',
+  'Fork session': 'Session forken',
+  'Export Markdown': 'Markdown exportieren',
+  'Export JSON': 'JSON exportieren',
+  'Native continuity': 'Native Kontinuität',
+  "Continuing this conversation reopens the agent's own native session. The original CLI can still resume it afterwards.":
+    'Wenn du dieses Gespräch fortsetzt, wird die native Session des Agenten wieder geöffnet. Die ursprüngliche CLI kann sie danach weiterhin fortsetzen.',
+  'No readable messages': 'Keine lesbaren Nachrichten',
+  'The host could not parse this transcript.':
+    'Der Host konnte dieses Transkript nicht lesen.',
+  'Load earlier messages': 'Frühere Nachrichten laden',
+
+  // projects
+  'Search projects…': 'Projekte durchsuchen…',
+  'Search by path, name or host': 'Nach Pfad, Name oder Host suchen',
+  'No projects match': 'Keine Projekte gefunden',
+  'Try a different filter or wait for a host to reconnect.':
+    'Ändere den Filter oder warte, bis sich ein Host wieder verbindet.',
+  'No sessions': 'Keine Sessions',
+  'open': 'offen',
+
+  // runs / control room
+  'Control room': 'Kontrollraum',
+  'Search runs…': 'Runs durchsuchen…',
+  'No active runs': 'Keine aktiven Runs',
+  'Resume a native session or start a new agent before opening the control room.':
+    'Setze eine native Session fort oder starte einen neuen Agenten, bevor du den Kontrollraum öffnest.',
+  'Running': 'Läuft',
+  'Waiting for input': 'Wartet auf Eingabe',
+  'Idle': 'Leerlauf',
+  'Completed': 'Abgeschlossen',
+  'Failed': 'Fehlgeschlagen',
+  'Unknown': 'Unbekannt',
+  'Stop': 'Stoppen',
+  'Open': 'Öffnen',
+  'Messages': 'Nachrichten',
+  'Tokens': 'Tokens',
+
+  // hosts
+  'Machines running nexusd. Pairing is always initiated from this hub.':
+    'Rechner mit nexusd. Die Kopplung wird immer von diesem Hub aus gestartet.',
+  'Pair a host': 'Host koppeln',
+  'Details': 'Details',
+  'Share': 'Teilen',
+  'Revoke': 'Widerrufen',
+  'online': 'online',
+  'offline': 'offline',
+  'update available': 'Update verfügbar',
+  'up to date': 'aktuell',
+  'check failed': 'Prüfung fehlgeschlagen',
+  'Check for updates': 'Nach Updates suchen',
+  'Installed': 'Installiert',
+  'Latest': 'Neueste',
+  'Status': 'Status',
+  'Run on the host:': 'Auf dem Host ausführen:',
+  '(refuses while runs are active)': '(verweigert bei aktiven Runs)',
+  'Allowed agents': 'Erlaubte Agenten',
+  'New / fork': 'Neu / Fork',
+  'Detected agents': 'Erkannte Agenten',
+  'UPDATES': 'UPDATES',
+  'SESSIONS': 'SESSIONS',
+  'HOSTS': 'HOSTS',
+  'DETECTED AGENTS': 'ERKANNTE AGENTEN',
+
+  // settings
+  'Settings': 'Einstellungen',
+  'Appearance': 'Darstellung',
+  'Theme': 'Design',
+  'System': 'System',
+  'Dark': 'Dunkel',
+  'Light': 'Hell',
+  'Language': 'Sprache',
+  'English': 'Englisch',
+  'Deutsch': 'Deutsch',
+  'Account': 'Konto',
+  'Security': 'Sicherheit',
+  'Devices': 'Geräte',
+  'Users & roles': 'Benutzer & Rollen',
+  'Audit log': 'Audit-Protokoll',
+  'All devices': 'Alle Geräte',
+  'Change password': 'Passwort ändern',
+  'Current password': 'Aktuelles Passwort',
+  'New password': 'Neues Passwort',
+  'Confirm new password': 'Neues Passwort bestätigen',
+  'Two-factor authentication': 'Zwei-Faktor-Authentifizierung',
+  'Passkeys': 'Passkeys',
+  'Add passkey': 'Passkey hinzufügen',
+  'Sign out all devices': 'Alle Geräte abmelden',
+  'Export data': 'Daten exportieren',
+  'Backup': 'Sicherung',
+  'Version': 'Version',
+
+  // diff
+  Unified: 'Unified',
+  Split: 'Split',
+  'Diff layout': 'Diff-Layout',
+  'files changed': 'Dateien geändert',
+  'file changed': 'Datei geändert',
+  'files': 'Dateien',
+  'file': 'Datei',
+  'Git changes': 'Git-Änderungen',
+  'Read-only status and diff from': 'Nur-Lese-Status und Diff aus',
+  'No uncommitted changes.': 'Keine nicht committeten Änderungen.',
+  '(clean working tree)': '(sauberer Arbeitsbaum)',
+  'Repository': 'Repository',
+  'Review changes for': 'Änderungen prüfen für',
+  Changes: 'Änderungen',
+  'Back to session': 'Zurück zur Session',
+  'No files are modified.': 'Es werden keine Dateien verändert.',
+
+  // chat / composer
+  'Send': 'Senden',
+  'Stop run': 'Run stoppen',
+  'Attach files': 'Dateien anhängen',
+  'Write a message…': 'Nachricht schreiben…',
+  'Model': 'Modell',
+  'Reasoning': 'Reasoning',
+  'Agent': 'Agent',
+  'New chat': 'Neuer Chat',
+  'Split': 'Split',
+  'Open split workspace': 'Geteilten Arbeitsbereich öffnen',
+  'Approve': 'Genehmigen',
+  'Deny': 'Ablehnen',
+  'Always allow': 'Immer erlauben',
+  'Approval required': 'Genehmigung erforderlich',
+  'Waiting for approval': 'Wartet auf Genehmigung',
+};
+
+Object.assign(de, {
+  'Untitled session': 'Unbenannte Session',
+  'just now': 'gerade eben',
+  'm ago': ' Min. her',
+  'h ago': ' Std. her',
+  'd ago': ' T. her',
+  '{n} machines online': '{n} Rechner online',
+  '{n} worktrees with open runs': '{n} Worktrees mit laufenden Runs',
+  '{n} agent types': '{n} Agententypen',
+  '{n} agents': '{n} Agenten',
+  '{n} sessions': '{n} Sessions',
+  '{n} active': '{n} aktiv',
+  '{n} worktrees': '{n} Worktrees',
+  '{n} messages': '{n} Nachrichten',
+  '{n} shown': '{n} angezeigt',
+  '{n} open runs': '{n} offene Runs',
+  '{n} files': '{n} Dateien',
+  '{n} reasoning levels': '{n} Reasoning-Stufen',
+  '{n} available': '{n} verfügbar',
+  'No hosts': 'Keine Hosts',
+  'Pair your first machine to start discovering sessions.': 'Koppel deinen ersten Rechner, um Sessions zu entdecken.',
+  'Pair a host that already has coding-agent history.': 'Koppel einen Host, der bereits Coding-Agent-Historie hat.',
+  'No sessions': 'Keine Sessions',
+  'Discovered natively from each host; nothing is copied or rewritten.': 'Nativ von jedem Host erkannt; nichts wird kopiert oder umgeschrieben.',
+  'Working directories discovered from native sessions, grouped by host and worktree.': 'Arbeitsverzeichnisse aus nativen Sessions, gruppiert nach Host und Worktree.',
+  'Filter title, project or path…': 'Titel, Projekt oder Pfad filtern…',
+  'Filter projects, paths, hosts or branches…': 'Projekte, Pfade, Hosts oder Branches filtern…',
+  'Clear project filter': 'Projektfilter entfernen',
+  'No sessions match': 'Keine Sessions gefunden',
+  'Try another filter, or wait for a host to reconnect.': 'Ändere den Filter oder warte, bis sich ein Host wieder verbindet.',
+  'No projects match': 'Keine Projekte gefunden',
+  'Try a different filter or wait for a host to reconnect.': 'Ändere den Filter oder warte, bis sich ein Host wieder verbindet.',
+  'Load more': 'Mehr laden',
+  'More than one agent is active in this working tree': 'Mehr als ein Agent ist in diesem Worktree aktiv',
+  'shared worktree': 'geteilter Worktree',
+  'All active terminal and structured runs across your machines.': 'Alle aktiven Terminal- und Structured-Runs auf deinen Rechnern.',
+  'Split view': 'Geteilte Ansicht',
+  'Filter runs': 'Runs filtern',
+  'open runs': 'offene Runs',
+  'waiting for you': 'warten auf dich',
+  hosts: 'Hosts',
+  'No runs in this state': 'Keine Runs in diesem Status',
+  'No active runs': 'Keine aktiven Runs',
+  'Choose another filter.': 'Wähle einen anderen Filter.',
+  'Transcript': 'Transkript',
+  'Open': 'Öffnen',
+  'Stopping run': 'Run wird gestoppt',
+  'Create a one-time code, then run': 'Erstelle einen Einmalcode und führe dann',
+  'on the machine.': 'auf dem Rechner aus.',
+  pending: 'ausstehend',
+  seen: 'gesehen',
+  'no agents': 'keine Agenten',
+  'nexusd update available': 'nexusd-Update verfügbar',
+  update: 'Update',
+  'Compare SAS with the daemon.': 'Vergleiche die SAS mit dem Daemon.',
+  'Confirm host': 'Host bestätigen',
+  'Host confirmed': 'Host bestätigt',
+  'Host identity and the policy enforced locally by nexusd. The hub cannot override these limits.': 'Host-Identität und die lokal von nexusd durchgesetzte Policy. Der Hub kann diese Grenzen nicht überschreiben.',
+  'Host ID': 'Host-ID',
+  Platform: 'Plattform',
+  Daemon: 'Daemon',
+  'Last seen': 'Zuletzt gesehen',
+  'Allowed roots': 'Erlaubte Pfade',
+  'not reported': 'nicht gemeldet',
+  'all detected': 'alle erkannt',
+  'new blocked': 'neu gesperrt',
+  'new allowed': 'neu erlaubt',
+  'fork blocked': 'Fork gesperrt',
+  'fork allowed': 'Fork erlaubt',
+  'Detected agents': 'Erkannte Agenten',
+  none: 'keine',
+  Updates: 'Updates',
+  'Check the GitHub release feed. Installation stays on the host:': 'Prüft den GitHub-Release-Feed. Die Installation bleibt auf dem Host:',
+  'Checking...': 'Prüfe…',
+  'Private releases require': 'Private Releases benötigen',
+  'with Contents: read on the host.': 'mit Contents: read auf dem Host.',
+  'Host revoked': 'Host widerrufen',
+  'The code is single-use and expires after 10 minutes. The host connects outbound; no inbound ports are required.': 'Der Code ist einmalig und läuft nach 10 Minuten ab. Der Host verbindet sich ausgehend; es sind keine eingehenden Ports nötig.',
+  'Run this on the machine you want to add:': 'Führe dies auf dem Rechner aus, den du hinzufügen möchtest:',
+  'Copy code': 'Code kopieren',
+  'Copy command': 'Befehl kopieren',
+  'Then install the per-user service:': 'Installiere danach den Benutzerdienst:',
+  'The host is accepted by this hub at': 'Der Host wird von diesem Hub akzeptiert unter',
+  'No online host. Pair a host first.': 'Kein Online-Host. Koppel zuerst einen Host.',
+  'Choose the machine that should run the agent.': 'Wähle den Rechner, auf dem der Agent laufen soll.',
+  Continue: 'Weiter',
+  'New session on': 'Neue Session auf',
+  'The agent starts in a directory permitted by the host policy. Permission-bypass flags are rejected on the host.': 'Der Agent startet in einem Verzeichnis, das die Host-Policy erlaubt. Flags zum Umgehen von Berechtigungen werden auf dem Host abgelehnt.',
+  Mode: 'Modus',
+  'Structured chat': 'Structured Chat',
+  'Working directory': 'Arbeitsverzeichnis',
+  'C:\\Users\\me\\project or /home/me/project': 'C:\\Users\\me\\project oder /home/me/project',
+  'The host enforces its own': 'Der Host setzt seine eigenen',
+  'a path outside them is rejected even if this form accepts it.': 'ein Pfad außerhalb wird abgelehnt, auch wenn dieses Formular ihn akzeptiert.',
+  'Start session': 'Session starten',
+  'The theme is stored on the hub for your user and follows you across devices.': 'Das Design wird auf dem Hub für deinen Benutzer gespeichert und folgt dir über Geräte hinweg.',
+  'Follow the operating system': 'Dem Betriebssystem folgen',
+  'Always dark': 'Immer dunkel',
+  'Always light': 'Immer hell',
+  'The interface language is stored on this device. English is the default; changing it reloads the page.': 'Die Sprache wird auf diesem Gerät gespeichert. Englisch ist die Standardsprache; eine Änderung lädt die Seite neu.',
+  'TOTP enabled': 'TOTP aktiviert',
+  'TOTP not enabled': 'TOTP nicht aktiviert',
+  'Devices & passkeys': 'Geräte & Passkeys',
+  'Content-free Web Push for approvals, completed runs, failures and host disconnects.': 'Inhaltsfreie Web-Push-Nachrichten für Genehmigungen, abgeschlossene Runs, Fehler und Host-Verbindungsabbrüche.',
+  'Enable on this device': 'Auf diesem Gerät aktivieren',
+  Administration: 'Administration',
+  About: 'Über',
+  version: 'Version',
+  'Sessions stay on your hosts; the hub stores metadata.': 'Sessions bleiben auf deinen Hosts; der Hub speichert Metadaten.',
+  'Appearance, account, notifications and administration.': 'Darstellung, Konto, Benachrichtigungen und Administration.',
+  'Structured chat': 'Structured Chat',
+  'Toggle session details': 'Session-Details umschalten',
+  'Stop this run': 'Diesen Run stoppen',
+  'Close details': 'Details schließen',
+  'Connecting…': 'Verbinde…',
+  'Jump to latest': 'Zum Neuesten springen',
+  'Message {agent}…': 'Nachricht an {agent}…',
+  'Enter to send · Shift+Enter newline': 'Enter sendet · Shift+Enter neue Zeile',
+  'Interrupt current turn': 'Aktuellen Turn unterbrechen',
+  'Send message': 'Nachricht senden',
+  Run: 'Run',
+  State: 'Status',
+  Started: 'Gestartet',
+  'Native session': 'Native Session',
+  Messages: 'Nachrichten',
+  'This run was started without a discovered native session.': 'Dieser Run wurde ohne erkannte native Session gestartet.',
+  Git: 'Git',
+  'Load working tree changes': 'Änderungen im Arbeitsbaum laden',
+  'Unpin session': 'Session lösen',
+  'Pin session': 'Session anheften',
+  'Read-only transcript': 'Nur-Lese-Transkript',
+  'Terminal mode': 'Terminal-Modus',
+  Continuity: 'Kontinuität',
+  "This chat drives the agent's native session. You can return to the same session in the original CLI, and the transcript stays on the host.": 'Dieser Chat steuert die native Session des Agenten. Du kannst in der ursprünglichen CLI zu derselben Session zurückkehren; das Transkript bleibt auf dem Host.',
+  'Drag to resize details': 'Ziehen, um die Details zu vergrößern',
+  'You have control of this run': 'Du hast die Kontrolle über diesen Run',
+  'Read-only:': 'Nur lesen:',
+  'Interrupt requested': 'Unterbrechung angefordert',
+  'Agent is working': 'Agent arbeitet',
+  'WebSocket is reconnecting; try again in a moment': 'WebSocket verbindet sich neu; versuche es gleich noch einmal',
+  'Approval sent': 'Genehmigung gesendet',
+  'Allow once': 'Einmal erlauben',
+  'Choose a model': 'Modell wählen',
+  'Search model or provider…': 'Modell oder Anbieter suchen…',
+  'default reasoning': 'Standard-Reasoning',
+  'Remove favorite': 'Favorit entfernen',
+  'Add favorite': 'Favorit hinzufügen',
+  'No models match that search.': 'Keine Modelle gefunden.',
+  'Switch model': 'Modell wechseln',
+  'Select model': 'Modell wählen',
+  'Default': 'Standard',
+  'Reasoning': 'Reasoning',
+  'Mode': 'Modus',
+  'Run': 'Run',
+  'Update': 'Update',
+  'Update available on': 'Update verfügbar auf',
+  'is available (installed': 'ist verfügbar (installiert',
+  'Compare SAS with the daemon.': 'Vergleiche die SAS mit dem Daemon.',
+})
+
+
+Object.assign(de, {
+  'Add session': 'Session hinzufügen',
+  'Append-only, hash-chained security events stored on the hub.': 'Nur anhängendes, hash-verkettetes Sicherheitsprotokoll auf dem Hub.',
+  'Federated transcript search runs on each online host. Content is never indexed on the hub.': 'Die föderierte Transkriptsuche läuft auf jedem Online-Host. Inhalte werden nie auf dem Hub indexiert.',
+  'Hub roles and per-host permissions. Per-host grants are the unit of least privilege; host policy is still enforced separately.': 'Hub-Rollen und Berechtigungen pro Host. Grants pro Host sind die kleinste Einheit; die Host-Policy wird weiterhin separat durchgesetzt.',
+  'Loading transcript...': 'Transkript wird geladen...',
+  'Loading transcript…': 'Transkript wird geladen…',
+  'Pair a device': 'Gerät koppeln',
+  'Search model or provider?': 'Modell oder Anbieter suchen?',
+  'Session': 'Session',
+  'Side-by-side agent sessions from any host.': 'Agenten-Sessions von beliebigen Hosts nebeneinander.',
+  'Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.': 'Angemeldete Browser. Widerrufe alles, dem du nicht mehr vertraust; der Widerruf beendet die Session sofort.',
+  'Users': 'Benutzer',
+  'Waiting': 'Wartend',
+  'Workspace': 'Arbeitsbereich',
+  'Your coding agents across every paired machine.': 'Deine Coding-Agenten auf allen gekoppelten Rechnern.',
+  'unknown': 'unbekannt',
+  'worktree': 'Worktree',
+  '{n} agents share this worktree': '{n} Agenten teilen diesen Worktree',
+});
+
+
+Object.assign(de, {
+  'running': 'läuft',
+  'waiting for input': 'wartet auf Eingabe',
+  'idle': 'Leerlauf',
+  'completed': 'abgeschlossen',
+  'failed': 'fehlgeschlagen',
+  'starting': 'startet',
+  'stopping': 'stoppt',
+  'exited': 'beendet',
+  'session': 'Session',
+  'sessions': 'Sessions',
+  'project': 'Projekt',
+  'projects': 'Projekte',
+  'machine': 'Rechner',
+  'machines': 'Rechner',
+  'message': 'Nachricht',
+  'messages': 'Nachrichten',
+  'agent': 'Agent',
+  'agents': 'Agenten',
+  'worktree': 'Worktree',
+  'worktrees': 'Worktrees',
+  'file': 'Datei',
+  'files': 'Dateien',
+  'open run': 'offener Run',
+  'open runs': 'offene Runs',
+});
+
+
+Object.assign(de, {
+  'Ran command': 'Befehl ausgeführt',
+  'Read file': 'Datei gelesen',
+  'Edited file': 'Datei bearbeitet',
+  'Wrote file': 'Datei geschrieben',
+  'Searched files': 'Dateien durchsucht',
+  'Searched the web': 'Web durchsucht',
+  'Checked git': 'Git geprüft',
+  'Ran tests': 'Tests ausgeführt',
+  'Updated plan': 'Plan aktualisiert',
+  'Delegated task': 'Aufgabe delegiert',
+  'Called MCP tool': 'MCP-Tool aufgerufen',
+  'Viewed image': 'Bild angesehen',
+  'Used tool': 'Tool verwendet',
+  'Running': 'Läuft',
+  'Failed': 'Fehlgeschlagen',
+  'Done': 'Fertig',
+  'item': 'Eintrag',
+  'items': 'Einträge',
+});
+
+
+Object.assign(de, {
+  'updated': 'aktualisiert',
+  'Load earlier messages ({n} remaining)': 'Frühere Nachrichten laden ({n} verbleibend)',
+});
+
+
+Object.assign(de, {
+  'Device': 'Gerät',
+  'Authenticator (TOTP)': 'Authenticator (TOTP)',
+  'TOTP is enabled. A code is required at every login.': 'TOTP ist aktiviert. Bei jeder Anmeldung wird ein Code benötigt.',
+  'TOTP is not enabled yet. Enrolling it adds a second factor to password login.': 'TOTP ist noch nicht aktiviert. Die Einrichtung fügt der Passwort-Anmeldung einen zweiten Faktor hinzu.',
+  'enabled': 'aktiviert',
+  'Set up authenticator': 'Authenticator einrichten',
+  'Passkeys use WebAuthn and are phishing-resistant. Add one to this device, then use “Sign in with a passkey” on the login page.': 'Passkeys nutzen WebAuthn und sind phishing-resistent. Füge einen für dieses Gerät hinzu und nutze dann „Mit Passkey anmelden“ auf der Anmeldeseite.',
+  'Add a passkey': 'Passkey hinzufügen',
+  'Web Push notifications': 'Web-Push-Benachrichtigungen',
+  'Content-free alerts for run completion and approval requests. The payload never contains transcript text, commands or file paths.': 'Inhaltsfreie Hinweise bei abgeschlossenen Runs und Genehmigungsanfragen. Die Nutzlast enthält nie Transkripttext, Befehle oder Dateipfade.',
+  'Enable notifications': 'Benachrichtigungen aktivieren',
+  'Passkey login and Argon2id passwords with optional TOTP are available. Session cookies are HttpOnly, SameSite=Strict and Secure when TLS is configured.': 'Passkey-Anmeldung und Argon2id-Passwörter mit optionalem TOTP sind verfügbar. Session-Cookies sind HttpOnly, SameSite=Strict und bei TLS Secure.',
+  'Device revoked': 'Gerät widerrufen',
+  'Scan this code on a new device. It is single-use and expires in two minutes. The new device gets its own revocable session.': 'Scanne diesen Code auf einem neuen Gerät. Er ist einmalig und läuft nach zwei Minuten ab. Das neue Gerät erhält eine eigene widerrufbare Session.',
+  'Copy link': 'Link kopieren',
+  'passkey added': 'Passkey hinzugefügt',
+  'Passkey added': 'Passkey hinzugefügt',
+  'enabled on this device': 'auf diesem Gerät aktiviert',
+  'Push notifications enabled': 'Push-Benachrichtigungen aktiviert',
+  'Add this secret to your authenticator app, then enter the current six-digit code to confirm.': 'Füge dieses Secret deiner Authenticator-App hinzu und gib dann den aktuellen sechsstelligen Code zur Bestätigung ein.',
+  'Current code': 'Aktueller Code',
+  'Enable TOTP': 'TOTP aktivieren',
+  'TOTP enabled': 'TOTP aktiviert',
+});
+
+
+Object.assign(de, {
+  'Thinking': 'Denkt nach',
+  'Command': 'Befehl',
+  'Path': 'Pfad',
+  'Output': 'Ausgabe',
+  'Raw input': 'Rohe Eingabe',
+  'No further details.': 'Keine weiteren Details.',
+  'You': 'Du',
+});
+
+
+Object.assign(de, {
+  'Send a message to continue this native session.': 'Sende eine Nachricht, um diese native Session fortzusetzen.',
+  'Connected. Send a message.': 'Verbunden. Sende eine Nachricht.',
+});
+
+
+Object.assign(de, {
+  'Search all transcripts, e.g. rate limiter': 'Alle Transkripte durchsuchen, z. B. rate limiter',
+  'Search across hosts': 'Hosts durchsuchen',
+  'Results come from the agent stores; offline hosts are reported, not silently skipped.': 'Ergebnisse kommen aus den Agenten-Stores; Offline-Hosts werden gemeldet und nicht still übersprungen.',
+  'Not searched:': 'Nicht durchsucht:',
+  '(offline)': '(offline)',
+  'No matches': 'Keine Treffer',
+  'Try another term, another filter, or check that hosts are online.': 'Versuche einen anderen Begriff, einen anderen Filter oder prüfe, ob die Hosts online sind.',
+  'No open runs': 'Keine offenen Runs',
+  'Resume a native session or start a new agent before opening a split workspace.': 'Setze eine native Session fort oder starte einen neuen Agenten, bevor du die geteilte Ansicht öffnest.',
+  'Each pane keeps its own live connection and approval controls. A native session can only be started once; this picker only opens existing runs.': 'Jede Spalte behält ihre eigene Live-Verbindung und Genehmigungssteuerung. Eine native Session kann nur einmal gestartet werden; dieser Picker öffnet nur bestehende Runs.',
+});
+
+
+Object.assign(de, {
+  'with open runs': 'mit laufenden Runs',
+});
+
+
+Object.assign(de, {
+  'Start an agent on an online host': 'Agenten auf einem Online-Host starten',
+  'Overview and active work': 'Übersicht und aktive Arbeit',
+  'Grouped by repository and worktree': 'Gruppiert nach Repository und Worktree',
+  'All discovered native sessions': 'Alle erkannten nativen Sessions',
+  'Active runs': 'Aktive Runs',
+  'Terminal and structured runs': 'Terminal- und Structured-Runs',
+  'Split workspace': 'Geteilter Arbeitsbereich',
+  'Open two agent chats side by side': 'Zwei Agenten-Chats nebeneinander öffnen',
+  'Paired machines and agent inventory': 'Gekoppelte Rechner und Agenten-Inventar',
+  'Search transcripts': 'Transkripte durchsuchen',
+  'Federated search across hosts': 'Föderierte Suche über alle Hosts',
+  'Appearance, notifications, devices': 'Darstellung, Benachrichtigungen, Geräte',
+  'Recently opened': 'Zuletzt geöffnet',
+  'Search sessions, projects, hosts…': 'Sessions, Projekte, Hosts durchsuchen…',
+  '↑↓ navigate': '↑↓ navigieren',
+  '↵ open': '↵ öffnen',
+  'Ctrl K toggle': 'Ctrl K umschalten',
+  'No matches.': 'Keine Treffer.',
+});
+
+
+Object.assign(de, {
+  'Notifications, {n} unread': 'Benachrichtigungen, {n} ungelesen',
+  'Mark all read': 'Alle als gelesen markieren',
+  'Filter notifications': 'Benachrichtigungen filtern',
+  'Unread': 'Ungelesen',
+  'No notifications match these filters.': 'Keine Benachrichtigungen passen zu diesen Filtern.',
+  'No notifications yet. Run completions, failures and approvals will appear here.': 'Noch keine Benachrichtigungen. Abgeschlossene Runs, Fehler und Genehmigungen erscheinen hier.',
+  'Notification settings': 'Benachrichtigungseinstellungen',
+  'unread': 'ungelesen',
+});
+
+
+Object.assign(de, {
+  'User': 'Benutzer',
+  'Role': 'Rolle',
+  'you': 'du',
+  'Add a user': 'Benutzer hinzufügen',
+  'The new user signs in with this password and can change roles only through an owner. TOTP can be enrolled after their first login.': 'Der neue Benutzer meldet sich mit diesem Passwort an; Rollen kann nur ein Eigentümer ändern. TOTP kann nach der ersten Anmeldung eingerichtet werden.',
+  'Create user': 'Benutzer anlegen',
+  'Role updated': 'Rolle aktualisiert',
+  'User created': 'Benutzer angelegt',
+  'The hub grant is only one gate; the host policy still decides which agents, roots and actions are allowed.': 'Die Hub-Freigabe ist nur eine Hürde; die Host-Policy entscheidet weiterhin, welche Agenten, Pfade und Aktionen erlaubt sind.',
+  'Remove access': 'Zugriff entfernen',
+  'Save grant': 'Freigabe speichern',
+  'Grant saved': 'Freigabe gespeichert',
+  'view': 'ansehen',
+  'read_transcript': 'Transkript lesen',
+  'resume': 'fortsetzen',
+  'create': 'erstellen',
+  'fork': 'forken',
+  'terminal_input': 'Terminal-Eingabe',
+  'approve': 'genehmigen',
+  'manage': 'verwalten',
+});
+
+
+Object.assign(de, {
+  'Audit chain broken at sequence': 'Audit-Kette unterbrochen bei Sequenz',
+  'Investigate the database immediately.': 'Untersuche die Datenbank sofort.',
+  'Hash chain verified: no broken link in the checked range.': 'Hash-Kette verifiziert: kein gebrochenes Glied im geprüften Bereich.',
+});
+
+
+Object.assign(de, {
+  'All open runs are already visible': 'Alle offenen Runs sind bereits sichtbar',
+  'Add a session to the workspace': 'Session zum Arbeitsbereich hinzufügen',
+  'Open in single view': 'In Einzelansicht öffnen',
+  'Swap panes': 'Spalten tauschen',
+  'Close pane': 'Spalte schließen',
+  'Drag or use arrow keys to resize panes': 'Ziehen oder Pfeiltasten zum Größenändern',
+  'Resize panes': 'Spalten anpassen',
+  'visible session': 'sichtbare Session',
+  'visible sessions': 'sichtbare Sessions',
+  'Panels keep independent streams and approval prompts.': 'Panels behalten unabhängige Streams und Genehmigungsabfragen.',
+  'Add pane': 'Spalte hinzufügen',
+  'Side by side': 'Nebeneinander',
+  'Stacked': 'Untereinander',
+});
+
+
+Object.assign(de, {
+  'disconnected': 'getrennt',
+  'lease': 'Lease',
+  'Read-only: another device holds the lease.': 'Nur lesen: ein anderes Gerät hält die Lease.',
+  'You have control (controller lease).': 'Du hast die Kontrolle (Controller-Lease).',
+});
+
+
+Object.assign(de, {
+  'Copy code': 'Code kopieren',
+  'Copied': 'Kopiert',
+});
+
+const supported = ['en', 'de'];
+let lang = 'en';
+
+function detect() {
+  try {
+    const stored = localStorage.getItem('nexus-lang');
+    if (supported.includes(stored)) return stored;
+  } catch { /* ignore */ }
+  return 'en';
+}
+
+export function initLang() {
+  lang = detect();
+  if (typeof document !== 'undefined') document.documentElement.lang = lang;
+  return lang;
+}
+
+export function getLang() {
+  return lang;
+}
+
+export function setLang(value) {
+  lang = supported.includes(value) ? value : 'en';
+  try { localStorage.setItem('nexus-lang', lang); } catch { /* ignore */ }
+  if (typeof document !== 'undefined') document.documentElement.lang = lang;
+}
+
+export function t(text, vars) {
+  const source = String(text ?? '');
+  const out = lang === 'de' ? (de[source] ?? source) : source;
+  if (!vars) return out;
+  return out.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
+}
+
+export function tn(count, singular, plural) {
+  return `${count} ${t(count === 1 ? singular : plural)}`;
+}

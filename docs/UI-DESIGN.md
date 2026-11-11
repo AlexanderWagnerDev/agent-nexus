@@ -46,7 +46,7 @@ own neutral blue/indigo identity.
 | Text | `#e8e9eb` | `#1c1d20` |
 | Muted | `#9a9da4` | `#63666d` |
 | Accent | `#7d8cf8` | `#4056d6` |
-| Radius | 7–14 px | 7–14 px |
+| Radius | 2-4 px | 2-4 px |
 | UI type | 14 px / 1.5 | same |
 | Chat type | 15 px / 1.65 | same |
 | Code type | 13 px mono | same |
@@ -124,6 +124,20 @@ can be dragged between 240 and 520 px; its width is stored locally.
 
 All tested mobile layouts avoid horizontal page overflow; long strings, code and
 tool output scroll inside their own containers.
+
+## 0.3.5 refinement
+
+- Rectangular controls now use 2-4 px radii instead of 7-14 px. Circles remain
+  reserved for status dots and spinners.
+- **Review changes** opens a full-width `#/sessions/<id>/changes` page instead of
+  a modal. Unified and split diffs use the whole content width, and the diff
+  body has no nested height cap on that page. Split mode clips each side
+  independently and falls back to unified below 520 px.
+- German is available as a second interface language. English remains the
+  default. The language can be changed on the login screen (EN/DE) or under
+  **Settings -> Appearance -> Language**, is stored per browser, and updates
+  `<html lang>`. Agent names, mode identifiers, paths and transcript content are
+  never translated.
 
 ## Known gaps
 

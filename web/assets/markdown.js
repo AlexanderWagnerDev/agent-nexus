@@ -4,6 +4,8 @@
  * interpreted, and links are restricted to http(s) and mailto URLs.
  */
 
+import { t } from './i18n.js';
+
 const HTML_ESCAPES = {
   '&': '&amp;',
   '<': '&lt;',
@@ -107,7 +109,7 @@ function codeBlock(code, lang) {
   const language = normalizeLang(lang);
   const label = language || 'text';
   const safeLanguage = /^[a-z0-9+#._-]+$/i.test(language) ? language : 'text';
-  return `<div class="md-code"><div class="md-code-head"><span class="md-code-lang">${escapeHtml(label)}</span><button class="md-copy" type="button" aria-label="Copy code">Copy</button></div><pre><code class="language-${safeLanguage}">${highlightCode(code, language)}</code></pre></div>`;
+  return `<div class="md-code"><div class="md-code-head"><span class="md-code-lang">${escapeHtml(label)}</span><button class="md-copy" type="button" aria-label="${t('Copy code')}">${t('Copy')}</button></div><pre><code class="language-${safeLanguage}">${highlightCode(code, language)}</code></pre></div>`;
 }
 
 function isTableSeparator(line) {

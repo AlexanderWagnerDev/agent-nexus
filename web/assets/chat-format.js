@@ -1,5 +1,7 @@
 /* Tool-call normalisation for compact chat cards. */
 
+import { t } from './i18n.js';
+
 export function parseToolInput(input) {
   if (input && typeof input === 'object') return input;
   const text = String(input ?? '').trim();
@@ -108,20 +110,20 @@ export function describeTool(name, input, output = '') {
   const mcp = obj && (obj.server || obj.tool) ? [obj.server, obj.tool].filter(Boolean).join(' / ') : '';
   let detail = '';
   if (kind === 'terminal' || kind === 'git' || kind === 'test') detail = command || description;
-  else if (kind === 'edit' || kind === 'write') detail = paths.length > 1 ? `${paths.length} files` : (paths[0] || path || description);
+  else if (kind === 'edit' || kind === 'write') detail = paths.length > 1 ? `${paths.length} ${t('files')}` : (paths[0] || path || description);
   else if (kind === 'read') detail = path || description;
   else if (kind === 'search') detail = pattern || description;
   else if (kind === 'web') detail = firstString(obj?.url, obj?.query, description);
   else if (kind === 'mcp') detail = mcp || description;
   else if (kind === 'task') detail = description || firstString(obj?.prompt);
-  else if (kind === 'todo' && Array.isArray(obj?.todos)) detail = `${obj.todos.length} items`;
+  else if (kind === 'todo' && Array.isArray(obj?.todos)) detail = `${obj.todos.length} ${t(obj.todos.length === 1 ? 'item' : 'items')}`;
   else detail = path || command || pattern || description;
   if (!detail && !obj && typeof input === 'string') detail = input.trim().split('\n')[0].slice(0, 160);
   const rawOutput = stripAnsi(output);
   const diff = buildDiff(obj) || (/^(diff --git|@@ )/m.test(rawOutput) ? rawOutput : '');
   return {
     kind,
-    label: LABELS[kind] || LABELS.tool,
+    label: t(LABELS[kind] || LABELS.tool),
     detail: String(detail || '').replace(/\s+/g, ' ').trim().slice(0, 180),
     command,
     path,
@@ -133,7 +135,7 @@ export function describeTool(name, input, output = '') {
 }
 
 export function toolStatusLabel(status) {
-  if (status === 'running') return 'Running';
-  if (status === 'error') return 'Failed';
-  return 'Done';
+  if (status === 'running') return t('Running');
+  if (status === 'error') return t('Failed');
+  return t('Done');
 }

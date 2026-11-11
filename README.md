@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.4-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging and hub-visible automatic update status are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.5-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging, hub-visible automatic update status, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -19,7 +19,7 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | Dark | Light |
 | --- | --- |
 | ![Home in dark mode](docs/screenshots/dashboard-dark.png) | ![Home in light mode](docs/screenshots/dashboard-light.png) |
-| ![Structured chat in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat in light mode](docs/screenshots/chat-light.png) |
+| ![Session transcript in dark mode](docs/screenshots/chat-dark.png) | ![Session transcript in light mode](docs/screenshots/chat-light.png) |
 | ![Agent activity in dark mode](docs/screenshots/multi-agent-dashboard.png) | ![Agent activity in light mode](docs/screenshots/runs-light.png) |
 | ![Projects in dark mode](docs/screenshots/projects-dark.png) | ![Projects in light mode](docs/screenshots/projects-light.png) |
 | ![Settings in dark mode](docs/screenshots/settings-dark.png) | ![Settings in light mode](docs/screenshots/settings-light.png) |
@@ -37,6 +37,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 [split workspace on a phone](docs/screenshots/workspace-mobile.png),
 [model, reasoning and attachment composer](docs/screenshots/chat-composer-dark.png),
 [side-by-side diff](docs/screenshots/diff-split-dark.png),
+[side-by-side diff in light mode](docs/screenshots/diff-split-light.png),
 [cross-host repository grouping](docs/screenshots/sessions-repos-dark.png),
 [tool-call cards](docs/screenshots/chat-tools-dark.png),
 [Git context panel](docs/screenshots/chat-context-dark.png),
@@ -67,6 +68,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Projects** | Sessions grouped by normalized working directory, with branch, agents and active counts; identical remotes are recognized across hosts and worktrees are counted |
 | **Favorites** | Per-user pinned sessions reflected in the sidebar and session/chat headers |
 | **Themes** | Dark, light and system mode; stored per user on the hub, with an initial system-colored login screen |
+| **Languages** | English (default) and German interface; selectable on the login screen or under Settings, stored per browser, with `<html lang>` and date/number locale following the choice |
 | **Navigation** | Collapsible desktop sidebar, mobile bottom navigation, session tabs and a `Ctrl/Cmd+K` command palette |
 | **Transcripts** | Read-only, paged, Markdown-rendered messages, collapsible tool cards and reasoning; fetched on demand from the host |
 | **Export** | Full transcript as Markdown or JSON, fetched page-by-page from the host and bounded at 10,000 messages |
@@ -79,7 +81,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
 | **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects |
 | **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events |
-| **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host |
+| **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host; opens a full-width changes page with unified and split layouts |
 | **PWA** | Manifest, service worker, maskable PNG icons, installable on desktop and mobile |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
 | **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
