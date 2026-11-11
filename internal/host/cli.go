@@ -70,12 +70,13 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, string, error
 	}
 	hubKey, _ := FetchHubPublicKey(ctx, hubURL)
 	cfg := Config{
-		HubURL:       hubURL,
-		HostID:       pr.HostID,
-		HostName:     name,
-		PrivateKey:   base64.StdEncoding.EncodeToString(priv),
-		HubPublicKey: hubKey,
-		Policy:       DefaultPolicy(),
+		HubURL:             hubURL,
+		HostID:             pr.HostID,
+		HostName:           name,
+		PrivateKey:         base64.StdEncoding.EncodeToString(priv),
+		HubPublicKey:       hubKey,
+		HubSigningRequired: hubKey != "",
+		Policy:             DefaultPolicy(),
 	}
 	if err := SaveConfig(cfg); err != nil {
 		return Config{}, "", err
@@ -109,12 +110,17 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 			fmt.Fprintln(out, "identity:   ok")
 		}
 		if cfg.HubPublicKey == "" {
-			fmt.Fprintln(out, "hub signing: not pinned yet (pinned on the next connection to a signing hub)")
+			if cfg.HubSigningRequired {
+				fmt.Fprintln(out, "hub signing: REQUIRED but no key pinned")
+				issues++
+			} else {
+				fmt.Fprintln(out, "hub signing: not pinned yet (pinned on the next connection to a signing hub)")
+			}
 		} else if raw, err := base64.StdEncoding.DecodeString(cfg.HubPublicKey); err != nil || len(raw) != ed25519.PublicKeySize {
 			fmt.Fprintln(out, "hub signing: INVALID pinned key")
 			issues++
 		} else {
-			fmt.Fprintln(out, "hub signing: pinned")
+			fmt.Fprintln(out, "hub signing: pinned and required")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(cfg.HubURL, "/")+"/healthz", nil)

@@ -795,6 +795,34 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, run)
 }
 
+func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("id")
+	if !s.hostPermission(u, hostID, "view") {
+		writeError(w, http.StatusForbidden, "host view permission required")
+		return
+	}
+	if !s.hostOnline(hostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
+	params, _ := json.Marshal(map[string]string{"channel": channel})
+	ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, hostID, "update.check", params)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var info any
+	if err := json.Unmarshal(raw, &info); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
 func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	hostID := r.PathValue("id")

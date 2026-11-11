@@ -27,7 +27,7 @@ const (
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.3.2"
+var Version = "0.3.3"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -129,6 +129,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/hosts/pairing-codes", s.requireAuth(s.requireStepUp(s.handlePairingCode)))
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeHost)))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
+	mux.HandleFunc("GET /api/v1/hosts/{id}/update", s.requireAuth(s.handleHostUpdate))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))
 
 	mux.HandleFunc("GET /api/v1/projects", s.requireAuth(s.handleProjects))

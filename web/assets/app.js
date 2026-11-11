@@ -1163,7 +1163,30 @@ async function pageHosts() {
       </div>
       <div class="aside-label mt-2">Detected agents</div>
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || '<span class="chip">none</span>'}</div>
-      <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`);
+      <div class="aside-label mt-2">Updates</div>
+      <div id="host-update-result" class="host-update-result"><p class="aside-note">Check the GitHub release feed. Installation stays on the host: <code>nexusd update --install</code>.</p></div>
+      <div class="modal-actions"><button class="btn small" id="host-update-check" type="button">Check for updates</button><button class="btn" type="button" data-close>Close</button></div>`);
+    document.getElementById('host-update-check')?.addEventListener('click', async () => {
+      const box = document.getElementById('host-update-result');
+      const button = document.getElementById('host-update-check');
+      if (!box || !button) return;
+      button.disabled = true;
+      box.innerHTML = '<div class="empty compact"><span class="spinner"></span>Checking?</div>';
+      try {
+        const info = await api(`/hosts/${encodeURIComponent(h.id)}/update`);
+        box.innerHTML = `
+          <div class="meta-list">
+            <div><span>Installed</span><strong>${esc(info.current || h.version || 'unknown')}</strong></div>
+            <div><span>Latest</span><strong>${esc(info.latest || 'unknown')}</strong></div>
+            <div><span>Status</span><strong>${info.available ? 'update available' : 'up to date'}</strong></div>
+          </div>
+          ${info.available ? `<div class="notice small mt-1">Run on the host: <code>nexusd update --install</code> (refuses while runs are active).</div>` : ''}`;
+      } catch (err) {
+        box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><p class="aside-note mt-1">Private releases require <code>NEXUS_GITHUB_TOKEN</code> with Contents: read on the host.</p>`;
+      } finally {
+        button.disabled = false;
+      }
+    });
   }));
   view.querySelectorAll('[data-share-host]').forEach((b) => b.addEventListener('click', () => shareHostDialog(hosts.find((h) => h.id === b.dataset.shareHost))));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {

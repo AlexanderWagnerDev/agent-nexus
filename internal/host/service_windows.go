@@ -17,6 +17,11 @@ import (
 // windowsTaskName is per-user, so no administrator rights are required.
 const windowsTaskName = "AgentNexus Host"
 
+func serviceInstalled() bool {
+	_, err := runWindowsCommand("schtasks", "/Query", "/TN", windowsTaskName)
+	return err == nil
+}
+
 func windowsTaskService(action, exe string) error {
 	switch action {
 	case "install":

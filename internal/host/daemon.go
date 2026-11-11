@@ -48,6 +48,8 @@ type Daemon struct {
 	hubNonceMu sync.Mutex
 	hubNonces  map[string]time.Time
 
+	statusMu sync.Mutex
+
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
 }
@@ -79,6 +81,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return errors.New("not configured")
 	}
 	cleanupStaleAttachments(24 * time.Hour)
+	d.writeRuntimeStatus()
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -117,8 +120,15 @@ func jitter(d time.Duration) time.Duration {
 
 func (d *Daemon) connect(ctx context.Context) error {
 	if d.cfg.HubPublicKey == "" {
-		if key, err := FetchHubPublicKey(ctx, d.cfg.HubURL); err == nil && key != "" {
+		key, err := FetchHubPublicKey(ctx, d.cfg.HubURL)
+		if err != nil || key == "" {
+			if d.cfg.HubSigningRequired {
+				return fmt.Errorf("hub signing is required but no key could be pinned: %w", err)
+			}
+			d.log.Warn("hub command signing is not pinned; continuing unsigned", "error", err)
+		} else {
 			d.cfg.HubPublicKey = key
+			d.cfg.HubSigningRequired = true
 			if err := SaveConfig(d.cfg); err != nil {
 				d.log.Warn("cannot save pinned hub key", "error", err)
 			} else {
@@ -321,6 +331,7 @@ func (d *Daemon) sendSessions(force bool) error {
 		return err
 	}
 	d.lastSnapshot = next
+	d.writeRuntimeStatus()
 	return nil
 }
 
@@ -335,6 +346,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			if err := d.sendSessions(false); err != nil {
 				d.log.Debug("session refresh failed", "error", err)
 			}
+			d.writeRuntimeStatus()
 		}
 	}
 }
@@ -604,6 +616,14 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			return nil, err
 		}
 		return d.gitView(context.Background(), p.Cwd)
+	case "update.check":
+		var p struct {
+			Channel string `json:"channel"`
+		}
+		_ = json.Unmarshal(params, &p)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return CheckForUpdate(ctx, Version, p.Channel)
 	case "run.options":
 		var p struct {
 			RunID string `json:"run_id"`
@@ -765,4 +785,37 @@ func diffSessionSnapshot(previous map[string]string, sessions []protocol.Session
 		}
 	}
 	return changed, removed, next
+}
+
+type runtimeStatus struct {
+	PID        int       `json:"pid"`
+	Version    string    `json:"version"`
+	ActiveRuns int       `json:"active_runs"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (d *Daemon) activeRunCount() int {
+	d.runMu.Lock()
+	defer d.runMu.Unlock()
+	return len(d.runs) + len(d.structured) + len(d.codexRuns) + len(d.acpRuns) + len(d.startingRuns)
+}
+
+// writeRuntimeStatus publishes the active-run count for the updater. A stale
+// file is ignored, so a crashed daemon cannot block a recovery update.
+func (d *Daemon) writeRuntimeStatus() {
+	dir, err := ConfigDir()
+	if err != nil {
+		return
+	}
+	d.statusMu.Lock()
+	defer d.statusMu.Unlock()
+	data, _ := json.Marshal(runtimeStatus{
+		PID: os.Getpid(), Version: Version,
+		ActiveRuns: d.activeRunCount(), UpdatedAt: time.Now().UTC(),
+	})
+	path := filepath.Join(dir, "runtime.json")
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err == nil {
+		_ = os.Rename(tmp, path)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,8 @@ func main() {
 		acpCmd(os.Args[2:])
 	case "status":
 		statusCmd()
+	case "update":
+		updateCmd(os.Args[2:])
 	case "service":
 		serviceCmd(os.Args[2:])
 	case "version", "--version", "-v":
@@ -57,6 +60,10 @@ Usage:
   nexusd acp [--agent <name> [--command <adapter>]]
   nexusd status
   nexusd service <install|uninstall|status>
+  nexusd update --check [--channel stable|prerelease]
+  nexusd update --stage [--channel ...]
+  nexusd update --install [--force] [--allow-checksum-only]
+  nexusd update --rollback [--force]
   nexusd version
 
 The daemon runs as the logged-in user; it never needs root/SYSTEM.
@@ -236,5 +243,64 @@ func serviceCmd(args []string) {
 	if err := host.ServiceAction(args[0]); err != nil {
 		fmt.Fprintln(os.Stderr, "service:", err)
 		os.Exit(1)
+	}
+}
+
+func updateCmd(args []string) {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	check := fs.Bool("check", false, "check the release feed")
+	stage := fs.Bool("stage", false, "download and verify the latest release")
+	install := fs.Bool("install", false, "install the staged release and restart the service")
+	rollback := fs.Bool("rollback", false, "restore nexusd.previous and restart the service")
+	channel := fs.String("channel", "auto", "stable, prerelease or auto")
+	force := fs.Bool("force", false, "restart even if active agent runs are reported")
+	allowChecksumOnly := fs.Bool("allow-checksum-only", false, "accept a release when cosign is unavailable (checksum only)")
+	_ = fs.Parse(args)
+	if *rollback {
+		if err := host.RollbackUpdate(*force); err != nil {
+			fmt.Fprintln(os.Stderr, "update:", err)
+			os.Exit(1)
+		}
+		fmt.Println("rollback scheduled; the service restarts with nexusd.previous")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	info, err := host.CheckForUpdate(ctx, host.Version, *channel)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "update:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("current: %s\nlatest:  %s\nasset:   %s\n", info.Current, info.Latest, info.AssetName)
+	if !info.Available {
+		fmt.Println("status:  up to date")
+		return
+	}
+	if *check && !*stage && !*install {
+		fmt.Println("status:  update available")
+		return
+	}
+	dir, err := host.ConfigDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "update:", err)
+		os.Exit(1)
+	}
+	stagedDir := filepath.Join(dir, "updates", info.Latest)
+	staged, err := host.StageUpdate(ctx, info, stagedDir, !*allowChecksumOnly)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "update:", err)
+		os.Exit(1)
+	}
+	fmt.Println("staged: ", staged)
+	if *check && !*install {
+		fmt.Println("checksum verified")
+		return
+	}
+	if *install {
+		if err := host.InstallStagedUpdate(staged, *force); err != nil {
+			fmt.Fprintln(os.Stderr, "update:", err)
+			os.Exit(1)
+		}
+		fmt.Println("update applied; check nexusd doctor and the service status")
 	}
 }
