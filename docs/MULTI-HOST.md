@@ -17,7 +17,7 @@ SSH or WSL are required.
    ```dotenv
    HUB_DOMAIN=nexus.example.com
    NEXUS_TAG=alpha
-   WUD_WATCH_DIGEST=false
+   WUD_WATCH_DIGEST=true
    HUB_BIND=127.0.0.1
    HUB_PORT=8787
    ```

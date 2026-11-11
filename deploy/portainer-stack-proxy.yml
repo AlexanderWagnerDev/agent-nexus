@@ -10,7 +10,7 @@
 #   NEXUS_TAG       alpha for the current development channel, or sha-<short>
 #                   for a pinned commit build. No official release exists yet.
 # Optional:
-#   HUB_NAME, WUD_WATCH_DIGEST=false (true when tracking a moving tag), subnets
+#   HUB_NAME, WUD_WATCH_DIGEST=true (false when pinning a sha- tag), subnets
 #
 # Create/inspect the proxy network first, for example:
 #   docker network ls
@@ -54,7 +54,7 @@ services:
       retries: 3
     labels:
       wud.watch: "true"
-      wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
+      wud.watch.digest: "${WUD_WATCH_DIGEST:-true}"
       wud.tag.include: "^${NEXUS_TAG:-alpha}$$"
       wud.display.name: "AgentNexus Hub"
       wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"

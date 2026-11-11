@@ -12,7 +12,7 @@
 #                release yet; do not point production data at alpha builds.
 # Optional:
 #   HUB_NAME, HUB_BIND (default 127.0.0.1), HUB_PORT (default 8787)
-#   WUD_WATCH_DIGEST=false (set true only when tracking a moving tag such as alpha)
+#   WUD_WATCH_DIGEST=true (default; set false when pinning a sha- tag)
 #   NEXUS_IPV4_SUBNET, NEXUS_IPV6_SUBNET
 #
 # IPv6: the Docker daemon must have IPv6 enabled; user-defined bridges then
@@ -53,7 +53,7 @@ services:
       retries: 3
     labels:
       wud.watch: "true"
-      wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
+      wud.watch.digest: "${WUD_WATCH_DIGEST:-true}"
       wud.tag.include: "^${NEXUS_TAG:-alpha}$$"
       wud.display.name: "AgentNexus Hub"
       wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"

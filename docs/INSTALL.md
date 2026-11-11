@@ -60,10 +60,10 @@ bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
 enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 
 The stack includes WUD labels. There is no official release yet: `alpha`
-tracks `main` and `sha-<short>` pins a commit. Set `WUD_WATCH_DIGEST=true` only
-when you deliberately follow the moving `alpha` tag. WUD only reports updates;
-it does not apply them. Never let an update cross a hub schema change without a
-backup.
+tracks `main` and `sha-<short>` pins a commit. Digest watching is enabled by
+default so WUD notices new `alpha` builds; set `WUD_WATCH_DIGEST=false` when you
+pin a `sha-` tag. WUD only reports updates; it does not apply them. Never let an
+update cross a hub schema change without a backup.
 
 If you use a bind mount for `/data`, make it writable by UID `65532`:
 
