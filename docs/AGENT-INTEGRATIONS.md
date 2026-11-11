@@ -36,10 +36,15 @@ Technical analysis of how AgentNexus discovers existing sessions of each coding 
 
 **Key insight:** All three first-release agents support resuming by native session ID from the command line. This makes **terminal mode** (ADR-003) a robust, vendor-neutral baseline for native continuation that does not depend on any experimental protocol. Structured mode adds a richer UI but relies on interfaces that are partly experimental — hence it is layered on top, not the foundation.
 
-### 1.1 Implementation notes (0.1.0-dev)
+### 1.1 Implementation notes (0.2.0-dev)
 
 Observed against local stores on Windows (2026-11-10), in addition to the
 vendor documentation above:
+
+- **Normalization:** Windows working directories are converted to forward
+  slashes before reaching the hub, so sessions from different adapter stores
+  group under one project. Branch names are filled from a read-only Git lookup
+  with a ten-minute per-directory cache, only inside the host policy roots.
 
 - **Codex CLI 0.156.x** writes compressed `.jsonl.zst` rollouts. The adapter
   decompresses them with `klauspost/compress/zstd`; plain `.jsonl` remains

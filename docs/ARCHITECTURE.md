@@ -144,15 +144,19 @@ OpenAPI document yet):
 | `GET /api/v1/hosts` | Hosts with state and agent inventory |
 | `POST /api/v1/hosts/pairing-codes` | Create a one-time pairing code |
 | `DELETE /api/v1/hosts/{hostId}` | Revoke host |
-| `GET /api/v1/sessions?host=&agent=&project=&state=&q=&cursor=` | List session records |
+| `GET /api/v1/sessions?host=&agent=&project=&state=&q=&limit=&offset=` | Paged session records |
+| `GET /api/v1/projects?limit=` | Session metadata grouped by host and working directory |
+| `GET /api/v1/favorites`, `PUT/DELETE /api/v1/sessions/{sessionId}/favorite` | Per-user pinned sessions |
 | `GET /api/v1/sessions/{sessionId}/transcript?offset=&limit=` | Paged transcript (fetched from host) |
 | `GET /api/v1/sessions/{sessionId}/export?format=markdown|json` | Full transcript export, bounded at 10,000 messages |
+| `GET /api/v1/sessions/{sessionId}/git` | Read-only branch, status and diff from the host |
 | `POST /api/v1/sessions/{sessionId}/runs` | Resume (`mode=terminal|structured`, `fork=false|true`) |
 | `POST /api/v1/hosts/{hostId}/runs` | Start a new session (`agent`, `cwd`, `mode`) |
 | `GET /api/v1/runs` | Active runs visible to the user (dashboard) |
 | `POST /api/v1/runs/{runId}/lease` | Acquire/transfer controller lease |
 | `POST /api/v1/runs/{runId}/stop` | Stop run |
 | WebSocket `approval` message | Answer an approval request through the run lease |
+| `GET /api/v1/notifications`, `POST /api/v1/notifications/read` | In-app notification history and read state |
 | `GET /api/v1/search?q=` | Federated full-text search |
 | `GET /api/v1/devices`, `DELETE /api/v1/devices/{id}` | Device management |
 | `GET /api/v1/audit` | Audit log (verified chain) |

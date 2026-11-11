@@ -29,9 +29,9 @@ flowchart LR
 | [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** 1.0 | **1.0.0** |
 | [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | 1.x |
 
-## Implementation status (2026-11-10)
+## Implementation status (2026-11-11)
 
-The repository now contains a runnable 0.1.0 development implementation. The
+The repository now contains a runnable 0.2.0 development implementation. The
 acceptance criteria below remain the definition of done; this table records
 what is actually implemented and tested versus what is still open.
 
@@ -41,9 +41,22 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push (approval/completion/error/disconnect), transcript export (Markdown/JSON), live runs dashboard, QR/link device pairing, PWA manifest/service worker, 360 px mobile layout review | WCAG 2.2 AA audit for non-terminal views; Claude ACP path not exercised against a real Claude session |
+| 4 | 🟡 partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox, transcript export (Markdown/JSON), projects, favorites, session tabs, command palette, control room, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review | Split view, attachments and model/thinking selection are not implemented; WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
+
+### 0.2 UI and workflow pass
+
+- Chat now renders Markdown/GFM, highlighted code, tables, collapsible tool
+  cards with human summaries, tool output/diffs, reasoning and approvals; native
+  history is paged and streaming is throttled.
+- New shell: projects and pinned sessions in the rail, session tabs, resizable
+  context panel, notification inbox, command palette and mobile bottom nav.
+- Read-only Git branch/status/diff is available from a session or chat context.
+- Windows path normalization and branch enrichment make projects consistent
+  across OpenCode, Codex and Claude stores.
+- The design rationale and remaining gaps are documented in
+  [UI-DESIGN.md](UI-DESIGN.md).
 
 ### Honest limitations of the current build
 
@@ -74,9 +87,11 @@ what is actually implemented and tested versus what is still open.
   malicious hub cannot bypass it because the check runs on the host.
 - The browser client has dark, light and system themes persisted in
   `user_settings` on the hub. A Playwright smoke test covers login, themes,
-  navigation and a 390 px mobile viewport in CI.
+  navigation, projects, command palette, notifications, sidebar collapse and a
+  390 px mobile viewport in CI; Markdown/tool formatting has Node unit tests.
 - Screenshots in `docs/screenshots/` were captured from a running hub with a
-  real Windows host and Codex structured session; they are not mockups.
+  real Windows host and OpenCode/Codex sessions, including tool calls and a Git
+  review; they are not mockups.
 
 
 ## Priorities

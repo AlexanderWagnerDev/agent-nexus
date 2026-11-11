@@ -24,7 +24,7 @@ Versioned images are published to GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:latest
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.1.0   # release tag
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.2.0-rc.1   # release tag
 ```
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
@@ -51,7 +51,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — a release tag such as `v0.1.0`; avoid `latest` in production.
+- `NEXUS_TAG` — a release tag such as `v0.2.0-rc.1`; avoid `latest` in production.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
