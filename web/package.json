@@ -5,9 +5,11 @@
   "scripts": {
     "e2e": "node e2e/smoke.mjs",
     "e2e:live": "node e2e/live.mjs",
+    "e2e:a11y": "node e2e/a11y.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
+    "axe-core": "^4.14.0",
     "playwright": "^1.65.0"
   }
 }

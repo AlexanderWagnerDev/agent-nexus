@@ -135,7 +135,7 @@ the previous container tag and database backup for rollback.
 
 - Signed-command mode is not implemented; the hub remains trusted for run
   commands.
-- PostgreSQL, native mobile/desktop apps and WCAG 2.2 AA certification are open.
+- PostgreSQL, native mobile/desktop apps and manual WCAG 2.2 AA certification are open (the automated scan is clean).
 - Claude ACP was not exercised against a real Claude installation in this
   release; terminal mode is verified.
 - Linux/macOS real-agent sessions were not available for testing; CI covers

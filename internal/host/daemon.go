@@ -48,7 +48,9 @@ type Daemon struct {
 	hubNonceMu sync.Mutex
 	hubNonces  map[string]time.Time
 
-	statusMu sync.Mutex
+	statusMu   sync.Mutex
+	updateMu   sync.Mutex
+	lastUpdate *protocol.UpdateStatus
 
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
@@ -82,6 +84,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	cleanupStaleAttachments(24 * time.Hour)
 	d.writeRuntimeStatus()
+	go d.updateLoop(ctx)
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -218,6 +221,7 @@ func (d *Daemon) connect(ctx context.Context) error {
 	if err := d.sendActiveRuns(); err != nil {
 		d.log.Warn("run snapshot failed", "error", err)
 	}
+	d.sendStoredUpdateStatus()
 
 	// Discovery refresh: rescan on start and every 30 seconds. Change
 	// detection is a hash of the normalized snapshot; the hub only receives
@@ -818,4 +822,51 @@ func (d *Daemon) writeRuntimeStatus() {
 	if err := os.WriteFile(tmp, data, 0o600); err == nil {
 		_ = os.Rename(tmp, path)
 	}
+}
+
+func (d *Daemon) updateLoop(ctx context.Context) {
+	d.checkAndReportUpdate(ctx)
+	t := time.NewTicker(6 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			d.checkAndReportUpdate(ctx)
+		}
+	}
+}
+
+func (d *Daemon) checkAndReportUpdate(ctx context.Context) {
+	channel := strings.TrimSpace(os.Getenv("NEXUS_UPDATE_CHANNEL"))
+	info, err := CheckForUpdate(ctx, Version, channel)
+	status := &protocol.UpdateStatus{
+		Current: Version, Latest: info.Latest, Available: info.Available,
+		Prerelease: info.Prerelease, CheckedAt: time.Now().UTC(),
+	}
+	if err != nil {
+		status.Error = err.Error()
+	}
+	d.updateMu.Lock()
+	d.lastUpdate = status
+	d.updateMu.Unlock()
+	d.sendUpdateStatus(status)
+}
+
+func (d *Daemon) sendStoredUpdateStatus() {
+	d.updateMu.Lock()
+	status := d.lastUpdate
+	d.updateMu.Unlock()
+	if status != nil {
+		d.sendUpdateStatus(status)
+	}
+}
+
+func (d *Daemon) sendUpdateStatus(status *protocol.UpdateStatus) {
+	if status == nil {
+		return
+	}
+	copyStatus := *status
+	_ = d.send(protocol.Envelope{Type: "update.status", Update: &copyStatus})
 }

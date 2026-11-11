@@ -444,6 +444,12 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		if s.hostOnline(hosts[i].ID) {
 			hosts[i].Status = "online"
 		}
+		s.updateMu.Lock()
+		if status, ok := s.hostUpdates[hosts[i].ID]; ok {
+			copyStatus := status
+			hosts[i].Update = &copyStatus
+		}
+		s.updateMu.Unlock()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
 }

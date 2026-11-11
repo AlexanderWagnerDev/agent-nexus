@@ -9,7 +9,7 @@
   --line-strong: #3a3d43;
   --text: #e8e9eb;
   --muted: #9a9da4;
-  --muted-2: #858a92;
+  --muted-2: #9aa0a8;
   --accent: #7d8cf8;
   --accent-ink: #ffffff;
   --accent-soft: rgba(125, 140, 248, .13);
@@ -52,15 +52,15 @@
   --line-strong: #c7cbd1;
   --text: #1c1d20;
   --muted: #63666d;
-  --muted-2: #6b7078;
+  --muted-2: #61666e;
   --accent: #4056d6;
   --accent-ink: #ffffff;
   --accent-soft: rgba(64, 86, 214, .08);
   --accent-line: rgba(64, 86, 214, .36);
   --red: #c9374a;
-  --green: #2f8a5d;
+  --green: #25714a;
   --amber: #996d1f;
-  --blue: #2f61c9;
+  --blue: #2a58b8;
   --purple: #7252c7;
   --shadow: 0 18px 46px rgba(28, 29, 32, .14);
   --sidebar-bg: #f1f2f4;
@@ -139,8 +139,8 @@ code, pre, .mono { font-family: var(--font-mono); }
   display: inline-grid; place-items: center;
   border-radius: 7px;
   border: 1px solid color-mix(in srgb, var(--glyph) 26%, var(--line));
-  background: color-mix(in srgb, var(--glyph) 11%, transparent);
-  color: color-mix(in srgb, var(--glyph) 80%, var(--text));
+  background: color-mix(in srgb, var(--glyph) 18%, transparent);
+  color: var(--text);
   font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .02em;
 }
 .agent-glyph.small { width: 21px; height: 21px; border-radius: 5px; font-size: 8px; }

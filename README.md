@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.3-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.4-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging and hub-visible automatic update status are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -176,6 +176,9 @@ go vet ./...
 cd web && npm test          # Markdown and diff unit tests
 cd web && npm run e2e       # disposable hub + browser smoke test
 
+# axe-core WCAG 2.2 A/AA scan against a running hub (desktop and mobile):
+BASE_URL=http://127.0.0.1:8788 npm run e2e:a11y
+
 # One real prompt against an existing structured run on a paired host:
 BASE_URL=http://127.0.0.1:8788 RUN_ID=<run-id> npm run e2e:live
 ```
@@ -233,7 +236,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
 | 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; WCAG audit open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, hub command signing and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 

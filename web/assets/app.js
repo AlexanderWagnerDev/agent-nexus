@@ -1123,7 +1123,7 @@ async function pageHosts() {
   view.innerHTML = `<div class="list">${hosts.map((h) => `
     <div class="host-row">
       <div class="host-id">
-        <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'waiting_for_input' : h.status)}</div>
+        <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline'), h.pending ? 'waiting_for_input' : h.status)}${h.update?.available ? `<span class="badge waiting_for_input" title="nexusd update available">update ${esc(h.update.latest || '')}</span>` : ''}</div>
         <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · seen ${esc(fmtRelative(h.last_seen))}</div>
       </div>
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || '<span class="chip">no agents</span>'}</div>
@@ -1164,7 +1164,15 @@ async function pageHosts() {
       <div class="aside-label mt-2">Detected agents</div>
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || '<span class="chip">none</span>'}</div>
       <div class="aside-label mt-2">Updates</div>
-      <div id="host-update-result" class="host-update-result"><p class="aside-note">Check the GitHub release feed. Installation stays on the host: <code>nexusd update --install</code>.</p></div>
+      <div id="host-update-result" class="host-update-result">${h.update ? `
+        <div class="meta-list">
+          <div><span>Installed</span><strong>${esc(h.update.current || h.version || 'unknown')}</strong></div>
+          <div><span>Latest</span><strong>${esc(h.update.latest || 'unknown')}</strong></div>
+          <div><span>Status</span><strong>${h.update.error ? 'check failed' : (h.update.available ? 'update available' : 'up to date')}</strong></div>
+        </div>
+        ${h.update.error ? `<div class="notice error small mt-1">${esc(h.update.error)}</div>` : ''}
+        ${h.update.available ? `<div class="notice small mt-1">Run on the host: <code>nexusd update --install</code> (refuses while runs are active).</div>` : ''}
+      ` : '<p class="aside-note">Check the GitHub release feed. Installation stays on the host: <code>nexusd update --install</code>.</p>'}</div>
       <div class="modal-actions"><button class="btn small" id="host-update-check" type="button">Check for updates</button><button class="btn" type="button" data-close>Close</button></div>`);
     document.getElementById('host-update-check')?.addEventListener('click', async () => {
       const box = document.getElementById('host-update-result');
@@ -1348,9 +1356,9 @@ async function pageSessions() {
   view.innerHTML = `
     <div class="filterbar">
       <label class="search-field">${svgIcon('search')}<input class="input" id="filter-q" placeholder="Filter title, project or path…" value="${esc(params.get('q') || '')}"></label>
-      <select class="select" id="filter-agent"><option value="">All agents</option>${['claude', 'codex', 'opencode', 'gemini'].map((a) => `<option value="${a}" ${params.get('agent') === a ? 'selected' : ''}>${agentMeta(a).label}</option>`).join('')}</select>
-      <select class="select" id="filter-host"><option value="">All hosts</option>${hosts.map((h) => `<option value="${esc(h.id)}" ${params.get('host') === h.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>
-      <select class="select" id="filter-state"><option value="">Any state</option>${['running', 'waiting_for_input', 'idle', 'completed', 'failed', 'unknown'].map((s) => `<option value="${s}" ${params.get('state') === s ? 'selected' : ''}>${s.replaceAll('_', ' ')}</option>`).join('')}</select>
+      <select class="select" id="filter-agent" aria-label="Filter by agent"><option value="">All agents</option>${['claude', 'codex', 'opencode', 'gemini'].map((a) => `<option value="${a}" ${params.get('agent') === a ? 'selected' : ''}>${agentMeta(a).label}</option>`).join('')}</select>
+      <select class="select" id="filter-host" aria-label="Filter by host"><option value="">All hosts</option>${hosts.map((h) => `<option value="${esc(h.id)}" ${params.get('host') === h.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>
+      <select class="select" id="filter-state" aria-label="Filter by state"><option value="">Any state</option>${['running', 'waiting_for_input', 'idle', 'completed', 'failed', 'unknown'].map((s) => `<option value="${s}" ${params.get('state') === s ? 'selected' : ''}>${s.replaceAll('_', ' ')}</option>`).join('')}</select>
       <span class="filter-count" id="session-count"></span>
     </div>
     <div class="project-filter" id="project-filter" hidden></div>

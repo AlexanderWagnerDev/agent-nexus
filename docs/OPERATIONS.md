@@ -140,6 +140,16 @@ without `--force`; it is a no-op when current and refuses during active work.
 Keep the hub and host protocol major versions compatible, and upgrade the hub
 before the hosts.
 
+The daemon also checks the release feed at startup and every six hours and
+reports `update.status` to the hub. **Hosts** shows an update badge and the
+installed/latest versions; **Hosts -> host -> Check for updates** triggers an
+immediate signed check. This only reports availability: applying an update
+remains a host CLI action. Set `NEXUS_UPDATE_CHANNEL=prerelease` on the host
+service to include prereleases, and provide `NEXUS_GITHUB_TOKEN` there so the
+background check can read the private release feed. If the feed is
+unreachable, the host detail shows the check error instead of a false
+"up to date".
+
 ## Upgrade
 
 

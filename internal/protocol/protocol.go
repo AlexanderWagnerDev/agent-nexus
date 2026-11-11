@@ -76,6 +76,17 @@ type Session struct {
 	Warning         string    `json:"warning,omitempty"`
 }
 
+// UpdateStatus is reported by a host after checking the release feed. The hub
+// stores only this metadata so update availability can be shown centrally.
+type UpdateStatus struct {
+	Current    string    `json:"current"`
+	Latest     string    `json:"latest,omitempty"`
+	Available  bool      `json:"available"`
+	Prerelease bool      `json:"prerelease,omitempty"`
+	CheckedAt  time.Time `json:"checked_at"`
+	Error      string    `json:"error,omitempty"`
+}
+
 // SessionKey identifies a native session without sending its metadata.
 type SessionKey struct {
 	Agent    string `json:"agent"`
@@ -229,6 +240,7 @@ type Envelope struct {
 	Error      string         `json:"error,omitempty"`
 	Run        *RunSpec       `json:"run,omitempty"`
 	Runs       []RunInfo      `json:"runs,omitempty"`
+	Update     *UpdateStatus  `json:"update,omitempty"`
 	Event      *RunEvent      `json:"event,omitempty"`
 	RunID      string         `json:"run_id,omitempty"`
 	Seq        uint64         `json:"seq,omitempty"`
@@ -284,6 +296,7 @@ type HostView struct {
 	Version  string         `json:"version"`
 	Status   string         `json:"status"`
 	LastSeen time.Time      `json:"last_seen"`
+	Update   *UpdateStatus  `json:"update,omitempty"`
 	Agents   []AgentInfo    `json:"agents"`
 	Policy   *PolicySummary `json:"policy,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`

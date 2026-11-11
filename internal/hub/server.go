@@ -27,7 +27,7 @@ const (
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.3.3"
+var Version = "0.3.4"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -52,6 +52,10 @@ type Server struct {
 	epoch        string
 	signer       *HubSigner
 
+	updateMu           sync.Mutex
+	hostUpdates        map[string]protocol.UpdateStatus
+	lastUpdateNotified map[string]string
+
 	passkeySessions passkeySessionStore
 }
 
@@ -65,18 +69,20 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		cfg.HubName = "AgentNexus"
 	}
 	s := &Server{
-		cfg:             cfg,
-		store:           store,
-		log:             logger,
-		loginLimiter:    newRateLimiter(10, 5*time.Minute),
-		pairLimiter:     newRateLimiter(10, 10*time.Minute),
-		hosts:           map[string]*hostConn{},
-		clients:         map[*clientConn]struct{}{},
-		runs:            map[string]*runState{},
-		runHosts:        map[string]string{},
-		pending:         map[string]*pendingRequest{},
-		passkeySessions: passkeySessionStore{data: map[string]passkeySession{}},
-		epoch:           newID(),
+		cfg:                cfg,
+		store:              store,
+		log:                logger,
+		loginLimiter:       newRateLimiter(10, 5*time.Minute),
+		pairLimiter:        newRateLimiter(10, 10*time.Minute),
+		hosts:              map[string]*hostConn{},
+		clients:            map[*clientConn]struct{}{},
+		runs:               map[string]*runState{},
+		runHosts:           map[string]string{},
+		pending:            map[string]*pendingRequest{},
+		passkeySessions:    passkeySessionStore{data: map[string]passkeySession{}},
+		hostUpdates:        map[string]protocol.UpdateStatus{},
+		lastUpdateNotified: map[string]string{},
+		epoch:              newID(),
 	}
 	s.ensureVAPID()
 	return s
@@ -394,6 +400,29 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 			s.log.Info("session changes applied", "host_id", hc.id, "upserted", upserted, "deleted", deleted, "full", msg.Full)
 			s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: hc.id})
 		}
+	case "update.status":
+		if msg.Update != nil {
+			status := *msg.Update
+			if status.CheckedAt.IsZero() {
+				status.CheckedAt = time.Now().UTC()
+			}
+			s.updateMu.Lock()
+			s.hostUpdates[hc.id] = status
+			notify := status.Available && s.lastUpdateNotified[hc.id] != status.Latest
+			if notify {
+				s.lastUpdateNotified[hc.id] = status.Latest
+			}
+			s.updateMu.Unlock()
+			s.broadcastHostUpdate(hc.id)
+			if notify {
+				if host, err := s.store.HostByID(hc.id); err == nil && host.OwnerID != "" {
+					_ = s.store.AddNotification(host.OwnerID, "update",
+						"Update available on "+host.Name,
+						"nexusd "+status.Latest+" is available (installed "+status.Current+")",
+						"", "#/hosts")
+				}
+			}
+		}
 	case "active_runs":
 		s.adoptHostRuns(hc.id, msg.Runs)
 	case "result":
@@ -529,6 +558,12 @@ func (s *Server) broadcastHostUpdate(id string) {
 	if s.hostOnline(id) {
 		hv.Status = "online"
 	}
+	s.updateMu.Lock()
+	if status, ok := s.hostUpdates[id]; ok {
+		copyStatus := status
+		hv.Update = &copyStatus
+	}
+	s.updateMu.Unlock()
 	s.broadcast(protocol.ServerEnvelope{Type: "host.updated", Host: &hv})
 }
 

@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-var Version = "0.3.3"
+var Version = "0.3.4"
 
 // Policy is enforced on the host and cannot be overridden by the hub.
 type Policy struct {
