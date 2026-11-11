@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.5-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging, hub-visible automatic update status, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging, hub-visible update status, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -103,23 +103,32 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 
 ## Quick start
 
-### Install a release (no build)
+### Build from source
 
-Download the latest release binaries or use the multi-arch image:
+There are no downloadable release binaries during alpha. Build the hub and the
+host daemon from the current `main`:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.3-rc.1
+make build          # produces bin/nexus-hub and bin/nexusd
 ```
 
+Container builds from `main` are published as development images only:
+
+```bash
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:alpha
+```
+
+The `alpha` tag moves with `main` and is not an official release. Use a
+`sha-<short>` tag for a pinned build.
+
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
-Linux and macOS host-client installation. The steps below build from source.
+Linux and macOS host-client installation.
 
 Requirements: Go 1.27+ and Node.js only for the JavaScript syntax check (the browser client is embedded and has no build step).
 
 ```bash
 # 1. Build
 make build          # produces bin/nexus-hub and bin/nexusd
-
 # 2. Run the hub locally
 ./bin/nexus-hub --addr 127.0.0.1:8080 --data-dir ./.nexus
 
@@ -147,7 +156,7 @@ cp .env.example .env      # set HUB_DOMAIN and HUB_NAME
 docker compose up -d --build
 ```
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Prebuilt multi-arch images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Security
 
@@ -258,6 +267,8 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md) | Per-agent session storage and native resume details |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, pairing, permissions, deployment hardening |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Data locations, backup/restore, upgrade, proxy, troubleshooting |
+| [docs/RELEASING.md](docs/RELEASING.md) | Alpha release policy and the locked manual release procedure |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | Public identity, screenshot rules and the pre-publication privacy checklist |
 | [docs/WSL.md](docs/WSL.md) | Running `nexusd` inside WSL as a separate host |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 

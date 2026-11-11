@@ -7,9 +7,10 @@
 # Required:
 #   HUB_DOMAIN      external HTTPS hostname (WebAuthn requires a hostname)
 #   PROXY_NETWORK   exact name of the existing proxy network
-#   NEXUS_TAG       v0.3.3-rc.1 for pinned updates, or latest for the latest channel
+#   NEXUS_TAG       alpha for the current development channel, or sha-<short>
+#                   for a pinned commit build. No official release exists yet.
 # Optional:
-#   HUB_NAME, WUD_WATCH_DIGEST=false (true for latest), subnets
+#   HUB_NAME, WUD_WATCH_DIGEST=false (true when tracking a moving tag), subnets
 #
 # Create/inspect the proxy network first, for example:
 #   docker network ls
@@ -19,7 +20,7 @@
 # honour enable_ipv6.
 services:
   hub:
-    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-v0.3.3-rc.1}
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-alpha}
     container_name: agentnexus-hub
     restart: always
     init: true
@@ -54,9 +55,9 @@ services:
     labels:
       wud.watch: "true"
       wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
-      wud.tag.include: "^${NEXUS_TAG:-v0.3.3-rc.1}$$"
+      wud.tag.include: "^${NEXUS_TAG:-alpha}$$"
       wud.display.name: "AgentNexus Hub"
-      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/releases"
+      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"
 
 volumes:
   nexus-data:

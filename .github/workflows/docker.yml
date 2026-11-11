@@ -3,7 +3,6 @@ name: Container
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
 
 # Workflows run on Avrea-hosted runners. Avrea GitHub App access is required.
@@ -37,13 +36,15 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # Alpha-only labels. Deliberately no semver and no "latest": there is
+          # no official version and ordinary commits must not look like a
+          # release. The moving "alpha" tag is for development testing only.
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=alpha,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.title=AgentNexus (alpha)
+            org.opencontainers.image.description=Self-hosted control plane for native coding-agent sessions. Alpha development build; not an official release.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
@@ -52,7 +53,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=alpha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true

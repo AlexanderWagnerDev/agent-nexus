@@ -2,7 +2,7 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current 0.3.3-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The current alpha build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
 ### 0.1.x implementation notes
 
@@ -337,7 +337,7 @@ sessions and fork enabled, and the forbidden-argument list above.
 - Every request and decision is audited with user, device and timestamp.
 - Push notifications for approvals contain no command text by default ("Codex on build-server needs approval").
 
-## Hub command signing (v0.3.2)
+## Hub command signing
 
 - The hub has a persistent Ed25519 key at `<data-dir>/hub-signing.key` and
   publishes the public key at `GET /api/v1/hub-key`.
@@ -345,7 +345,7 @@ sessions and fork enabled, and the forbidden-argument list above.
   and `signature` over a canonical JSON payload with the signature field
   cleared. This covers run control, requests, approvals and session snapshots.
 - The host pins the key during pairing, or on first connection for a host
-  paired before v0.3.2. On every message it verifies:
+  paired by an older daemon that did not pin one. On every message it verifies:
   - the Ed25519 signature;
   - a timestamp within ?5 minutes;
   - that the nonce has not been seen in the replay window.
@@ -357,7 +357,7 @@ sessions and fork enabled, and the forbidden-argument list above.
   key and prevents replay. Client/device-signed commands with host-local device
   approval remain the Phase 5 goal below.
 
-## Host update trust chain (v0.3.3)
+## Host update trust chain
 
 - The hub never serves or selects `nexusd` binaries. The host queries GitHub
   releases and downloads the archive and `checksums.txt` directly.

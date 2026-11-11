@@ -22,11 +22,12 @@ agents' own stores; the hub never rewrites them.
 
 ## Docker image and GHCR
 
-Versioned images are published to GitHub Container Registry:
+Development images are published to GitHub Container Registry. There is no
+official version yet: `alpha` tracks `main`, and `sha-<short>` pins a commit.
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:latest
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.3-rc.1   # release tag
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:alpha
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:sha-167a829   # pinned build
 ```
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
@@ -53,7 +54,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — a release tag such as `v0.3.3-rc.1`; avoid `latest` in production.
+- `NEXUS_TAG` — `alpha` for the development channel or `sha-<short>` to pin a commit. There is no official release yet.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided

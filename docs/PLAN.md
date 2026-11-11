@@ -2,10 +2,10 @@
 
 This document is the single source of truth for **what** AgentNexus must do (requirements), **how** it will be built (technical decisions) and **in which steps** (work packages). Component details live in [ARCHITECTURE.md](ARCHITECTURE.md), per-agent details in [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md), security details in [SECURITY.md](SECURITY.md), and the schedule with acceptance criteria in [ROADMAP.md](ROADMAP.md).
 
-- **Status:** Implementation in progress — 0.3.3-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-11)
+- **Status:** alpha implementation in progress; there is no official version yet. See [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status)
 - **Last reviewed:** 2026-11-11
 
-### Implementation snapshot (0.3.3-dev)
+### Implementation snapshot (alpha)
 
 - **Implemented:** hub/daemon, SAS host pairing, discovery/transcripts for
   Claude/Codex/OpenCode (Gemini best effort), terminal resume, OpenCode/Codex

@@ -21,7 +21,7 @@ Edit `.env`:
 ```dotenv
 HUB_DOMAIN=nexus.example.com
 HUB_NAME=AgentNexus
-NEXUS_TAG=v0.3.3-rc.1
+NEXUS_TAG=alpha
 ```
 
 Point the DNS record for `HUB_DOMAIN` at the server, open TCP 80/443, then:
@@ -59,11 +59,11 @@ read-only root filesystem with a small `/tmp`, no capabilities, and an IPv6
 bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
 enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 
-The stack includes WUD labels. For controlled releases set
-`NEXUS_TAG=v0.3.3-rc.1` and `WUD_WATCH_DIGEST=false`; for a deliberate rolling
-channel set `NEXUS_TAG=latest` and `WUD_WATCH_DIGEST=true`. WUD only reports
-updates; it does not apply them. Never let an update cross a hub schema change
-without a backup.
+The stack includes WUD labels. There is no official release yet: `alpha`
+tracks `main` and `sha-<short>` pins a commit. Set `WUD_WATCH_DIGEST=true` only
+when you deliberately follow the moving `alpha` tag. WUD only reports updates;
+it does not apply them. Never let an update cross a hub schema change without a
+backup.
 
 If you use a bind mount for `/data`, make it writable by UID `65532`:
 
@@ -86,22 +86,21 @@ IP address is not a valid WebAuthn origin).
 
 ## 3. Install and pair a host client
 
-Download the archive for the machine from the latest GitHub release:
+Build the host daemon from `main`. There are no downloadable release archives
+during alpha.
 
-- Windows x64: `agent-nexus_<version>_windows_amd64.zip`
-- Windows ARM64: `agent-nexus_<version>_windows_arm64.zip`
-- Linux x64/ARM64: `agent-nexus_<version>_linux_amd64.tar.gz` or `linux_arm64`
-- macOS Intel/Apple Silicon: `agent-nexus_<version>_darwin_amd64.tar.gz` or
-  `darwin_arm64`
+```bash
+go build -trimpath -o nexusd ./cmd/nexusd
+```
 
-The archive contains `nexus-hub`, `nexusd`, checksums and SBOM files. Hosts only
-need `nexusd`.
+CI cross-compiles the daemon for `windows/amd64`, `windows/arm64`,
+`linux/amd64`, `linux/arm64`, `darwin/amd64` and `darwin/arm64`. Build on the
+target machine or cross-compile with `GOOS`/`GOARCH`.
 
 ### Windows (including Windows Server 2025)
 
 ```powershell
-Expand-Archive agent-nexus_*_windows_amd64.zip -DestinationPath C:\AgentNexus
-cd C:\AgentNexus
+go build -trimpath -o nexusd.exe ./cmd/nexusd
 .\nexusd.exe pair --hub https://nexus.example.com --code XXXX-XXXX --name my-laptop
 ```
 
@@ -166,6 +165,12 @@ Files and Folders permission if your projects live under `~/Documents`,
 `nexusd` can check and stage releases without any hub involvement. This keeps a
 compromised hub out of the binary trust path.
 
+During alpha there is no public release feed, so `update --check` reports that no
+release exists. The staging, verification, rollback and active-run guards remain
+implemented and are exercised against local release fixtures in the test suite.
+A private test feed can be pointed at with `NEXUS_UPDATE_API` and
+`NEXUS_UPDATE_REPO`.
+
 ```bash
 nexusd update --check --channel prerelease
 nexusd update --stage --channel prerelease
@@ -174,9 +179,8 @@ nexusd update --install --force  # explicit override
 nexusd update --rollback         # restore nexusd.previous
 ```
 
-- The release repository is private. Create a fine-grained read-only GitHub
-  token with **Contents: read** and export it as `NEXUS_GITHUB_TOKEN` on the
-  host (or make the repository public).
+- A private release feed needs a fine-grained read-only GitHub token with
+  **Contents: read**, exported as `NEXUS_GITHUB_TOKEN` on the host.
 - Every archive is verified against the release `checksums.txt` (SHA-256).
   If `cosign` is installed, the signed checksum bundle is also verified against
   the release workflow identity. `--allow-checksum-only` is the explicit
@@ -239,7 +243,7 @@ WebSocket path through the proxy.
 ## Updating
 
 1. Back up `hub.db` (see [OPERATIONS.md](OPERATIONS.md)).
-2. Change `NEXUS_TAG` to the new release and run `docker compose up -d`.
+2. Change `NEXUS_TAG` to the new image tag and run `docker compose up -d`.
 3. Replace `nexusd` on each host and run `nexusd service install` again.
 4. Check `nexusd doctor`, `/healthz` and `/readyz`.
 

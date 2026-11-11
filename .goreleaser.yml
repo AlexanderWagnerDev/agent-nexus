@@ -50,8 +50,10 @@ signs:
     artifacts: checksum
 
 release:
-  draft: false
-  prerelease: auto
+  # Shift-left safety net: even a manual dispatch produces a draft. Publishing
+  # remains a separate, human decision in the GitHub UI.
+  draft: true
+  prerelease: true
 
 changelog:
   sort: asc

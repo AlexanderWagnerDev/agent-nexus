@@ -1,9 +1,21 @@
-name: Release
+name: Release (manual, locked)
+
+# Publication is intentionally manual. The project is in alpha and has no
+# official version. Nothing in this workflow runs on a normal commit or tag.
+# A future maintainer must dispatch it explicitly, point it at an existing tag
+# and type the confirmation word. See docs/RELEASING.md.
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing git tag to publish, for example v0.1.0'
+        required: true
+        type: string
+      confirm:
+        description: 'Type PUBLISH to confirm an intentional public release'
+        required: true
+        type: string
 
 # Workflows run on Avrea-hosted runners. Avrea GitHub App access is required.
 
@@ -12,13 +24,33 @@ permissions:
   id-token: write
 
 jobs:
+  guard:
+    runs-on: avrea-ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require explicit confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$CONFIRM" != "PUBLISH" ]; then
+            echo "Refusing to release: confirm input must be exactly PUBLISH." >&2
+            exit 1
+          fi
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "Refusing to release: tag must start with v and a digit." >&2; exit 1 ;;
+          esac
+
   release:
+    needs: guard
     runs-on: avrea-ubuntu-26.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod

@@ -125,7 +125,7 @@ can be dragged between 240 and 520 px; its width is stored locally.
 All tested mobile layouts avoid horizontal page overflow; long strings, code and
 tool output scroll inside their own containers.
 
-## 0.3.5 refinement
+## Latest refinement (alpha)
 
 - Rectangular controls now use 2-4 px radii instead of 7-14 px. Circles remain
   reserved for status dots and spinners.

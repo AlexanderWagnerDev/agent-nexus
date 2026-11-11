@@ -7,10 +7,12 @@
 #
 # Required:
 #   HUB_DOMAIN   external HTTPS hostname (WebAuthn requires a hostname)
-#   NEXUS_TAG    v0.3.3-rc.1 for pinned updates, or latest for the latest channel
+#   NEXUS_TAG    alpha for the current development channel, or a commit-based
+#                sha-<short> tag for a pinned build. There is no official
+#                release yet; do not point production data at alpha builds.
 # Optional:
 #   HUB_NAME, HUB_BIND (default 127.0.0.1), HUB_PORT (default 8787)
-#   WUD_WATCH_DIGEST=false (set true only for the latest channel)
+#   WUD_WATCH_DIGEST=false (set true only when tracking a moving tag such as alpha)
 #   NEXUS_IPV4_SUBNET, NEXUS_IPV6_SUBNET
 #
 # IPv6: the Docker daemon must have IPv6 enabled; user-defined bridges then
@@ -18,7 +20,7 @@
 # ipam entry and set enable_ipv6 to false.
 services:
   hub:
-    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-v0.3.3-rc.1}
+    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-alpha}
     container_name: agentnexus-hub
     restart: always
     init: true
@@ -52,9 +54,9 @@ services:
     labels:
       wud.watch: "true"
       wud.watch.digest: "${WUD_WATCH_DIGEST:-false}"
-      wud.tag.include: "^${NEXUS_TAG:-v0.3.3-rc.1}$$"
+      wud.tag.include: "^${NEXUS_TAG:-alpha}$$"
       wud.display.name: "AgentNexus Hub"
-      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/releases"
+      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"
 
 volumes:
   nexus-data:

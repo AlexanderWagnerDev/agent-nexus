@@ -123,7 +123,7 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 			Endpoint: sub.Endpoint,
 			Keys:     webpush.Keys{P256dh: sub.P256DH, Auth: sub.Auth},
 		}, &webpush.Options{
-			Subscriber:      "mailto:agentnexus@localhost",
+			Subscriber:      "https://github.com/AlexanderWagnerDev/agent-nexus",
 			VAPIDPublicKey:  s.vapidPublic,
 			VAPIDPrivateKey: s.vapidPrivate,
 			TTL:             60,

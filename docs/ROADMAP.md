@@ -29,11 +29,12 @@ flowchart LR
 | [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** 1.0 | **1.0.0** |
 | [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | 1.x |
 
-## Implementation status (2026-11-11)
+## Implementation status
 
-The repository now contains a runnable 0.3.3 development implementation. The
-acceptance criteria below remain the definition of done; this table records
-what is actually implemented and tested versus what is still open.
+The repository now contains a runnable alpha implementation. There is no
+official version and no published release. The acceptance criteria below remain
+the definition of done; this table records what is actually implemented and
+tested versus what is still open.
 
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
@@ -45,7 +46,7 @@ what is actually implemented and tested versus what is still open.
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
-### 0.2 UI and workflow pass
+### Earlier UI and workflow pass
 
 - Chat now renders Markdown/GFM, highlighted code, tables, collapsible tool
   cards with human summaries, tool output/diffs, reasoning and approvals; native

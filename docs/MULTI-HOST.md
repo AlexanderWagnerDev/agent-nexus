@@ -16,7 +16,7 @@ SSH or WSL are required.
 
    ```dotenv
    HUB_DOMAIN=nexus.example.com
-   NEXUS_TAG=v0.3.3-rc.1
+   NEXUS_TAG=alpha
    WUD_WATCH_DIGEST=false
    HUB_BIND=127.0.0.1
    HUB_PORT=8787
@@ -43,10 +43,11 @@ The per-user service inherits that profile, so OpenCode logins, models, skills
 and MCP config are available.
 
 ```powershell
-# 1. Install (repeat on each machine; use the matching release archive)
+# 1. Build/install (repeat on each machine; there is no release archive yet)
 New-Item -ItemType Directory -Force C:\AgentNexus | Out-Null
-Expand-Archive agent-nexus_0.3.3-rc.1_windows_amd64.zip -DestinationPath C:\AgentNexus -Force
 cd C:\AgentNexus
+go build -trimpath -o nexusd.exe ./cmd/nexusd
+Copy-Item nexusd.exe $env:LOCALAPPDATA\AgentNexus\nexusd.exe -Force
 
 # 2. Pair with a one-time code from Hosts -> Pair a host
 .\nexusd.exe pair --hub https://nexus.example.com --code XXXX-XXXX --name win-1
