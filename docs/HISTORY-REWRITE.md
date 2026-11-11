@@ -11,6 +11,10 @@ exposes those fields even after the current files are cleaned. A repository that
 is made public with the existing history would therefore disclose personal data
 that is not present in the working tree.
 
+Earlier commits also contain screenshots and text from a real development
+machine with real host names, project names and local paths. Those files were
+replaced in the working tree, but the old blobs remain reachable in history.
+
 The exact values are intentionally **not** written down in this file. They are
 listed in the private approval request.
 
@@ -35,7 +39,13 @@ listed in the private approval request.
    `AlexanderWagnerDev <207699914+AlexanderWagnerDev@users.noreply.github.com>`.
 4. Rewrite with `git filter-repo --mailmap <private-mailmap>` (or
    `--email-callback` when the display name also has to be normalised).
-5. Rewrite commit messages only if a secret scan finds personal data there.
+5. Purge historical screenshot blobs that came from the real development
+   machine. Because the current tree uses new files, the simplest reliable
+   option is to rebuild the public history from the cleaned tree while keeping
+   the commit messages, or to run `git filter-repo --path docs/screenshots
+   --invert-paths` followed by re-adding the synthetic screenshots in one
+   commit.
+6. Rewrite commit messages only if a secret scan finds personal data there.
 6. Verify:
    - `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` contains only approved
      identities and bots;
