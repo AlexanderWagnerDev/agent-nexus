@@ -34,7 +34,7 @@ func TestActiveRunsForUser(t *testing.T) {
 	defer s.Close()
 	owner, _ := s.CreateUser("owner", "hash", "secret")
 	viewer, _ := s.CreateUserWithRole("viewer", "hash2", "secret2", "viewer")
-	hostID, _ := s.CreateHost(owner.ID, "host", make([]byte, 32), "linux", "amd64", "0.1.0")
+	hostID, _ := s.CreateHost(owner.ID, "host", make([]byte, 32), "linux", "amd64", "alpha")
 	if err := s.SetHostGrant(hostID, viewer.ID, "view"); err != nil {
 		t.Fatal(err)
 	}
@@ -69,8 +69,8 @@ func TestHostOwnsRun(t *testing.T) {
 	}
 	defer s.Close()
 	owner, _ := s.CreateUser("owner", "hash", "secret")
-	hostA, _ := s.CreateHost(owner.ID, "a", make([]byte, 32), "linux", "amd64", "0.1.0")
-	hostB, _ := s.CreateHost(owner.ID, "b", make([]byte, 32), "linux", "amd64", "0.1.0")
+	hostA, _ := s.CreateHost(owner.ID, "a", make([]byte, 32), "linux", "amd64", "alpha")
+	hostB, _ := s.CreateHost(owner.ID, "b", make([]byte, 32), "linux", "amd64", "alpha")
 	if err := s.CreateRun("run1", "", hostA, protocol.ModeTerminal, owner.ID, "device"); err != nil {
 		t.Fatal(err)
 	}

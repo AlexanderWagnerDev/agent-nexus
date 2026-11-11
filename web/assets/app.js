@@ -1201,13 +1201,17 @@ async function pageHosts() {
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('none')}</span>`}</div>
       <div class="aside-label mt-2">${t('Updates')}</div>
       <div id="host-update-result" class="host-update-result">${h.update ? `
-        <div class="meta-list">
+        ${(() => {
+          const noRelease = h.update.error === 'no published release';
+          return `<div class="meta-list">
           <div><span>${t('Installed')}</span><strong>${esc(h.update.current || h.version || t('unknown'))}</strong></div>
           <div><span>${t('Latest')}</span><strong>${esc(h.update.latest || t('unknown'))}</strong></div>
-          <div><span>${t('Status')}</span><strong>${h.update.error ? t('check failed') : (h.update.available ? t('update available') : t('up to date'))}</strong></div>
+          <div><span>${t('Status')}</span><strong>${noRelease ? t('No published release') : (h.update.error ? t('check failed') : (h.update.available ? t('update available') : t('up to date')))}</strong></div>
         </div>
-        ${h.update.error ? `<div class="notice error small mt-1">${esc(h.update.error)}</div>` : ''}
-        ${h.update.available ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div>` : ''}
+        ${h.update.error && !noRelease ? `<div class="notice error small mt-1">${esc(h.update.error)}</div>` : ''}
+        ${noRelease ? `<p class="aside-note mt-1">${t('The alpha has no release feed. Update checks resume after the first approved version.')}</p>` : ''}
+        ${h.update.available ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div>` : ''}`;
+        })()}
       ` : `<p class="aside-note">${t('Check the GitHub release feed. Installation stays on the host:')} <code>nexusd update --install</code>.</p>`}</div>
       <div class="modal-actions"><button class="btn small" id="host-update-check" type="button">${t('Check for updates')}</button><button class="btn" type="button" data-close>${t('Close')}</button></div>`);
     document.getElementById('host-update-check')?.addEventListener('click', async () => {

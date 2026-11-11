@@ -23,6 +23,10 @@ import (
 
 const defaultUpdateRepo = "AlexanderWagnerDev/agent-nexus"
 
+// ErrNoRelease means the release feed is reachable but contains no publishable
+// release. During alpha this is the normal state, not an update failure.
+var ErrNoRelease = errors.New("no published release")
+
 type UpdateInfo struct {
 	Current      string    `json:"current"`
 	Latest       string    `json:"latest"`
@@ -131,7 +135,7 @@ func CheckForUpdate(ctx context.Context, currentVersion, channel string) (Update
 		newest = newestStable
 	}
 	if newest == nil {
-		return info, errors.New("no matching release found")
+		return info, ErrNoRelease
 	}
 	version := strings.TrimPrefix(newest.TagName, "v")
 	info.Latest = version

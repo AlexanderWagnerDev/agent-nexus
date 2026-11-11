@@ -658,6 +658,11 @@ Object.assign(de, {
   'Copied': 'Kopiert',
 });
 
+Object.assign(de, {
+  'No published release': 'Kein veröffentlichtes Release',
+  'The alpha has no release feed. Update checks resume after the first approved version.': 'Die Alpha hat keinen Release-Feed. Update-Prüfungen laufen nach der ersten freigegebenen Version wieder.',
+});
+
 const supported = ['en', 'de'];
 let lang = 'en';
 

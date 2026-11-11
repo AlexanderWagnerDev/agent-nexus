@@ -846,7 +846,11 @@ func (d *Daemon) checkAndReportUpdate(ctx context.Context) {
 		Prerelease: info.Prerelease, CheckedAt: time.Now().UTC(),
 	}
 	if err != nil {
-		status.Error = err.Error()
+		if errors.Is(err, ErrNoRelease) {
+			status.Error = ErrNoRelease.Error()
+		} else {
+			status.Error = err.Error()
+		}
 	}
 	d.updateMu.Lock()
 	d.lastUpdate = status

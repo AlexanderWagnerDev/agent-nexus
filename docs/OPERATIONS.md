@@ -125,11 +125,14 @@ nexusd update --install
 nexusd update --rollback
 ```
 
-Downloads come from GitHub releases, not the hub. The archive SHA-256 is
-verified against `checksums.txt`; the cosign bundle is verified when `cosign`
-is installed. Hosts without cosign must explicitly pass
-`--allow-checksum-only`. The private release repository needs a read-only
-`NEXUS_GITHUB_TOKEN` with Contents access.
+Downloads come from GitHub releases, not the hub. There is no release feed
+during alpha, so `--check` reports that no release exists until the maintainer
+publishes the first approved version. A private test feed can be selected with
+`NEXUS_UPDATE_API` and `NEXUS_UPDATE_REPO`. The archive SHA-256 is verified
+against `checksums.txt`; the cosign bundle is verified when `cosign` is
+installed. Hosts without cosign must explicitly pass `--allow-checksum-only`.
+A private release repository needs a read-only `NEXUS_GITHUB_TOKEN` with
+Contents access.
 
 `--install` is refused while `runtime.json` reports active runs. It requires an
 installed service, keeps `nexusd.previous`, and restarts the service. Windows

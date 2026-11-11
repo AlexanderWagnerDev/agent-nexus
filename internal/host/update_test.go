@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -65,7 +66,7 @@ func TestCheckForUpdateAndStage(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 	t.Setenv("NEXUS_UPDATE_API", server.URL)
-	info, err := CheckForUpdate(context.Background(), "0.3.1", "prerelease")
+	info, err := CheckForUpdate(context.Background(), "alpha", "prerelease")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,5 +83,20 @@ func TestCheckForUpdateAndStage(t *testing.T) {
 	}
 	if filepath.Base(staged) != "nexusd.exe" {
 		t.Fatalf("unexpected staged name: %s", staged)
+	}
+}
+
+func TestCheckForUpdateNoRelease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+	t.Setenv("NEXUS_UPDATE_API", server.URL)
+	info, err := CheckForUpdate(context.Background(), "alpha", "prerelease")
+	if !errors.Is(err, ErrNoRelease) {
+		t.Fatalf("expected ErrNoRelease, got %v", err)
+	}
+	if info.Latest != "" || info.Available {
+		t.Fatalf("unexpected update info for an empty feed: %+v", info)
 	}
 }
