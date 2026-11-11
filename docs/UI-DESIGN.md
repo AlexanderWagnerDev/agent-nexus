@@ -108,7 +108,9 @@ can be dragged between 240 and 520 px; its width is stored locally.
   ratio are persisted locally.
 - Panes expose the session title, project, host, agent and live state, plus
   open-in-single-view, swap and close actions.
-- On phones the panes stack and the divider is hidden.
+- On phones the panes stack and the divider is hidden. The iframe is absolutely
+  positioned inside its pane so it always fills the available height instead of
+  falling back to its intrinsic height.
 
 ## Responsive behavior
 

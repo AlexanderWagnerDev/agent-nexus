@@ -2,25 +2,26 @@
 
 This document is the single source of truth for **what** AgentNexus must do (requirements), **how** it will be built (technical decisions) and **in which steps** (work packages). Component details live in [ARCHITECTURE.md](ARCHITECTURE.md), per-agent details in [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md), security details in [SECURITY.md](SECURITY.md), and the schedule with acceptance criteria in [ROADMAP.md](ROADMAP.md).
 
-- **Status:** Implementation in progress — 0.3.0-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-11)
+- **Status:** Implementation in progress — 0.3.1-dev; see [ROADMAP.md — Implementation status](ROADMAP.md#implementation-status-2026-11-11)
 - **Last reviewed:** 2026-11-11
 
-### Implementation snapshot (0.3.0-dev)
+### Implementation snapshot (0.3.1-dev)
 
 - **Implemented:** hub/daemon, SAS host pairing, discovery/transcripts for
   Claude/Codex/OpenCode (Gemini best effort), terminal resume, OpenCode/Codex
   structured modes, generic ACP adapters, approvals, Web Push, transcript
   export, live runs dashboard, multi-user grants, step-up confirmation,
   two-pane split workspace, live model/reasoning/agent selection, bounded
-  attachments, cross-host repository identity, review-grade diffs and
-  per-user services on Linux/macOS/Windows.
+  attachments, cross-host repository identity, review-grade diffs, searchable
+  model picker, incremental session sync, encrypted hub secrets, online
+  backups and per-user services on Linux/macOS/Windows.
 - **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
   (CI), cross-compilation for six targets, CodeQL (SARIF artifact because the
   private repository has no GHAS), Windows Task Scheduler install/status/
   uninstall on Windows 11, live Codex `app-server` and OpenCode `serve`/ACP
-  runs on Windows 11, OpenCode/Codex option discovery, an OpenCode image
-  attachment round-trip, split-view browser QA, transcript export against a
-  1,000+ message session.
+  runs on Windows 11, OpenCode/Codex option discovery, OpenCode and Codex image
+  attachment round-trips, offline/reconnect replay, split-view and model-picker
+  browser QA, transcript export against a 1,000+ message session.
 - **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
   Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
   (no Docker daemon on the development host), signed-command mode, PostgreSQL,

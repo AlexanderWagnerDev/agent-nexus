@@ -1,6 +1,6 @@
 # AgentNexus — Operations
 
-Practical runbook for the current 0.1.x build. It describes what the code does
+Practical runbook for the current 0.3.x build. It describes what the code does
 and what has actually been tested, not the 1.0 target.
 
 ## Data locations
@@ -8,6 +8,7 @@ and what has actually been tested, not the 1.0 target.
 | Component | Default location |
 | --- | --- |
 | Hub database | `<config-dir>/AgentNexus/hub.db` (override with `--data-dir` / `NEXUS_DATA_DIR`) |
+| Hub secret key | `<data-dir>/secret.key` (AES-256-GCM key for TOTP and VAPID secrets, mode `0600`) |
 | Hub web assets | embedded in `nexus-hub` |
 | Host config and key | `<config-dir>/AgentNexus/nexusd.json` (mode `0600` where the OS supports it) |
 | Host audit log | `<config-dir>/AgentNexus/audit.log` (JSONL) |
@@ -24,7 +25,7 @@ Versioned images are published to GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:latest
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.0-rc.1   # release tag
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.1-rc.1   # release tag
 ```
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
@@ -51,7 +52,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — a release tag such as `v0.3.0-rc.1`; avoid `latest` in production.
+- `NEXUS_TAG` — a release tag such as `v0.3.1-rc.1`; avoid `latest` in production.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
@@ -73,43 +74,44 @@ sudo chown -R 65532:65532 /srv/agentnexus
 The hub stores users, hosts, device sessions, pairing history, settings and the
 audit log. Native session transcripts remain on the hosts.
 
-With the hub stopped (safest):
+The database and `secret.key` form one backup set. TOTP secrets and the VAPID
+private key cannot be read without the key file.
+
+With the hub running, use the built-in online snapshot (available in the hub
+binary, including the container image):
 
 ```bash
-cp -a "$NEXUS_DATA_DIR/hub.db" "backup/hub-$(date +%F).db"
+nexus-hub --data-dir "$NEXUS_DATA_DIR" --backup "backup/hub-$(date +%F).db"
+cp -a "$NEXUS_DATA_DIR/secret.key" "backup/secret-$(date +%F).key"
 ```
 
-With the hub running, use SQLite's online backup (SQLite is bundled in the
-container image only as a Go driver, so run this on a host with the `sqlite3`
-CLI):
+The command refuses to overwrite an existing file. With the hub stopped, a
+plain copy of `hub.db` and `secret.key` is also consistent. For Docker, execute
+the snapshot inside the container so `/data` is the mounted volume:
 
 ```bash
-sqlite3 "$NEXUS_DATA_DIR/hub.db" ".backup 'backup/hub-$(date +%F).db'"
+docker compose exec nexus-hub /nexus-hub --data-dir /data --backup /data/backup-$(date +%F).db
+docker compose cp nexus-hub:/data/secret.key backup/secret.key
 ```
 
-Docker volume backup:
-
-```bash
-docker run --rm -v agentnexus_nexus-data:/data -v "$PWD/backup:/backup" \
-  alpine sh -c 'tar czf /backup/nexus-$(date +%F).tgz -C /data .'
-```
-
-Restore:
+Restore (stop the hub first and restore both files):
 
 ```bash
 systemctl --user stop agentnexus          # or stop the container/task
 cp backup/hub-YYYY-MM-DD.db "$NEXUS_DATA_DIR/hub.db"
-chmod 600 "$NEXUS_DATA_DIR/hub.db"
+cp backup/secret-YYYY-MM-DD.key "$NEXUS_DATA_DIR/secret.key"
+chmod 600 "$NEXUS_DATA_DIR/hub.db" "$NEXUS_DATA_DIR/secret.key"
 systemctl --user start agentnexus
 ```
 
-The VAPID key pair lives in `hub.db`. Back it up with the database; replacing
-it invalidates existing push subscriptions. A host daemon needs no backup
-beyond `nexusd.json`; native sessions are owned by the agents.
+Rollback: keep the previous hub binary and the matching backup set. Stop the
+hub, restore the database and key, start the previous binary against the same
+data directory. Do not mix an old database with a new secret key. A host daemon
+needs no backup beyond `nexusd.json`; native sessions are owned by the agents.
 
 ## Upgrade
 
-1. Back up `hub.db`.
+1. Back up `hub.db` and `secret.key` (see above).
 2. Pull the new image / replace `nexus-hub` and restart. Migrations run
    automatically on start.
 3. Replace `nexusd` on each host and restart the per-user service:

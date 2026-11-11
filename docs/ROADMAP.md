@@ -31,7 +31,7 @@ flowchart LR
 
 ## Implementation status (2026-11-11)
 
-The repository now contains a runnable 0.3.0 development implementation. The
+The repository now contains a runnable 0.3.1 development implementation. The
 acceptance criteria below remain the definition of done; this table records
 what is actually implemented and tested versus what is still open.
 
@@ -41,7 +41,7 @@ what is actually implemented and tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
-| 4 | ✅ partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository identity, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review | WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP runs have no model/attachment controls |
+| 4 | ✅ partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository identity, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review | WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP runs have no model/attachment controls |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 

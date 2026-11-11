@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: 0.3.0-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments and review-grade diffs are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: 0.3.1-rc.1 pre-release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments and review-grade diffs are implemented and runnable. Signed-command mode, PostgreSQL, native apps, WCAG 2.2 AA verification and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 ## Why AgentNexus?
 
@@ -33,6 +33,8 @@ desktop, tablet and phone, and the theme is stored per user on the hub.
 
 More views: [split workspace](docs/screenshots/workspace-dark.png),
 [split workspace in light mode](docs/screenshots/workspace-light.png),
+[searchable model picker](docs/screenshots/model-picker-dark.png),
+[split workspace on a phone](docs/screenshots/workspace-mobile.png),
 [model, reasoning and attachment composer](docs/screenshots/chat-composer-dark.png),
 [side-by-side diff](docs/screenshots/diff-split-dark.png),
 [cross-host repository grouping](docs/screenshots/sessions-repos-dark.png),
@@ -53,6 +55,9 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **First-run setup** | Owner account, Argon2id password hashing, server-side sessions, optional TOTP enrollment |
 | **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, SAS confirmation, challenge-response over an outbound WebSocket |
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
+| **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
+| **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
+| **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
@@ -66,11 +71,12 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Control room** | Live view of every open terminal/structured run with state, elapsed time, shared-worktree warnings and quick stop |
 | **Split workspace** | Two independent live chats side by side or stacked, resizable and persisted, with per-pane approvals and mobile stacking |
 | **Chat** | Streaming text, Markdown/GFM tables, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
-| **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, live model/reasoning/agent selectors and bounded attachments gated by real model capabilities |
+| **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, a searchable model picker with favorites/recent models, live reasoning/agent selectors and bounded attachments gated by real model capabilities |
 | **Search** | Federated transcript search across online hosts with agent/host filters; offline hosts are reported, not silently skipped |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
 | **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
 | **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects |
+| **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events |
 | **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host |
 | **PWA** | Manifest, service worker, maskable PNG icons, installable on desktop and mobile |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
@@ -98,7 +104,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 Download the latest release binaries or use the multi-arch image:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.0-rc.1
+docker pull ghcr.io/alexanderwagnerdev/agent-nexus:v0.3.1-rc.1
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
@@ -159,6 +165,25 @@ to code scanning for this private repository without GitHub Advanced Security,
 so the workflow keeps the SARIF results as 14-day workflow artifacts instead of
 the Security tab. Enable code scanning and switch `upload: never` to
 `upload: always` in `.github/workflows/codeql.yml` once GHAS is available.
+
+## Testing
+
+```bash
+go test ./...
+go vet ./...
+cd web && npm test          # Markdown and diff unit tests
+cd web && npm run e2e       # disposable hub + browser smoke test
+
+# One real prompt against an existing structured run on a paired host:
+BASE_URL=http://127.0.0.1:8788 RUN_ID=<run-id> npm run e2e:live
+```
+
+The live check requires a real OpenCode or Codex run and is intentionally not
+part of CI. Large-store benchmarks:
+
+```bash
+go test ./internal/hub -run '^$' -bench 'Benchmark(Replace|List)Session' -benchtime=1x
+```
 
 ## Architecture at a glance
 

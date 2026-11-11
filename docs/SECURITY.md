@@ -2,7 +2,7 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current 0.3.0-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants and five-minute step-up confirmation for sensitive actions. Signed-command mode is **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The current 0.3.1-dev build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants and five-minute step-up confirmation for sensitive actions. Signed-command mode is **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
 ### 0.1.x implementation notes
 
@@ -21,13 +21,13 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Device revocation | deletes sessions and closes open browser sockets | push subscriptions are not deleted with the device |
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
-| Web Push | VAPID, content-free payloads, subscriptions bound to user and device | VAPID private key is stored in `hub.db`; permission is browser-controlled |
+| Web Push | VAPID, content-free payloads, subscriptions bound to user and device; private key encrypted at rest | permission is browser-controlled |
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
 | Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
 | Role limits | viewers cannot create host pairing codes | viewers can still read every host explicitly shared with them |
 | Windows autostart | per-user Task Scheduler task, logon trigger, least privilege, restart on failure | Server 2025 untested; no boot-time task by design |
 
-**Hardening changes in this build (2026-11-10):**
+**Hardening changes in this build (2026-11-11):**
 
 - `allowed_agents` is now enforced for new terminal sessions and for every
   structured mode; previously only resumed actions were checked.
@@ -40,6 +40,21 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 - Viewers can no longer create host pairing codes.
 - The Windows Startup launcher was replaced by a Task Scheduler task with
   crash restart and no administrator rights.
+- Audit appends are serialized so concurrent requests cannot fork the hash
+  chain; a concurrent append test verifies the chain.
+- TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under a
+  `0600` key file next to the database. Legacy plaintext is migrated on startup;
+  a missing or damaged key fails closed.
+- Attachment names are reduced to a safe basename across both separator styles,
+  image and PDF payloads are checked against magic bytes, empty uploads fail,
+  failed uploads clean up their directory, and stale directories older than
+  24 hours are removed at daemon start.
+- Prompt text is capped at 256 KiB and terminal paste input at 2 MiB on both
+  hub and host; password input is capped at 1 KiB before Argon2.
+- Session snapshots are delta-synced after a capability negotiation; full
+  snapshots remain the reconnect and repair path.
+- Browser WebSocket reconnects use jitter, detect a new hub epoch and replay
+  buffered run events from zero after a hub restart.
 
 
 
@@ -228,7 +243,7 @@ mTLS is intentionally not required so that TLS may terminate at a reverse proxy 
 | Data | Protection |
 | --- | --- |
 | Client ↔ hub, host ↔ hub | TLS 1.3 preferred, TLS 1.2 minimum with AEAD ciphers only; HSTS; the hub refuses to start a non-loopback listener without TLS unless explicitly told it is behind a TLS-terminating proxy (`trusted_proxy` setting with proxy IP allow-list). |
-| Hub secrets at rest (TOTP secrets, VAPID private key, push subscription keys, hub identity key) | Encrypted with XChaCha20-Poly1305 under a key-encryption key (KEK) provided via file or environment variable, generated on first start if absent (file permissions `0600`). Protects against database-only leaks (e.g. backups). |
+| Hub secrets at rest (TOTP secrets, VAPID private key, push subscription keys, hub identity key) | TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under `secret.key` (`0600`), generated on first start. Push subscription keys remain public material. Protects against database-only leaks; back up the database and key together. |
 | Optional transcript cache on hub (Q-02) | Encrypted the same way; disabled by default. |
 | Hub database and backups | Recommend full-disk encryption on the server; backup command produces an encrypted archive (age/X25519 recipient). |
 | Host private key | OS keystore (macOS Keychain, Windows DPAPI/Credential Manager, Linux Secret Service), fallback file `0600` in the user data directory. |

@@ -199,7 +199,7 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
 | Fork | `codex fork <SESSION_ID>` |
 | New | `codex` |
 
-`codex resume` accepts model and sandbox overrides; AgentNexus passes none by default so the session continues with its own configuration.
+`codex resume` accepts model and sandbox overrides. Terminal resumes pass none, so the session continues with its own configuration. Structured turns send `model` and `effort` only when the user explicitly changes the live selector; the default is the session's own configuration.
 
 ### 4.4 Structured mode — `codex app-server` ⚠️
 
