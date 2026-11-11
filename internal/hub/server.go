@@ -54,6 +54,9 @@ type Server struct {
 	hostUpdates        map[string]protocol.UpdateStatus
 	lastUpdateNotified map[string]string
 
+	indexMu   sync.Mutex
+	hostIndex map[string]protocol.IndexStatus
+
 	passkeySessions passkeySessionStore
 }
 
@@ -80,6 +83,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		passkeySessions:    passkeySessionStore{data: map[string]passkeySession{}},
 		hostUpdates:        map[string]protocol.UpdateStatus{},
 		lastUpdateNotified: map[string]string{},
+		hostIndex:          map[string]protocol.IndexStatus{},
 		epoch:              newID(),
 	}
 	s.ensureVAPID()

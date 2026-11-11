@@ -241,6 +241,7 @@ type Envelope struct {
 	Run        *RunSpec       `json:"run,omitempty"`
 	Runs       []RunInfo      `json:"runs,omitempty"`
 	Update     *UpdateStatus  `json:"update,omitempty"`
+	Index      *IndexStatus   `json:"index,omitempty"`
 	Event      *RunEvent      `json:"event,omitempty"`
 	RunID      string         `json:"run_id,omitempty"`
 	Seq        uint64         `json:"seq,omitempty"`
@@ -299,8 +300,19 @@ type HostView struct {
 	Update   *UpdateStatus  `json:"update,omitempty"`
 	Agents   []AgentInfo    `json:"agents"`
 	Policy   *PolicySummary `json:"policy,omitempty"`
+	Index    *IndexStatus   `json:"index,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`
 	SAS      string         `json:"sas,omitempty"`
+}
+
+// IndexStatus is the host-local full-text index progress. It never contains
+// transcript content.
+type IndexStatus struct {
+	State   string `json:"state"` // disabled, building, ready, error
+	Indexed int    `json:"indexed"`
+	Total   int    `json:"total"`
+	Bytes   int64  `json:"bytes,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // SessionView is the hub-side projection of a native session.

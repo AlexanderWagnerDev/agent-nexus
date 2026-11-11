@@ -8,6 +8,16 @@ import { newSessionDialog } from '../components/new-session.js';
 import { t } from '../i18n.js';
 import { agentVersion, esc, fmtRelative, fmtTime } from '../ui-format.js';
 
+function indexLabel(index) {
+  if (!index || index.state === 'disabled') return t('Index off');
+  if (index.state === 'building') {
+    const pct = index.total ? Math.min(100, Math.floor((index.indexed * 100) / index.total)) : 0;
+    return t('Indexing: {n}%', { n: pct });
+  }
+  if (index.state === 'error') return t('Index error');
+  return t('Index ready');
+}
+
 export async function pageHosts() {
   renderShell('hosts');
   const view = setPage(t('Hosts'), t('Machines running nexusd. Pairing is always initiated from this hub.'), `<button class="btn primary small" id="pair-host">${t('Pair a host')}</button>`);
@@ -28,7 +38,7 @@ export async function pageHosts() {
         <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(t(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline')), h.pending ? 'waiting_for_input' : h.status)}${h.update?.available ? `<span class="badge waiting_for_input" title="${t('nexusd update available')}">${t('update')} ${esc(h.update.latest || '')}</span>` : ''}</div>
         <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · ${t('seen')} ${esc(fmtRelative(h.last_seen))}</div>
       </div>
-      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}</div>
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}<span class="chip ${h.index?.state === 'building' ? 'active' : ''}">${indexLabel(h.index)}</span></div>
       <div class="host-actions">
         <button class="btn small ghost" data-host-details="${esc(h.id)}">${t('Details')}</button>
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>${t('New session')}</button>

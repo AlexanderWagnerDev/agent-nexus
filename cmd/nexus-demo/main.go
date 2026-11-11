@@ -186,6 +186,9 @@ func (d *demoHost) connect(ctx context.Context) error {
 			AllowNew:      true,
 			AllowFork:     true,
 		},
+		Index: &protocol.IndexStatus{
+			State: "ready", Indexed: len(d.fixtures.sessions), Total: len(d.fixtures.sessions), Bytes: 64 * 1024,
+		},
 	})
 	_ = d.send(ws, protocol.Envelope{
 		Type:   "update.status",

@@ -665,6 +665,13 @@ Object.assign(de, {
 
 Object.assign(de, {
   'Back to reference': 'Zurück zur Referenz',
+  'Search index': 'Suchindex',
+  'Index off': 'Index aus',
+  'Index ready': 'Index bereit',
+  'Indexing: {n}%': 'Index wird aufgebaut: {n} %',
+  'Index error': 'Indexfehler',
+  'Building the search index on {host}: {n}%': 'Suchindex wird auf {host} aufgebaut: {n} %',
+  'Using the slower adapter search until the index is ready.': 'Bis der Index bereit ist, wird die langsamere Adapter-Suche verwendet.',
 });
 
 const supported = ['en', 'de'];

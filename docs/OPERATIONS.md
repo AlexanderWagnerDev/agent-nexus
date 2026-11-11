@@ -303,6 +303,16 @@ that native session.
   secure), browser notification permission and, on iOS, an installed PWA.
   The payload contains only a generic title, body and run URL.
 
+## Host search index
+
+Each daemon builds `search-index.db` in its config directory on first start
+and refreshes it in the background. Search falls back to the slower adapter
+scan until the index reports ready. `nexusd index status` shows the state and
+session count; `nexusd index rebuild` rebuilds it after changing
+`allowed_roots` or `allowed_agents`. The file can grow to roughly the size of
+the indexed transcript text and can be deleted at any time while the daemon is
+stopped.
+
 ## Troubleshooting
 
 | Symptom | Check |

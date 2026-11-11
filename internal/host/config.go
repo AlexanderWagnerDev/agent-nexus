@@ -54,6 +54,14 @@ type Config struct {
 	// command line, for example {"claude": "claude-code-acp"}. When empty the
 	// daemon looks for the claude-agent-acp or claude-code-acp binary on PATH.
 	ACPCommands map[string]string `json:"acp_commands,omitempty"`
+	// SearchIndex enables the host-local FTS5 transcript cache. Omitted means
+	// enabled; set it to false to keep transcript text out of a local index.
+	SearchIndex *bool `json:"search_index,omitempty"`
+}
+
+// SearchIndexEnabled reports whether the local search index may be built.
+func (c Config) SearchIndexEnabled() bool {
+	return c.SearchIndex == nil || *c.SearchIndex
 }
 
 // ACPCommand returns the ACP adapter command configured for an agent.

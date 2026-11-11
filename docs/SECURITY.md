@@ -63,6 +63,11 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
   immediately after `CreateProcess`; a grandchild spawned in that microsecond
   window could escape the job. The terminal-only alternative (running the
   agent under a wrapper that creates the job first) is not implemented.
+- The optional host-local search index is a second copy of transcript text in
+  `search-index.db` next to the daemon config. It is created with `0600`
+  permissions, never uploaded, and can be disabled with `search_index: false`.
+  The hub receives only hit metadata and index progress. Deleting the file or
+  running `nexusd index rebuild` removes the local copy.
 - HTTP JSON bodies are limited to 1 MiB with `http.MaxBytesReader`, and the
   browser WebSocket read limit is 4 MiB (enough for a 2 MiB terminal paste).
   The host link keeps a 32 MiB limit for paged transcripts.

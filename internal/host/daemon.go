@@ -54,6 +54,7 @@ type Daemon struct {
 
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
+	index       *SearchIndex
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
@@ -88,6 +89,8 @@ func (d *Daemon) Adapters() []Adapter { return d.adapters }
 
 func (d *Daemon) Run(ctx context.Context) error {
 	defer d.stopAllRuns()
+	d.startSearchIndex(ctx)
+	defer d.stopSearchIndex()
 	if d.cfg.HubURL == "" {
 		return errors.New("not configured")
 	}
@@ -339,6 +342,49 @@ func (d *Daemon) sendActiveRuns() error {
 	return d.send(protocol.Envelope{Type: "active_runs", Runs: runs})
 }
 
+// startSearchIndex builds the host-local FTS5 cache in the background. Until
+// it is ready, search falls back to the adapters.
+func (d *Daemon) startSearchIndex(ctx context.Context) {
+	if !d.cfg.SearchIndexEnabled() {
+		return
+	}
+	dir, err := ConfigDir()
+	if err != nil {
+		d.log.Warn("search index disabled: no config directory", "error", err)
+		return
+	}
+	index, err := OpenSearchIndex(filepath.Join(dir, "search-index.db"))
+	if err != nil {
+		d.log.Warn("search index disabled: cannot open the database", "error", err)
+		return
+	}
+	d.index = index
+	go func() {
+		if err := index.Refresh(ctx, d.adapters, d.policy, d.log); err != nil && ctx.Err() == nil {
+			index.setStatus(0, 0, "error", err.Error())
+			d.log.Warn("search index build failed", "error", err)
+		}
+		_ = d.sendInventory()
+	}()
+}
+
+func (d *Daemon) stopSearchIndex() {
+	if d.index != nil {
+		_ = d.index.Close()
+	}
+}
+
+func (d *Daemon) searchIndexStatus() *protocol.IndexStatus {
+	if d.index == nil {
+		return &protocol.IndexStatus{State: "disabled"}
+	}
+	status := d.index.Status()
+	if status.State == "" {
+		status.State = "building"
+	}
+	return &status
+}
+
 func (d *Daemon) sendInventory() error {
 	agents := make([]protocol.AgentInfo, 0, len(d.adapters))
 	for _, a := range d.adapters {
@@ -358,7 +404,7 @@ func (d *Daemon) sendInventory() error {
 		AllowFork:     d.policy.AllowFork,
 	}
 	return d.send(protocol.Envelope{
-		Type: "inventory", Version: Version, Agents: agents, Policy: summary,
+		Type: "inventory", Version: Version, Agents: agents, Policy: summary, Index: d.searchIndexStatus(),
 	})
 }
 
@@ -650,6 +696,13 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
+		}
+		if d.index != nil && d.index.Status().State == "ready" {
+			if hits, err := d.index.Search(context.Background(), p.Query, p.Limit); err == nil {
+				return hits, nil
+			} else {
+				d.log.Warn("search index query failed; falling back to adapters", "error", err)
+			}
 		}
 		var hits []protocol.SearchHit
 		for _, a := range d.adapters {

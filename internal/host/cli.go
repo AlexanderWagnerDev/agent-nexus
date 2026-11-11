@@ -164,6 +164,15 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 			fmt.Fprintf(out, "             store not found; discovery disabled\n")
 		}
 	}
+	if !cfg.SearchIndexEnabled() {
+		fmt.Fprintln(out, "search index: disabled (search_index=false)")
+	} else if dir, err := ConfigDir(); err == nil {
+		if info, err := os.Stat(filepath.Join(dir, "search-index.db")); err == nil {
+			fmt.Fprintf(out, "search index: %d KiB in %s\n", info.Size()/1024, filepath.Join(dir, "search-index.db"))
+		} else {
+			fmt.Fprintln(out, "search index: not built yet (built on the next daemon start)")
+		}
+	}
 	if issues == 0 {
 		fmt.Fprintln(out, "result:     ok")
 	} else {

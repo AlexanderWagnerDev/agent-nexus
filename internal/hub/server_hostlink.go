@@ -220,6 +220,9 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		if err := s.store.SetHostInventory(hc.id, msg.Version, msg.Agents, msg.Policy); err != nil {
 			s.log.Error("inventory update failed", "host_id", hc.id, "error", err)
 		}
+		if msg.Index != nil {
+			s.setHostIndex(hc.id, msg.Index)
+		}
 		s.store.UpdateHostSeen(hc.id)
 		s.broadcastHostUpdate(hc.id)
 	case "sessions":
@@ -388,6 +391,7 @@ func (s *Server) broadcastHostUpdate(id string) {
 		hv.Update = &copyStatus
 	}
 	s.updateMu.Unlock()
+	hv.Index = s.hostIndexStatus(id)
 	s.broadcast(protocol.ServerEnvelope{Type: "host.updated", Host: &hv})
 }
 
@@ -433,4 +437,23 @@ type clientConn struct {
 
 	mu   sync.Mutex
 	subs map[string]bool
+}
+
+func (s *Server) setHostIndex(hostID string, status *protocol.IndexStatus) {
+	if status == nil {
+		return
+	}
+	s.indexMu.Lock()
+	s.hostIndex[hostID] = *status
+	s.indexMu.Unlock()
+}
+
+func (s *Server) hostIndexStatus(hostID string) *protocol.IndexStatus {
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	status, ok := s.hostIndex[hostID]
+	if !ok {
+		return nil
+	}
+	return &status
 }

@@ -136,8 +136,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		hostID string
 	}
 	ch := make(chan result, len(hosts))
+	indexStatus := map[string]protocol.IndexStatus{}
 	online := 0
 	for _, h := range hosts {
+		if status := s.hostIndexStatus(h.ID); status != nil {
+			indexStatus[h.Name] = *status
+		}
 		if !s.hostPermission(u, h.ID, "read_transcript") {
 			continue
 		}
@@ -187,7 +191,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if len(all) > 100 {
 		all = all[:100]
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"results": all, "not_searched": search, "hosts_total": len(hosts)})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"results": all, "not_searched": search, "hosts_total": len(hosts), "index_status": indexStatus,
+	})
 }
 
 // ---- runs ----

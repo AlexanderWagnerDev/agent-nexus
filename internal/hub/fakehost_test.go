@@ -509,3 +509,37 @@ func TestHubHostDisconnectFailsActiveRuns(t *testing.T) {
 		return err == nil && got.State == protocol.StateFailed
 	})
 }
+
+func TestHubProjectsHostIndexStatus(t *testing.T) {
+	hub := newSetupHub(t)
+	signer, err := OpenHubSigner(filepath.Join(t.TempDir(), "signing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub.server.SetSigner(signer)
+	owner, _ := hub.store.UserByUsername("owner")
+	host := startFakeHost(t, hub, owner, "index-host")
+	host.setAnswer(func(method string, params json.RawMessage) (any, string) {
+		if method == "search" {
+			return []protocol.SearchHit{{NativeID: "n1", Agent: "opencode", Title: "Hit", Snippet: "text"}}, ""
+		}
+		return nil, "unsupported"
+	})
+	host.send(protocol.Envelope{Type: "inventory", Version: "alpha", Index: &protocol.IndexStatus{
+		State: "building", Indexed: 42, Total: 100, Bytes: 4096,
+	}})
+	waitFor(t, "index status", func() bool {
+		status := hub.server.hostIndexStatus(host.hostID)
+		return status != nil && status.State == "building" && status.Indexed == 42
+	})
+	status, body := hub.do(nil, http.MethodGet, "/api/v1/hosts", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "hosts with index")
+	if !strings.Contains(string(body), `"state":"building"`) || !strings.Contains(string(body), `"indexed":42`) {
+		t.Fatalf("host index: %s", body)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/search?q=needle", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "search with index status")
+	if !strings.Contains(string(body), `"index_status"`) || !strings.Contains(string(body), `"index-host"`) {
+		t.Fatalf("search index status: %s", body)
+	}
+}

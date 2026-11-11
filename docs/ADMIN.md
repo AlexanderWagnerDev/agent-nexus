@@ -58,6 +58,16 @@ root check. `process_grace_seconds` (default 5, maximum 60) is how long a
 stopped run may take to exit before its whole process tree is killed.
 `nexusd doctor` prints the current policy summary.
 
+### Search index
+
+The daemon keeps a local SQLite FTS5 cache in
+`<config-dir>/AgentNexus/search-index.db` so repeated federated searches do
+not re-read every agent store. Only sessions inside `allowed_roots` for an
+allowed agent are indexed. The file contains transcript text, is created with
+`0600` permissions and is never sent to the hub. Disable it with
+`"search_index": false` in `nexusd.json`; delete or rebuild it with
+`nexusd index rebuild`, and inspect it with `nexusd index status`.
+
 ## Agent support
 
 | Agent | Discovery | Native terminal resume | Structured mode |

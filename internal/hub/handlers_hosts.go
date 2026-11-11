@@ -27,6 +27,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			hosts[i].Update = &copyStatus
 		}
 		s.updateMu.Unlock()
+		hosts[i].Index = s.hostIndexStatus(hosts[i].ID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
 }

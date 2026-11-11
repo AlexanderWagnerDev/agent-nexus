@@ -63,6 +63,8 @@ func TestPairRejectsHubError(t *testing.T) {
 
 func TestDoctorReportsConfigurationProblems(t *testing.T) {
 	t.Setenv("NEXUSD_CONFIG", filepath.Join(t.TempDir(), "nexusd.json"))
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	var out bytes.Buffer
 	issues := Doctor(Config{}, context.Canceled, &out)
@@ -89,6 +91,9 @@ func TestDoctorReportsConfigurationProblems(t *testing.T) {
 	_ = Doctor(cfg, nil, &out)
 	if !strings.Contains(out.String(), "identity:   ok") || !strings.Contains(out.String(), "hub health: HTTP 200") {
 		t.Fatalf("doctor output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "search index:") {
+		t.Fatalf("doctor did not report the search index: %s", out.String())
 	}
 
 	cfg.PrivateKey = "short"

@@ -34,6 +34,8 @@ func main() {
 		acpCmd(os.Args[2:])
 	case "status":
 		statusCmd()
+	case "index":
+		indexCmd(os.Args[2:])
 	case "update":
 		updateCmd(os.Args[2:])
 	case "service":
@@ -59,6 +61,7 @@ Usage:
   nexusd discover [--json]
   nexusd acp [--agent <name> [--command <adapter>]]
   nexusd status
+  nexusd index [status|rebuild]
   nexusd service <install|uninstall|status>
   nexusd update --check [--channel stable|prerelease]
   nexusd update --stage [--channel ...]
@@ -191,6 +194,50 @@ func statusCmd() {
 	}
 	fmt.Printf("host:   %s\nid:     %s\nhub:    %s\npolicy: roots=%v agents=%v new=%v fork=%v\n",
 		cfg.HostName, cfg.HostID, cfg.HubURL, cfg.Policy.AllowedRoots, cfg.Policy.AllowedAgents, cfg.Policy.AllowNew, cfg.Policy.AllowFork)
+}
+
+func indexCmd(args []string) {
+	fs := flag.NewFlagSet("index", flag.ExitOnError)
+	fs.Parse(args)
+	action := "status"
+	if fs.NArg() > 0 {
+		action = fs.Arg(0)
+	}
+	cfg, _ := host.LoadConfig()
+	dir, err := host.ConfigDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if !cfg.SearchIndexEnabled() {
+		fmt.Println("search index: disabled by search_index=false")
+		return
+	}
+	index, err := host.OpenSearchIndex(filepath.Join(dir, "search-index.db"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "cannot open search index:", err)
+		os.Exit(1)
+	}
+	defer index.Close()
+	switch action {
+	case "status":
+		count, _ := index.Count()
+		fmt.Printf("search index: %s (%d sessions, %s)\n", index.Status().State, count, index.MarshalStatus())
+	case "rebuild":
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		adapters := host.DetectAdapters(logger("warn"))
+		fmt.Printf("rebuilding with %d adapter(s) ...\n", len(adapters))
+		if err := index.Rebuild(ctx, adapters, cfg.Policy, logger("warn")); err != nil {
+			fmt.Fprintln(os.Stderr, "rebuild failed:", err)
+			os.Exit(1)
+		}
+		count, _ := index.Count()
+		fmt.Printf("search index: ready (%d sessions)\n", count)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown index action %q; use status or rebuild\n", action)
+		os.Exit(2)
+	}
 }
 
 func acpCmd(args []string) {

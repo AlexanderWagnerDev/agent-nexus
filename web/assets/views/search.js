@@ -25,7 +25,14 @@ export async function pageSearch() {
     const host = document.getElementById('search-host').value;
     const results = data.results.filter((r) => (!agent || r.agent === agent) && (!host || r.host_name === host));
     const skipped = Object.keys(data.not_searched || {});
+    const building = Object.entries(data.index_status || {})
+      .filter(([, status]) => status.state === 'building')
+      .map(([name, status]) => {
+        const pct = status.total ? Math.min(100, Math.floor((status.indexed * 100) / status.total)) : 0;
+        return t('Building the search index on {host}: {n}%', { host: name, n: pct });
+      });
     box.innerHTML = `
+      ${building.length ? `<div class="notice info mb-2">${building.map(esc).join(' / ')}. ${t('Using the slower adapter search until the index is ready.')}</div>` : ''}
       ${skipped.length ? `<div class="notice info mb-2">${t('Not searched:')} ${skipped.map(esc).join(', ')} ${t('(offline)')}</div>` : ''}
       ${results.length ? `<div class="list">${results.map((r) => {
         const inner = `<div style="min-width:0"><div class="title">${esc(r.title || t('Untitled session'))}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div><div class="right">${agentBadge(r.agent)}${r.host_name ? `<span class="small muted">${esc(r.host_name)}</span>` : ''}<span class="small muted">${fmtRelative(r.at)}</span></div>`;
