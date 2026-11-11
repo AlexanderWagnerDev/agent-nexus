@@ -58,6 +58,14 @@ root check. `process_grace_seconds` (default 5, maximum 60) is how long a
 stopped run may take to exit before its whole process tree is killed.
 `nexusd doctor` prints the current policy summary.
 
+### Agent versions
+
+`nexusd doctor` prints the tested version matrix. A detected version outside
+the band removes the `structured` capability and shows a warning in the hub;
+terminal mode is unaffected. Set `"allow_untested_agent_versions": true` to
+keep structured mode on anyway; each use is written to the host audit log.
+Unknown or unparseable versions are warned about but not disabled.
+
 ### Search index
 
 The daemon keeps a local SQLite FTS5 cache in

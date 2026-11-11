@@ -54,6 +54,9 @@ type Config struct {
 	// command line, for example {"claude": "claude-code-acp"}. When empty the
 	// daemon looks for the claude-agent-acp or claude-code-acp binary on PATH.
 	ACPCommands map[string]string `json:"acp_commands,omitempty"`
+	// AllowUntestedAgentVersions keeps structured mode enabled for agents
+	// outside the tested version band. Every use is audited.
+	AllowUntestedAgentVersions bool `json:"allow_untested_agent_versions,omitempty"`
 	// SearchIndex enables the host-local FTS5 transcript cache. Omitted means
 	// enabled; set it to false to keep transcript text out of a local index.
 	SearchIndex *bool `json:"search_index,omitempty"`

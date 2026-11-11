@@ -163,6 +163,13 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 		if !info.Supported {
 			fmt.Fprintf(out, "             store not found; discovery disabled\n")
 		}
+		if tested, recognized := CheckAgentVersion(a.Name(), info.Version); recognized && !tested {
+			fmt.Fprintln(out, "             WARNING version is outside the tested range; structured mode is disabled unless allow_untested_agent_versions is set")
+		}
+	}
+	fmt.Fprintln(out, "version matrix:")
+	for _, band := range AgentMatrix() {
+		fmt.Fprintf(out, "  %-9s %-22s structured=%v\n", band.Agent, band.TestedRange(), band.Structured)
 	}
 	if !cfg.SearchIndexEnabled() {
 		fmt.Fprintln(out, "search index: disabled (search_index=false)")

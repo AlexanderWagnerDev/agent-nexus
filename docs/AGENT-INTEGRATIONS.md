@@ -327,6 +327,24 @@ Decision table when a user requests *resume*:
 | Active elsewhere and attachable (Claude background session, OpenCode server with known URL) | Attach, view read-only, fork |
 | Active elsewhere, not attachable | View transcript read-only, fork, or resume anyway after explicit confirmation (logged) |
 
+## 9.1 Tested version matrix
+
+The single source of truth is `internal/host/versions.go`; a test compares this
+block with the code, so update both together.
+
+```text
+matrix: claude   >= 2.0.0 < 3.0.0   structured=yes
+matrix: codex    >= 0.50.0 < 1.0.0  structured=yes
+matrix: opencode >= 1.0.0 < 2.0.0   structured=yes
+matrix: gemini   >= 0.1.0 < 1.0.0   structured=no
+```
+
+Outside the band the host removes the `structured` capability and reports a
+visible warning; terminal mode keeps working. `allow_untested_agent_versions`
+keeps structured mode on and is audited once per daemon start. Unknown versions
+are marked with a warning but not disabled, because the range cannot be
+compared.
+
 ## 10. Verification backlog
 
 Items to resolve in Phase 0 spikes (WP-0.1 … WP-0.3) before the dependent phase starts:

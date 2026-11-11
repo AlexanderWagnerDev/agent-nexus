@@ -91,6 +91,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer d.stopAllRuns()
 	d.startSearchIndex(ctx)
 	defer d.stopSearchIndex()
+	d.auditVersionOverrides()
 	if d.cfg.HubURL == "" {
 		return errors.New("not configured")
 	}
@@ -392,7 +393,9 @@ func (d *Daemon) sendInventory() error {
 		if err != nil {
 			continue
 		}
-		if d.cfg.ACPCommand(info.Name) != "" && !sliceContains(info.Capabilities, "structured") {
+		d.applyVersionPolicy(&info)
+		if d.cfg.ACPCommand(info.Name) != "" && !sliceContains(info.Capabilities, "structured") &&
+			(!info.Untested || d.cfg.AllowUntestedAgentVersions) {
 			info.Capabilities = append(info.Capabilities, "structured")
 		}
 		agents = append(agents, info)

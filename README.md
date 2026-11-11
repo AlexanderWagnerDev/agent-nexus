@@ -109,6 +109,12 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
 
+A tested version band is recorded per agent in `internal/host/versions.go` and
+mirrored in [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md). A detected
+version outside the band disables structured mode with a visible warning while
+terminal mode keeps working; `allow_untested_agent_versions` overrides this and
+is audited. Unknown versions are warned about but not disabled.
+
 Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start

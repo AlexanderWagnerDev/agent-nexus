@@ -19,6 +19,13 @@ export async function pageStructuredRun(id, run) {
     session = await api(`/sessions/${encodeURIComponent(run.session_id)}`).catch(() => null);
   }
   const agent = agentMeta(run.agent || session?.agent);
+  let versionWarning = '';
+  try {
+    const { hosts } = await api('/hosts');
+    const hostInfo = (hosts || []).find((h) => h.id === run.host_id);
+    const info = (hostInfo?.agents || []).find((a) => a.name === (run.agent || session?.agent));
+    versionWarning = info?.version_warning || '';
+  } catch { /* the banner is optional */ }
   const title = session?.title || run.session_title || t('Structured chat');
   const cwd = session?.cwd || run.cwd || '';
   const branch = session?.git_branch || run.git_branch || '';
@@ -53,6 +60,7 @@ export async function pageStructuredRun(id, run) {
           </div>
         </div>
         <div class="composer-wrap">
+          ${versionWarning ? `<div class="notice info small" role="status">${t('Untested agent version')}: ${esc(versionWarning)}</div>` : ''}
           <button class="jump-latest" id="jump-latest" type="button" hidden>${svgIcon('arrowDown', 14)} ${t('Jump to latest')}</button>
           <div id="approval-banner" class="approval-slot"></div>
           <form class="composer" id="prompt-form">

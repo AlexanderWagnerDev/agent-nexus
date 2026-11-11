@@ -15,13 +15,22 @@ export async function pageSession(id) {
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const s = await api(`/sessions/${id}`);
   const agent = agentMeta(s.agent);
+  let versionWarning = '';
+  let structuredAllowed = s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude';
+  try {
+    const { hosts } = await api('/hosts');
+    const host = (hosts || []).find((h) => h.id === s.host_id);
+    const info = (host?.agents || []).find((a) => a.name === s.agent);
+    versionWarning = info?.version_warning || '';
+    structuredAllowed = Boolean(info?.capabilities?.includes('structured'));
+  } catch { /* keep the previous capability assumption */ }
   openTab({ id: s.id, key: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.title || 'Untitled session', agent: s.agent });
   rememberRecent({ id: s.id, title: s.title || 'Untitled session', agent: s.agent, hint: `${agent.label} · ${s.host_name} · ${projectName(s.cwd)}`, href: `#/sessions/${s.id}` });
   const title = s.title || 'Session';
   setPage(title, `${projectName(s.cwd)} · ${agent.label} · ${s.host_name}`, `
     <button class="btn small" id="favorite-session">${svgIcon('star')} ${state.favorites.has(s.id) ? t('Pinned') : t('Pin')}</button>
     <button class="btn small" id="resume-session">${svgIcon('terminal')} ${t('Terminal')}</button>
-    ${s.agent === 'opencode' || s.agent === 'codex' || s.agent === 'claude' ? `<button class="btn small primary" id="structured-session">${svgIcon('bot')} ${t('Open chat')}</button>` : ''}
+    ${structuredAllowed ? `<button class="btn small primary" id="structured-session">${svgIcon('bot')} ${t('Open chat')}</button>` : ''}
     <a class="btn small ghost" href="#/sessions">${t('Back')}</a>`);
   const favorite = async (on) => {
     await api(`/sessions/${s.id}/favorite`, { method: on ? 'PUT' : 'DELETE' });
@@ -46,6 +55,7 @@ export async function pageSession(id) {
           <span class="session-banner-meta">${s.message_count || 0} ${t((s.message_count || 0) === 1 ? 'message' : 'messages')} · ${t('updated')} ${esc(fmtRelative(s.updated_at))}</span>
         </div>
         ${s.warning ? `<div class="notice mt-1">${esc(s.warning)}</div>` : ''}
+        ${versionWarning ? `<div class="notice info mt-1">${t('Untested agent version')}: ${esc(versionWarning)}</div>` : ''}
         <div id="transcript" class="transcript"><div class="empty"><span class="spinner"></span></div></div>
         <div class="load-more" id="load-more-wrap"></div>
       </section>

@@ -665,6 +665,7 @@ Object.assign(de, {
 
 Object.assign(de, {
   'Back to reference': 'Zurück zur Referenz',
+  'Untested agent version': 'Ungetestete Agent-Version',
   'Search index': 'Suchindex',
   'Index off': 'Index aus',
   'Index ready': 'Index bereit',

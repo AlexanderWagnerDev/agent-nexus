@@ -48,6 +48,10 @@ type AgentInfo struct {
 	Path         string   `json:"path"`
 	Supported    bool     `json:"supported"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	// Untested is true when the detected version is outside the tested band.
+	Untested bool `json:"untested,omitempty"`
+	// VersionWarning explains an untested or unrecognized version.
+	VersionWarning string `json:"version_warning,omitempty"`
 }
 
 // PolicySummary is the read-only view of the host policy that the hub may

@@ -38,7 +38,7 @@ export async function pageHosts() {
         <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(t(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline')), h.pending ? 'waiting_for_input' : h.status)}${h.update?.available ? `<span class="badge waiting_for_input" title="${t('nexusd update available')}">${t('update')} ${esc(h.update.latest || '')}</span>` : ''}</div>
         <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · ${t('seen')} ${esc(fmtRelative(h.last_seen))}</div>
       </div>
-      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}<span class="chip ${h.index?.state === 'building' ? 'active' : ''}">${indexLabel(h.index)}</span></div>
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip ${a.untested ? 'warn' : ''}" ${a.version_warning ? `title="${esc(a.version_warning)}"` : ''}><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}${a.untested ? ' ?' : ''}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}<span class="chip ${h.index?.state === 'building' ? 'active' : ''}">${indexLabel(h.index)}</span></div>
       <div class="host-actions">
         <button class="btn small ghost" data-host-details="${esc(h.id)}">${t('Details')}</button>
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>${t('New session')}</button>
@@ -74,7 +74,8 @@ export async function pageHosts() {
         <div><span>${t('New / fork')}</span><strong>${policy.allow_new_sessions === false ? t('new blocked') : t('new allowed')} · ${policy.allow_fork === false ? t('fork blocked') : t('fork allowed')}</strong></div>
       </div>
       <div class="aside-label mt-2">${t('Detected agents')}</div>
-      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('none')}</span>`}</div>
+      <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip ${a.untested ? 'warn' : ''}"><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}</span>`).join('') || `<span class="chip">${t('none')}</span>`}</div>
+      ${(h.agents || []).filter((a) => a.version_warning).map((a) => `<div class="notice info small mt-1">${t('Untested agent version')}: ${esc(a.version_warning)}</div>`).join('')}
       <div class="aside-label mt-2">${t('Updates')}</div>
       <div id="host-update-result" class="host-update-result">${h.update ? `
         ${(() => {
