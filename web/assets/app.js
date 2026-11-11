@@ -3,65 +3,14 @@ import { renderMarkdown, highlightCode } from './markdown.js';
 import { describeTool } from './chat-format.js';
 import { parseUnifiedDiff, renderUnifiedDiff, renderSplitDiff, diffFileList, diffSummary } from './diff.js';
 import { t, tn, initLang, getLang, setLang } from './i18n.js';
+import { svgIcon } from './icons.js';
+import { esc, fmtTime, fmtStamp, fmtRelative, shortId, countLabel, agentMeta, agentVersion, projectName, cwdKey, repoLink, fmtDuration } from './ui-format.js';
 
 initLang();
 
 const app = document.getElementById('app');
 const modalRoot = document.getElementById('modal-root');
 const toastRoot = document.getElementById('toast-root');
-
-const iconPaths = {
-  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/>',
-  overview: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-  hosts: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
-  projects: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
-  sessions: '<path d="M4 5h16v11H9l-5 4V5Z"/>',
-  runs: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 16h4"/>',
-  search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
-  settings: '<path d="M4 7h8M17 7h3M4 17h3M12 17h8M4 12h12M19 12h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/><circle cx="18" cy="12" r="2"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/>',
-  monitor: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
-  command: '<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/>',
-  bell: '<path d="M6 9a6 6 0 1 1 12 0c0 5 3 6 3 6H3s3-1 3-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
-  panelLeft: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
-  panelRight: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
-  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-3-5.5 3 1-6.2L3 9.6l6.2-.9Z"/>',
-  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
-  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h4a6 6 0 0 0 6-6"/><path d="M18 9a6 6 0 0 1-6 6H8"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  check: '<path d="m4 12 5 5L20 6"/>',
-  x: '<path d="m5 5 14 14M19 5 5 19"/>',
-  alert: '<path d="M12 3 2.5 20h19Z"/><path d="M12 9v5M12 17h.01"/>',
-  chevronDown: '<path d="m6 9 6 6 6-6"/>',
-  chevronRight: '<path d="m9 6 6 6-6 6"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  send: '<path d="m4 12 16-8-6 16-3-6Z"/>',
-  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
-  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
-  external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/>',
-  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 16h4"/>',
-  file: '<path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5"/>',
-  edit: '<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13 7 4 4"/>',
-  searchFile: '<path d="M6 3h8l4 4v6"/><path d="M14 3v5h5"/><circle cx="11" cy="16" r="4"/><path d="m14 19 4 4"/>',
-  brain: '<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V16a3 3 0 0 0 4 2.8V20h3V4Z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8V16a3 3 0 0 1-4 2.8V20h-3"/>',
-  tool: '<path d="M14.5 6.5a4 4 0 0 0-5.6 4.7L4 16.1V20h3.9l4.9-4.9a4 4 0 0 0 4.7-5.6l-2.5 2.5-2.1-2.1Z"/>',
-  bot: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M8 12h.01M16 12h.01M8 16h8"/>',
-  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
-  refresh: '<path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v7h-7"/>',
-  arrowDown: '<path d="M12 4v16M6 14l6 6 6-6"/>',
-  git: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h4a6 6 0 0 0 6-6M18 9a6 6 0 0 1-6 6H8"/>',
-  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 16-5-5-8 8"/>',
-  web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/>',
-  paperclip: '<path d="m20 11-7.5 7.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-7.5 7.5a2 2 0 0 1-3-3L14 7"/>',
-  task: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/>',
-  plan: '<path d="M8 4h8v4H8Z"/><path d="M6 6H4v15h16V6h-2"/><path d="M8 12h8M8 16h5"/>',
-  mcp: '<path d="M8 12a4 4 0 0 1 4-4h4a4 4 0 0 1 0 8h-2"/><path d="M16 12a4 4 0 0 1-4 4H8a4 4 0 0 1 0-8h2"/>',
-};
-
-function svgIcon(name, size = 16) {
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.overview}</svg>`;
-}
 
 const state = {
   me: null,
@@ -86,110 +35,6 @@ const state = {
 };
 
 /* ---------- helpers ---------- */
-
-function esc(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function uiLocale() {
-  return getLang() === 'de' ? 'de-DE' : 'en-US';
-}
-
-function fmtTime(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime()) || d.getFullYear() < 1970) return '—';
-  return d.toLocaleString(uiLocale(), { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function fmtStamp(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const now = new Date();
-  const time = d.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === now.toDateString()) return time;
-  return `${d.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric' })}, ${time}`;
-}
-
-function fmtRelative(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  const diff = Date.now() - d.getTime();
-  if (Number.isNaN(diff)) return '—';
-  const s = Math.round(diff / 1000);
-  if (s < 45) return t('just now');
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}${t('m ago')}`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}${t('h ago')}`;
-  const days = Math.round(h / 24);
-  if (days < 30) return `${days}${t('d ago')}`;
-  return new Date(value).toLocaleDateString(uiLocale());
-}
-
-function shortId(id) {
-  return id ? id.slice(0, 10) : '';
-}
-
-function countLabel(count, singular, plural) {
-  return `${count} ${t(count === 1 ? singular : plural)}`;
-}
-
-const AGENTS = {
-  opencode: { label: 'OpenCode', short: 'OC' },
-  codex: { label: 'Codex', short: 'CX' },
-  claude: { label: 'Claude Code', short: 'CL' },
-  gemini: { label: 'Gemini', short: 'GM' },
-  copilot: { label: 'Copilot', short: 'CP' },
-  goose: { label: 'Goose', short: 'GO' },
-};
-
-function agentMeta(agent) {
-  return AGENTS[String(agent || '').toLowerCase()] || { label: agent || 'Agent', short: String(agent || '?').slice(0, 2).toUpperCase() };
-}
-
-function agentVersion(name, version) {
-  const value = String(version || '').trim();
-  if (!value) return '';
-  return value.replace(new RegExp(`^${String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s-]*(cli[\\s-]*)?`, 'i'), '') || value;
-}
-
-function projectName(cwd) {
-  const clean = String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '');
-  if (!clean) return 'No project';
-  const parts = clean.split('/');
-  return parts[parts.length - 1] || clean;
-}
-
-function cwdKey(cwd) {
-  return String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
-}
-
-function repoLink(url, label = '') {
-  const value = String(url || '');
-  if (!/^https?:\/\//i.test(value)) return '';
-  const name = label || value.replace(/^https?:\/\/[^/]+\//, '');
-  return `<a class="repo-link" href="${esc(value)}" target="_blank" rel="noopener noreferrer">${svgIcon('git', 13)}${esc(name)}</a>`;
-}
-
-function fmtDuration(value) {
-  if (!value) return '—';
-  const ms = typeof value === 'number' ? value : Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return '—';
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ${minutes % 60}m`;
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
-}
 
 function storeGet(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
