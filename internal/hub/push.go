@@ -21,6 +21,17 @@ func (s *Server) ensureVAPID() {
 		pub = public
 	}
 	priv, _ := s.store.GetSetting("vapid_private")
+	if priv != "" {
+		if plain, err := s.store.open(priv); err != nil {
+			s.log.Error("cannot decrypt VAPID private key; web push disabled", "error", err)
+			priv = ""
+		} else {
+			priv = plain
+			if s.store.secrets != nil {
+				_ = s.store.SetSetting("vapid_private", s.store.seal(priv))
+			}
+		}
+	}
 	s.vapidPublic, s.vapidPrivate = pub, priv
 }
 

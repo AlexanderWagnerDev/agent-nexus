@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-const Version = "0.3.0"
+const Version = "0.3.1"
 
 // Policy is enforced on the host and cannot be overridden by the hub.
 type Policy struct {
@@ -64,6 +64,12 @@ func ConfigDir() (string, error) {
 }
 
 func ConfigPath() (string, error) {
+	// NEXUSD_CONFIG allows a second isolated daemon instance for testing or
+	// running a host under a different identity without touching the user's
+	// normal pairing.
+	if override := strings.TrimSpace(os.Getenv("NEXUSD_CONFIG")); override != "" {
+		return override, nil
+	}
 	dir, err := ConfigDir()
 	if err != nil {
 		return "", err

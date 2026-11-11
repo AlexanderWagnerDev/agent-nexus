@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -215,5 +217,107 @@ func TestHostGrant(t *testing.T) {
 	hosts, err = s.ListHosts(viewer.ID, true)
 	if err != nil || len(hosts) != 1 {
 		t.Fatalf("admin host list failed: %v %v", hosts, err)
+	}
+}
+
+func TestAuditChainSurvivesConcurrentAppends(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	const writers = 16
+	const perWriter = 12
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(writer int) {
+			defer wg.Done()
+			for j := 0; j < perWriter; j++ {
+				if err := s.AppendAudit(fmt.Sprintf("user-%d", writer), "test.event", map[string]int{"i": j}); err != nil {
+					t.Errorf("append: %v", err)
+					return
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	broken, err := s.VerifyAudit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if broken != 0 {
+		t.Fatalf("audit chain broke at sequence %d", broken)
+	}
+	events, err := s.ListAudit(1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != writers*perWriter {
+		t.Fatalf("expected %d events, got %d", writers*perWriter, len(events))
+	}
+}
+
+func TestApplyHostSessionDelta(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	hostID, err := s.CreateHost(u.ID, "alpha", make([]byte, 32), "linux", "amd64", "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, _, err := s.ReplaceHostSessions(hostID, []protocol.Session{
+		{NativeID: "a", Agent: "codex", Title: "one", Cwd: "/work/a", CreatedAt: now, UpdatedAt: now},
+		{NativeID: "b", Agent: "opencode", Title: "two", Cwd: "/work/b", CreatedAt: now, UpdatedAt: now},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	upserted, deleted, err := s.ApplyHostSessionDelta(hostID,
+		[]protocol.Session{{NativeID: "a", Agent: "codex", Title: "one changed", Cwd: "/work/a", CreatedAt: now, UpdatedAt: now.Add(time.Minute)}},
+		[]protocol.SessionKey{{Agent: "opencode", NativeID: "b"}})
+	if err != nil || upserted != 1 || deleted != 1 {
+		t.Fatalf("delta: %d %d %v", upserted, deleted, err)
+	}
+	sessions, err := s.ListSessions(u.ID, hostID, "", "", "", "", 10, 0, true)
+	if err != nil || len(sessions) != 1 || sessions[0].Title != "one changed" {
+		t.Fatalf("delta result: %+v %v", sessions, err)
+	}
+	if _, _, err := s.ApplyHostSessionDelta(hostID, nil, []protocol.SessionKey{{Agent: "codex", NativeID: "a"}}); err != nil {
+		t.Fatal(err)
+	}
+	sessions, _ = s.ListSessions(u.ID, hostID, "", "", "", "", 10, 0, true)
+	if len(sessions) != 0 {
+		t.Fatalf("explicit removal failed: %+v", sessions)
+	}
+}
+
+func TestBackupSnapshot(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.CreateUser("owner", "hash", "secret"); err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir() + "/backup.db"
+	if err := s.Backup(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Backup(path); err == nil {
+		t.Fatal("overwriting an existing backup was allowed")
+	}
+	copyStore, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer copyStore.Close()
+	if n, err := copyStore.UserCount(); err != nil || n != 1 {
+		t.Fatalf("backup content: %d %v", n, err)
 	}
 }

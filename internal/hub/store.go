@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -22,7 +23,36 @@ import (
 // Store is the hub's metadata database. Transcript content is never written
 // here; only session metadata, runs, devices, hosts and the audit log.
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	auditMu sync.Mutex
+	secrets *SecretBox
+}
+
+// Backup writes a consistent SQLite snapshot while the hub is running. The
+// caller should copy secret.key alongside it; encrypted secrets are useless
+// without that key.
+func (s *Store) Backup(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("backup path is empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
+		return err
+	}
+	if _, err := os.Stat(abs); err == nil {
+		return fmt.Errorf("backup file already exists: %s", abs)
+	}
+	_, err = s.db.Exec(`VACUUM INTO ?`, filepath.ToSlash(abs))
+	return err
+}
+
+// SetSecretBox enables encryption of sensitive values at rest. Existing
+// plaintext values remain readable and are encrypted on their next write.
+func (s *Store) SetSecretBox(box *SecretBox) {
+	s.secrets = box
 }
 
 func OpenStore(path string) (*Store, error) {
@@ -281,7 +311,7 @@ func (s *Store) CreateUserWithRole(username, passwordHash, totpSecret, role stri
 		CreatedAt:    time.Now().UTC(),
 	}
 	_, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, role, created_at) VALUES(?,?,?,?,?,?)`,
-		u.ID, u.Username, u.PasswordHash, u.TOTPSecret, u.Role, ms(u.CreatedAt))
+		u.ID, u.Username, u.PasswordHash, s.seal(u.TOTPSecret), u.Role, ms(u.CreatedAt))
 	return u, err
 }
 
@@ -323,15 +353,70 @@ func (s *Store) scanUser(row rowScanner) (User, error) {
 	var u User
 	var created int64
 	var totp int
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.TOTPSecret, &totp, &u.Role, &created)
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.TOTPSecret, &totp, &u.Role, &created); err != nil {
+		return u, err
+	}
+	plain, err := s.open(u.TOTPSecret)
+	if err != nil {
+		return u, err
+	}
+	u.TOTPSecret = plain
 	u.TOTPEnabled = totp != 0
 	u.CreatedAt = fromMS(created)
-	return u, err
+	return u, nil
+}
+
+// MigrateSecrets encrypts legacy plaintext values in place. It is idempotent
+// and must run after SetSecretBox.
+func (s *Store) MigrateSecrets() error {
+	if s.secrets == nil {
+		return nil
+	}
+	rows, err := s.db.Query(`SELECT id, totp_secret FROM users WHERE totp_secret <> ''`)
+	if err != nil {
+		return err
+	}
+	type pending struct{ id, secret string }
+	var updates []pending
+	for rows.Next() {
+		var id, secret string
+		if err := rows.Scan(&id, &secret); err != nil {
+			rows.Close()
+			return err
+		}
+		if !strings.HasPrefix(secret, secretPrefix) {
+			updates = append(updates, pending{id, secret})
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, update := range updates {
+		if _, err := s.db.Exec(`UPDATE users SET totp_secret=? WHERE id=?`, s.seal(update.secret), update.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) SetTOTP(userID, secret string, enabled bool) error {
-	_, err := s.db.Exec(`UPDATE users SET totp_secret=?, totp_enabled=? WHERE id=?`, secret, boolInt(enabled), userID)
+	_, err := s.db.Exec(`UPDATE users SET totp_secret=?, totp_enabled=? WHERE id=?`, s.seal(secret), boolInt(enabled), userID)
 	return err
+}
+
+func (s *Store) seal(value string) string {
+	if s.secrets == nil || value == "" {
+		return value
+	}
+	return s.secrets.Seal(value)
+}
+
+func (s *Store) open(value string) (string, error) {
+	if s.secrets == nil || value == "" {
+		return value, nil
+	}
+	return s.secrets.Open(value)
 }
 
 // ---- devices and browser sessions ----
@@ -386,6 +471,9 @@ func (s *Store) SessionByToken(token string) (SessionInfo, error) {
 	}
 	if revoked.Valid {
 		return si, errors.New("device revoked")
+	}
+	if si.User.TOTPSecret, err = s.open(si.User.TOTPSecret); err != nil {
+		return si, err
 	}
 	si.User.TOTPEnabled = totp != 0
 	si.User.CreatedAt = fromMS(userCreated)
@@ -725,7 +813,8 @@ func sessionID(hostID, agent, nativeID string) string {
 }
 
 // ReplaceHostSessions applies a full snapshot from one host. It returns the
-// number of upserted and deleted records.
+// number of upserted and deleted records. A full snapshot is also the repair
+// path after a reconnect because it removes rows the host no longer reports.
 func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) (upserted, deleted int, err error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -736,20 +825,7 @@ func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) 
 	for _, sess := range sessions {
 		id := sessionID(hostID, sess.Agent, sess.NativeID)
 		keep[id] = true
-		state := sess.State
-		if state == "" {
-			state = protocol.StateUnknown
-		}
-		_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,repo_root,repo_url,created_at,updated_at,message_count,state,active_elsewhere,warning)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-			ON CONFLICT(host_id,agent,native_id) DO UPDATE SET
-			title=excluded.title, cwd=excluded.cwd, git_branch=excluded.git_branch,
-			repo_root=excluded.repo_root, repo_url=excluded.repo_url,
-			updated_at=excluded.updated_at, message_count=excluded.message_count,
-			state=excluded.state, active_elsewhere=excluded.active_elsewhere, warning=excluded.warning`,
-			id, hostID, sess.Agent, sess.NativeID, sess.Title, sess.Cwd, sess.GitBranch, sess.RepoRoot, sess.RepoURL,
-			ms(sess.CreatedAt), ms(sess.UpdatedAt), sess.MessageCount, state, boolInt(sess.ActiveElsewhere), sess.Warning)
-		if err != nil {
+		if err := upsertSession(tx, hostID, sess); err != nil {
 			return 0, 0, err
 		}
 		upserted++
@@ -773,6 +849,54 @@ func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) 
 		deleted++
 	}
 	return upserted, deleted, tx.Commit()
+}
+
+// ApplyHostSessionDelta applies changed sessions and explicit removals. It
+// never deletes rows that are absent from the payload; only a full snapshot
+// may do that.
+func (s *Store) ApplyHostSessionDelta(hostID string, sessions []protocol.Session, removed []protocol.SessionKey) (upserted, deleted int, err error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+	for _, sess := range sessions {
+		if err := upsertSession(tx, hostID, sess); err != nil {
+			return 0, 0, err
+		}
+		upserted++
+	}
+	for _, key := range removed {
+		if key.Agent == "" || key.NativeID == "" {
+			continue
+		}
+		res, err := tx.Exec(`DELETE FROM sessions WHERE host_id=? AND agent=? AND native_id=?`, hostID, key.Agent, key.NativeID)
+		if err != nil {
+			return 0, 0, err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			deleted++
+		}
+	}
+	return upserted, deleted, tx.Commit()
+}
+
+func upsertSession(tx *sql.Tx, hostID string, sess protocol.Session) error {
+	id := sessionID(hostID, sess.Agent, sess.NativeID)
+	state := sess.State
+	if state == "" {
+		state = protocol.StateUnknown
+	}
+	_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,repo_root,repo_url,created_at,updated_at,message_count,state,active_elsewhere,warning)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(host_id,agent,native_id) DO UPDATE SET
+		title=excluded.title, cwd=excluded.cwd, git_branch=excluded.git_branch,
+		repo_root=excluded.repo_root, repo_url=excluded.repo_url,
+		updated_at=excluded.updated_at, message_count=excluded.message_count,
+		state=excluded.state, active_elsewhere=excluded.active_elsewhere, warning=excluded.warning`,
+		id, hostID, sess.Agent, sess.NativeID, sess.Title, sess.Cwd, sess.GitBranch, sess.RepoRoot, sess.RepoURL,
+		ms(sess.CreatedAt), ms(sess.UpdatedAt), sess.MessageCount, state, boolInt(sess.ActiveElsewhere), sess.Warning)
+	return err
 }
 
 func (s *Store) ListSessions(userID, hostID, agent, project, state, query string, limit, offset int, all bool) ([]protocol.SessionView, error) {
@@ -977,6 +1101,11 @@ type AuditEvent struct {
 }
 
 func (s *Store) AppendAudit(actor, action string, details any) error {
+	// The hash chain is only valid when the read of the previous hash and the
+	// insert are one atomic operation. Without this lock two concurrent
+	// requests can both extend the same predecessor and fork the chain.
+	s.auditMu.Lock()
+	defer s.auditMu.Unlock()
 	b, _ := json.Marshal(details)
 	now := time.Now().UTC()
 	var prev string
@@ -1018,6 +1147,8 @@ func (s *Store) ListAudit(limit int) ([]AuditEvent, error) {
 // VerifyAudit recomputes the hash chain. It returns the first broken sequence
 // number, or 0 if the chain is intact.
 func (s *Store) VerifyAudit() (int64, error) {
+	s.auditMu.Lock()
+	defer s.auditMu.Unlock()
 	rows, err := s.db.Query(`SELECT seq,at,actor,action,details,prev_hash,hash FROM audit ORDER BY seq`)
 	if err != nil {
 		return 0, err

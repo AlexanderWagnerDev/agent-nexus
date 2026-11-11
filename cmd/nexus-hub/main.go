@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -44,6 +45,7 @@ func main() {
 		hubName     = flag.String("name", envOr("NEXUS_HUB_NAME", "AgentNexus"), "hub display name")
 		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
 		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
+		backup      = flag.String("backup", "", "write a consistent database snapshot to this file and exit")
 	)
 	flag.Parse()
 	if *healthcheck {
@@ -69,6 +71,26 @@ func main() {
 		os.Exit(1)
 	}
 	defer store.Close()
+
+	box, err := hub.OpenSecretBox(*dataDir)
+	if err != nil {
+		logger.Error("cannot open secret key", "error", err)
+		os.Exit(1)
+	}
+	store.SetSecretBox(box)
+	if err := store.MigrateSecrets(); err != nil {
+		logger.Error("cannot encrypt stored secrets", "error", err)
+		os.Exit(1)
+	}
+	if *backup != "" {
+		if err := store.Backup(*backup); err != nil {
+			logger.Error("backup failed", "error", err)
+			os.Exit(1)
+		}
+		fmt.Printf("backup written to %s\n", *backup)
+		fmt.Println("Copy secret.key from the data directory as well; encrypted secrets cannot be read without it.")
+		return
+	}
 
 	srv := hub.NewServer(hub.Config{
 		Addr:      *addr,

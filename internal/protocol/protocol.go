@@ -76,6 +76,12 @@ type Session struct {
 	Warning         string    `json:"warning,omitempty"`
 }
 
+// SessionKey identifies a native session without sending its metadata.
+type SessionKey struct {
+	Agent    string `json:"agent"`
+	NativeID string `json:"native_id"`
+}
+
 // Attachment is a user-supplied file forwarded to the host for a prompt.
 // Only the host writes it to disk; the hub never persists file content.
 type Attachment struct {
@@ -211,7 +217,9 @@ type Envelope struct {
 	Agents     []AgentInfo    `json:"agents,omitempty"`
 	Policy     *PolicySummary `json:"policy,omitempty"`
 	Sessions   []Session      `json:"sessions,omitempty"`
+	Removed    []SessionKey   `json:"removed,omitempty"`
 	Full       bool           `json:"full,omitempty"`
+	Features   []string       `json:"features,omitempty"`
 	RequestID  string         `json:"request_id,omitempty"`
 	Method     string         `json:"method,omitempty"`
 	Params     []byte         `json:"params,omitempty"`
@@ -251,6 +259,7 @@ type ClientEnvelope struct {
 // ServerEnvelope is sent to the browser over the client WebSocket.
 type ServerEnvelope struct {
 	Type     string        `json:"type"`
+	Epoch    string        `json:"epoch,omitempty"`
 	Host     *HostView     `json:"host,omitempty"`
 	Hosts    []HostView    `json:"hosts,omitempty"`
 	Session  *SessionView  `json:"session,omitempty"`

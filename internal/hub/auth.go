@@ -33,6 +33,9 @@ func HashPassword(password string) (string, error) {
 	if len(password) < 10 {
 		return "", errors.New("password must be at least 10 characters")
 	}
+	if len(password) > 1024 {
+		return "", errors.New("password must be at most 1024 characters")
+	}
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err

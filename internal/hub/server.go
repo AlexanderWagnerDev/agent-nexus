@@ -22,10 +22,12 @@ const (
 	runBufferBytes       = 4 << 20
 	hostSendQueue        = 256
 	clientSendQueue      = 512
+	maxPromptBytes       = 256 << 10
+	maxTerminalInputSize = 2 << 20 // base64 payload for a terminal paste
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.3.0"
+var Version = "0.3.1"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -47,6 +49,7 @@ type Server struct {
 
 	vapidPublic  string
 	vapidPrivate string
+	epoch        string
 
 	passkeySessions passkeySessionStore
 }
@@ -72,6 +75,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		runHosts:        map[string]string{},
 		pending:         map[string]*pendingRequest{},
 		passkeySessions: passkeySessionStore{data: map[string]passkeySession{}},
+		epoch:           newID(),
 	}
 	s.ensureVAPID()
 	return s
@@ -250,7 +254,7 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	if auth.HostName != "" {
 		_, _ = s.store.db.Exec(`UPDATE hosts SET name=? WHERE id=?`, auth.HostName, hostID)
 	}
-	_ = writeWS(ctx, ws, protocol.Envelope{Type: "auth.ok", Protocol: protocol.Version})
+	_ = writeWS(ctx, ws, protocol.Envelope{Type: "auth.ok", Protocol: protocol.Version, Features: []string{"session-delta-v1"}})
 	s.store.UpdateHostSeen(hostID)
 	s.broadcastHostUpdate(hostID)
 	s.log.Info("host connected", "host_id", hostID, "version", auth.Version, "os", auth.OS, "arch", auth.Arch)
@@ -308,7 +312,7 @@ func (s *Server) adoptHostRuns(hostID string, reported []protocol.RunInfo) {
 			state = protocol.StateRunning
 		}
 		s.setRunState(info.RunID, state)
-		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: state})
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: state, Epoch: s.epoch})
 	}
 	active, _ := s.store.ActiveRuns(hostID)
 	for _, run := range active {
@@ -358,13 +362,21 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.store.UpdateHostSeen(hc.id)
 		s.broadcastHostUpdate(hc.id)
 	case "sessions":
-		upserted, deleted, err := s.store.ReplaceHostSessions(hc.id, msg.Sessions)
+		var upserted, deleted int
+		var err error
+		if msg.Full {
+			upserted, deleted, err = s.store.ReplaceHostSessions(hc.id, msg.Sessions)
+		} else {
+			upserted, deleted, err = s.store.ApplyHostSessionDelta(hc.id, msg.Sessions, msg.Removed)
+		}
 		if err != nil {
 			s.log.Error("session snapshot failed", "host_id", hc.id, "error", err)
 			return
 		}
-		s.log.Info("session snapshot applied", "host_id", hc.id, "upserted", upserted, "deleted", deleted)
-		s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: hc.id})
+		if upserted+deleted > 0 {
+			s.log.Info("session changes applied", "host_id", hc.id, "upserted", upserted, "deleted", deleted, "full", msg.Full)
+			s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: hc.id})
+		}
 	case "active_runs":
 		s.adoptHostRuns(hc.id, msg.Runs)
 	case "result":
@@ -379,7 +391,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 	case "run.started":
 		s.setRunState(msg.RunID, protocol.StateRunning)
-		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning})
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning, Epoch: s.epoch})
 	case "run.output":
 		s.appendRunOutput(msg.RunID, msg.Seq, msg.Data)
 	case "run.event":
@@ -681,7 +693,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			}
 			rs.mu.Unlock()
 		}
-		c.push(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: state})
+		c.push(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: state, Epoch: s.epoch})
 		for _, ch := range chunks {
 			c.push(ch)
 		}
@@ -693,6 +705,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		delete(c.subs, msg.RunID)
 		c.mu.Unlock()
 	case "input":
+		if len(msg.Data) > maxTerminalInputSize {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "terminal input is too large"})
+			return
+		}
 		run, startedBy, err := s.store.RunByID(msg.RunID)
 		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
@@ -720,6 +736,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			return
 		}
 		if strings.TrimSpace(msg.Text) == "" {
+			return
+		}
+		if len(msg.Text) > maxPromptBytes {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "prompt is too large"})
 			return
 		}
 		if msg.Options != nil && len(msg.Options.Attachments) > 6 {

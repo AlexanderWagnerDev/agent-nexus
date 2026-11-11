@@ -36,12 +36,14 @@ type Daemon struct {
 	starting     map[string]bool
 	startingRuns map[string]bool
 
-	sendMu sync.Mutex
-	ws     *websocket.Conn
+	sendMu     sync.Mutex
+	snapshotMu sync.Mutex
+	ws         *websocket.Conn
 
-	lastSnapshot string
+	lastSnapshot map[string]string
 	lastByAgent  map[string][]protocol.Session
 	connectedAt  atomic.Int64
+	sessionDelta atomic.Bool
 
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
@@ -59,6 +61,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		starting:     map[string]bool{},
 		startingRuns: map[string]bool{},
 		lastByAgent:  map[string][]protocol.Session{},
+		lastSnapshot: map[string]string{},
 		gitBranches:  map[string]gitRepoCache{},
 	}
 	d.adapters = DetectAdapters(logger)
@@ -71,6 +74,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if d.cfg.HubURL == "" {
 		return errors.New("not configured")
 	}
+	cleanupStaleAttachments(24 * time.Hour)
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -170,8 +174,14 @@ func (d *Daemon) connect(ctx context.Context) error {
 		return errors.New("host authentication rejected")
 	}
 
+	d.sessionDelta.Store(false)
+	for _, feature := range auth.Features {
+		if feature == "session-delta-v1" {
+			d.sessionDelta.Store(true)
+		}
+	}
 	d.connectedAt.Store(time.Now().UnixNano())
-	d.log.Info("connected to hub", "hub", d.cfg.HubURL, "host_id", d.cfg.HostID)
+	d.log.Info("connected to hub", "hub", d.cfg.HubURL, "host_id", d.cfg.HostID, "session_delta", d.sessionDelta.Load())
 	if err := d.sendInventory(); err != nil {
 		d.log.Warn("inventory send failed", "error", err)
 	}
@@ -267,17 +277,30 @@ func (d *Daemon) sendInventory() error {
 }
 
 func (d *Daemon) sendSessions(force bool) error {
+	d.snapshotMu.Lock()
+	defer d.snapshotMu.Unlock()
 	sessions, err := d.listSessions(context.Background())
 	if err != nil {
 		return err
 	}
-	raw, _ := json.Marshal(sessions)
-	hash := fmt.Sprintf("%x", sha256Sum(raw))
-	if !force && hash == d.lastSnapshot {
+	// Send a full snapshot on first connect and deltas afterwards. One active
+	// session changes its updated_at on every discovery tick; resending all
+	// thousands of rows for that would rewrite the whole hub table every 15s.
+	full := force || !d.sessionDelta.Load()
+	changed, removed, next := diffSessionSnapshot(d.lastSnapshot, sessions, full)
+	if !full && len(changed) == 0 && len(removed) == 0 {
 		return nil
 	}
-	d.lastSnapshot = hash
-	return d.send(protocol.Envelope{Type: "sessions", Sessions: sessions, Full: true})
+	envelope := protocol.Envelope{Type: "sessions", Sessions: changed, Removed: removed, Full: full}
+	if full {
+		envelope.Sessions = sessions
+		envelope.Removed = nil
+	}
+	if err := d.send(envelope); err != nil {
+		return err
+	}
+	d.lastSnapshot = next
+	return nil
 }
 
 func (d *Daemon) discoveryLoop(ctx context.Context) {
@@ -395,6 +418,10 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		}
 		go d.startRun(ctx, *msg.Run)
 	case "run.input":
+		if len(msg.Data) > 2<<20 {
+			_ = d.send(protocol.Envelope{Type: "run.error", RunID: msg.RunID, Error: "terminal input is too large"})
+			return
+		}
 		d.runMu.Lock()
 		r := d.runs[msg.RunID]
 		d.runMu.Unlock()
@@ -402,6 +429,10 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 			_, _ = r.Write(msg.Data)
 		}
 	case "run.prompt":
+		if len(msg.Message) > 256<<10 {
+			_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: "prompt is too large"}})
+			return
+		}
 		d.runMu.Lock()
 		sr := d.structured[msg.RunID]
 		cr := d.codexRuns[msg.RunID]
@@ -683,4 +714,34 @@ func ReadHostname() string {
 		return h
 	}
 	return "agentnexus-host"
+}
+
+// diffSessionSnapshot compares the current session metadata with the last
+// successfully sent snapshot. The hash is over the full normalized session,
+// so title, state, message count, branch and repository changes are detected.
+func diffSessionSnapshot(previous map[string]string, sessions []protocol.Session, force bool) (changed []protocol.Session, removed []protocol.SessionKey, next map[string]string) {
+	next = make(map[string]string, len(sessions))
+	changed = make([]protocol.Session, 0, len(sessions))
+	for _, session := range sessions {
+		raw, _ := json.Marshal(session)
+		key := session.Agent + "\x00" + session.NativeID
+		hash := fmt.Sprintf("%x", sha256Sum(raw))
+		next[key] = hash
+		if force || previous[key] != hash {
+			changed = append(changed, session)
+		}
+	}
+	if force {
+		return changed, nil, next
+	}
+	for key := range previous {
+		if _, ok := next[key]; ok {
+			continue
+		}
+		parts := strings.SplitN(key, "\x00", 2)
+		if len(parts) == 2 {
+			removed = append(removed, protocol.SessionKey{Agent: parts[0], NativeID: parts[1]})
+		}
+	}
+	return changed, removed, next
 }

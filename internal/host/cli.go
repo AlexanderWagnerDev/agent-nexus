@@ -84,7 +84,14 @@ func Pair(ctx context.Context, hubURL, code, name string) (Config, string, error
 func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 	issues := 0
 	path, _ := ConfigPath()
+	fmt.Fprintf(out, "version:    %s\n", Version)
 	fmt.Fprintf(out, "config:     %s\n", path)
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o077 != 0 {
+			fmt.Fprintf(out, "permissions: WARNING config is readable by other users (%o)\n", info.Mode().Perm())
+			issues++
+		}
+	}
 	if cfgErr != nil {
 		fmt.Fprintf(out, "status:     NOT PAIRED (%v)\n", cfgErr)
 		issues++

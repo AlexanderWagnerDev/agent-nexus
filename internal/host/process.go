@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -44,7 +45,21 @@ func matchActiveSessions(lines []string, sessions []protocol.Session) map[string
 	return active
 }
 
+var processCache struct {
+	mu    sync.Mutex
+	lines []string
+	at    time.Time
+}
+
 func processCommandLines(ctx context.Context) []string {
+	processCache.mu.Lock()
+	if len(processCache.lines) > 0 && time.Since(processCache.at) < 55*time.Second {
+		lines := processCache.lines
+		processCache.mu.Unlock()
+		return lines
+	}
+	processCache.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	var cmd *exec.Cmd
@@ -59,5 +74,10 @@ func processCommandLines(ctx context.Context) []string {
 	if err != nil {
 		return nil
 	}
-	return strings.Split(string(out), "\n")
+	lines := strings.Split(string(out), "\n")
+	processCache.mu.Lock()
+	processCache.lines = lines
+	processCache.at = time.Now()
+	processCache.mu.Unlock()
+	return lines
 }
