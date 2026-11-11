@@ -62,7 +62,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
-| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | Private releases need a read-only `NEXUS_GITHUB_TOKEN`; automatic scheduling is OS-level |
+| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | No public release feed during alpha; a private test feed needs a read-only `NEXUS_GITHUB_TOKEN` |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -131,16 +131,14 @@ Linux and macOS host-client installation.
 Requirements: Go 1.27+ and Node.js only for the JavaScript syntax check (the browser client is embedded and has no build step).
 
 ```bash
-# 1. Build
-make build          # produces bin/nexus-hub and bin/nexusd
-# 2. Run the hub locally
+# 1. Run the hub locally
 ./bin/nexus-hub --addr 127.0.0.1:8080 --data-dir ./.nexus
 
-# 3. Open http://127.0.0.1:8080, create the owner account.
+# 2. Open http://127.0.0.1:8080, create the owner account.
 #    Save the TOTP secret shown after setup if you want a second factor.
 
-# 4. In the web UI: Hosts -> "Pair a host" -> copy the command.
-# 5. On the machine that runs your agents:
+# 3. In the web UI: Hosts -> "Pair a host" -> copy the command.
+# 4. On the machine that runs your agents:
 ./bin/nexusd pair --hub http://127.0.0.1:8080 --code XXXX-XXXX --name my-laptop
 # Compare the printed Pairing SAS with the code shown on the Hosts page,
 # then click "Confirm host" there.
@@ -249,7 +247,7 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | --- | --- |
 | 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; spike reports are not yet written |
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
-| 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection, FTS index and 10k-scale tuning pending |
+| 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection and an FTS index pending; 10k-session store benchmarks recorded, browser soak pending |
 | 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
 | 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, hub command signing and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
