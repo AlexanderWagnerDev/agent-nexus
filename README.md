@@ -244,6 +244,7 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | Document | Content |
 | --- | --- |
 | [docs/INSTALL.md](docs/INSTALL.md) | Beginner installation: Docker/Portainer, host clients, pairing, first chat |
+| [docs/MULTI-HOST.md](docs/MULTI-HOST.md) | Three Windows hosts + Portainer + MacBook/phone: setup, verification, updates |
 | [docs/ADMIN.md](docs/ADMIN.md) | Day-2 administration: users, grants, host policy, audit, updates, limitations |
 | [docs/UI-DESIGN.md](docs/UI-DESIGN.md) | Design references, tokens, chat/composer rules and remaining UI gaps |
 | [docs/PLAN.md](docs/PLAN.md) | Requirements, technical decisions (ADRs), work packages |
