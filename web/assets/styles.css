@@ -201,9 +201,9 @@ code, pre, .mono { font-family: var(--font-mono); }
 .nav a.active { background: var(--bg-elev-2); color: var(--text); }
 .nav a.active .icon { color: var(--accent); }
 .nav .icon svg { width: 17px; height: 17px; }
-.sidebar-extra { flex: 1; min-height: 0; overflow-y: auto; margin-top: 16px; padding: 0 1px 12px; display: grid; align-content: start; gap: 16px; }
+.sidebar-extra { flex: 1; min-height: 0; overflow-y: auto; margin-top: 16px; padding: 0 1px 12px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 16px; }
 .side-loading { display: grid; place-items: center; padding: 20px; }
-.side-section { display: grid; gap: 2px; }
+.side-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; }
 .side-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 8px 5px; color: var(--muted-2);

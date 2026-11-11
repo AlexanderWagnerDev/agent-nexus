@@ -18,14 +18,22 @@ This document is the single source of truth for **what** AgentNexus must do (req
   rollback, hardened IPv6/proxy Portainer stacks, online backups and per-user
   services on Linux/macOS/Windows.
 - **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
-  (CI), cross-compilation for six targets, CodeQL (SARIF artifact because the
-  private repository has no GHAS), Windows Task Scheduler install/status/
-  uninstall on Windows 11, live Codex `app-server` and OpenCode `serve`/ACP
-  runs on Windows 11, OpenCode/Codex option discovery, OpenCode and Codex image
-  attachment round-trips, offline/reconnect replay, signed-command acceptance
-  with a second daemon, a simulated three-host concurrent run, host update
-  staging, split-view and model-picker browser QA, transcript export against a
-  1,000+ message session.
+  (CI; the local Windows shell had no cgo toolchain), `gofmt`, 19 JavaScript
+  unit tests, the browser smoke test, an axe-core WCAG scan on desktop and
+  mobile in English and German, cross-compilation for six targets, CodeQL
+  (SARIF artifact because the private repository has no GHAS), Windows Task
+  Scheduler install/status/uninstall on Windows 11, live Codex `app-server` and
+  OpenCode `serve`/ACP runs on Windows 11, OpenCode/Codex option discovery,
+  OpenCode and Codex image attachment round-trips, offline/reconnect replay,
+  signed-command acceptance with a second daemon, a simulated three-host
+  concurrent run, a synthetic three-host demo hub with fixture sessions and
+  scripted runs, host update staging, split-view, changes-page, model-picker and
+  diff browser QA, transcript export against a 1,000+ message session, an
+  online backup restore, and 10,000-session store benchmarks.
+- **Measured here (Windows, AMD EPYC 7543, SQLite):** full replacement of
+  10,000 session rows 1.42 s; listing 500 of 10,000 sessions 140 ms; project
+  aggregation over 10,000 sessions 197 ms. These are store-level measurements,
+  not a browser or multi-host soak test.
 - **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
   Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
   (no Docker daemon on the development host), client/device-signed commands, PostgreSQL,

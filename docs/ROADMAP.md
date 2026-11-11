@@ -36,6 +36,19 @@ official version and no published release. The acceptance criteria below remain
 the definition of done; this table records what is actually implemented and
 tested versus what is still open.
 
+### Alpha verification (2026-11-11)
+
+- Go unit and integration tests pass; `go vet` and `gofmt` are clean.
+- 19 JavaScript unit tests pass; the browser smoke test and the axe-core scan
+  pass on desktop and mobile in English and German.
+- Store benchmarks at 10,000 sessions: full snapshot replacement 1.42 s,
+  listing 500 sessions 140 ms, project aggregation 197 ms.
+- Online backup and restore preserve users and session metadata.
+- Screenshots are generated from `cmd/nexus-demo` fixtures, not real sessions.
+- **Still unproven:** physical three-host operation, real Linux/macOS agent
+  sessions, Docker/Portainer runtime deployment, update/rollback against a real
+  release feed, manual WCAG 2.2 AA and an external penetration test.
+
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |

@@ -19,17 +19,19 @@ AgentNexus answers these questions with a **self-hosted hub** and a lightweight 
 | Dark | Light |
 | --- | --- |
 | ![Home in dark mode](docs/screenshots/dashboard-dark.png) | ![Home in light mode](docs/screenshots/dashboard-light.png) |
-| ![Session transcript in dark mode](docs/screenshots/chat-dark.png) | ![Session transcript in light mode](docs/screenshots/chat-light.png) |
+| ![Structured chat in dark mode](docs/screenshots/chat-dark.png) | ![Structured chat in light mode](docs/screenshots/chat-light.png) |
 | ![Agent activity in dark mode](docs/screenshots/multi-agent-dashboard.png) | ![Agent activity in light mode](docs/screenshots/runs-light.png) |
 | ![Projects in dark mode](docs/screenshots/projects-dark.png) | ![Projects in light mode](docs/screenshots/projects-light.png) |
 | ![Settings in dark mode](docs/screenshots/settings-dark.png) | ![Settings in light mode](docs/screenshots/settings-light.png) |
 | ![Mobile dashboard in dark mode](docs/screenshots/mobile-dashboard.png) | ![Mobile dashboard in light mode](docs/screenshots/mobile-dashboard-light.png) |
 | ![Sign in in dark mode](docs/screenshots/login-dark.png) | ![Sign in in light mode](docs/screenshots/login-light.png) |
 
-The screenshots come from a running hub with a paired Windows host and real
-Codex and OpenCode sessions. They show actual tool calls, Markdown, a Git review
-panel and multiple open runs; they are not mockups. The same UI is used on
-desktop, tablet and phone, and the theme is stored per user on the hub.
+The screenshots come from a running hub whose hosts are synthetic fixtures from
+`cmd/nexus-demo`: three simulated machines, fake native sessions and harmless
+tool output. They show the real UI, renderer and diff engine, but no real user,
+host, path or project data. The same UI is used on desktop, tablet and phone,
+and the theme is stored per user on the hub. See
+[docs/PRIVACY.md](docs/PRIVACY.md) for the demo-data rules.
 
 More views: [split workspace](docs/screenshots/workspace-dark.png),
 [split workspace in light mode](docs/screenshots/workspace-light.png),
@@ -42,7 +44,9 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 [tool-call cards](docs/screenshots/chat-tools-dark.png),
 [Git context panel](docs/screenshots/chat-context-dark.png),
 [rendered diff](docs/screenshots/chat-diff-dark.png),
+[notifications](docs/screenshots/notifications-dark.png),
 [mobile chat](docs/screenshots/mobile-chat.png),
+[mobile chat in light mode](docs/screenshots/mobile-chat-light.png),
 [mobile chat details](docs/screenshots/mobile-chat-details.png),
 [hosts](docs/screenshots/hosts-dark.png),
 [session transcript](docs/screenshots/session-detail-dark.png) and the
@@ -90,7 +94,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
 | **Operations** | Multi-arch GHCR image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
-### Agent support in this release
+### Agent support in the alpha
 
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -169,7 +173,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This release has not received an external security audit. Hub-to-host commands are signed, but client/device-signed commands and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This alpha build has not received an external security audit. Hub-to-host commands are signed, but client/device-signed commands and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
@@ -224,7 +228,7 @@ flowchart LR
     DB2 -- outbound WSS --> H
 ```
 
-The host link carries JSON envelopes in this release; see [ADR-014](docs/PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-01x). Protobuf envelopes and a React migration remain future options.
+The host link carries JSON envelopes in this build; see [ADR-014](docs/PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-01x). Protobuf envelopes and a React migration remain future options.
 
 ## Repository layout
 

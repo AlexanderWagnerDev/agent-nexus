@@ -302,7 +302,15 @@ func TestBackupSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err := s.CreateUser("owner", "hash", "secret"); err != nil {
+	u, err := s.CreateUser("owner", "hash", "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostID, err := s.CreateHost(u.ID, "demo", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.ReplaceHostSessions(hostID, benchmarkSessions(50)); err != nil {
 		t.Fatal(err)
 	}
 	path := t.TempDir() + "/backup.db"
@@ -319,5 +327,12 @@ func TestBackupSnapshot(t *testing.T) {
 	defer copyStore.Close()
 	if n, err := copyStore.UserCount(); err != nil || n != 1 {
 		t.Fatalf("backup content: %d %v", n, err)
+	}
+	sessions, err := copyStore.ListSessions(u.ID, hostID, "", "", "", "", 100, 0, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 50 {
+		t.Fatalf("backup lost sessions: got %d want 50", len(sessions))
 	}
 }

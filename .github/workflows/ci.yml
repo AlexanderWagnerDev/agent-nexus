@@ -50,8 +50,10 @@ jobs:
         with:
           node-version: 26
       - run: node --check web/assets/app.js
+      - run: node --check web/assets/i18n.js
       - run: node --check web/assets/markdown.js
       - run: node --check web/assets/chat-format.js
+      - run: node --check web/assets/diff.js
       - run: node --check web/assets/theme.js
 
   race:

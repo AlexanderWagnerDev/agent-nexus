@@ -35,6 +35,21 @@ go run ./cmd/nexus-hub --addr 127.0.0.1:8080 --data-dir ./.nexus
 
 Do not report vulnerabilities in public issues. See [SECURITY.md](SECURITY.md).
 
+## Screenshots and UI fixtures
+
+Screenshots use synthetic data only. The demo host speaks the real hub protocol
+but serves fixtures from `cmd/nexus-demo`; it never reads a real agent store.
+
+```bash
+make build demo
+node web/e2e/demo/seed.mjs      # starts a throwaway hub on :8790
+node web/e2e/demo/shots.mjs     # writes docs/screenshots
+```
+
+Login for the demo hub is `demo` / `demo-alpha-only`. The data directory lives
+under the OS temp folder and is deleted on the next seed. Never point the demo
+at a real hub or reuse real sessions. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ## License
 
 By contributing, you agree that your contribution is licensed under the

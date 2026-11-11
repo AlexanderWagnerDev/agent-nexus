@@ -381,7 +381,7 @@ function renderShell(active = 'overview') {
         <div class="sidebar-top">
           <a class="brand" href="#/" title="AgentNexus home">
             <span class="brand-mark">A</span>
-            <span class="brand-text"><strong>AgentNexus</strong><small>${esc(state.hubName)}</small></span>
+            <span class="brand-text"><strong>AgentNexus</strong>${state.hubName && state.hubName !== 'AgentNexus' ? `<small>${esc(state.hubName)}</small>` : ''}</span>
           </a>
           <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" title="${collapsed ? t('Expand sidebar') : t('Collapse sidebar')}" aria-label="${collapsed ? t('Expand sidebar') : t('Collapse sidebar')}">${svgIcon('panelLeft')}</button>
         </div>
@@ -771,7 +771,14 @@ function renderTabs() {
     return;
   }
   bar.hidden = false;
-  bar.innerHTML = `<div class="tabs-scroll">${state.openTabs.map((tab) => {
+  const seenHrefs = new Set();
+  const tabs = state.openTabs.filter((tab) => {
+    const href = tab.href || (tab.kind === 'session' ? `#/sessions/${tab.id}` : `#/runs/${tab.id}`);
+    if (seenHrefs.has(href)) return false;
+    seenHrefs.add(href);
+    return true;
+  });
+  bar.innerHTML = `<div class="tabs-scroll">${tabs.map((tab) => {
     const key = tab.key || tab.id;
     const href = tab.href || (tab.kind === 'session' ? `#/sessions/${esc(tab.id)}` : `#/runs/${esc(tab.id)}`);
     const active = location.hash === href;
@@ -791,6 +798,14 @@ function installGlobalUi() {
   if (state.uiInstalled) return;
   state.uiInstalled = true;
   loadTabs();
+  // The split workspace embeds this client in iframes. Tabs live in
+  // localStorage, so react to writes from another frame instead of leaving a
+  // stale tab bar behind.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'nexus-tabs') return;
+    loadTabs();
+    renderTabs();
+  });
   document.addEventListener('keydown', (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();

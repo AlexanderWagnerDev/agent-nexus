@@ -269,6 +269,13 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	if auth.HostName != "" {
 		_, _ = s.store.db.Exec(`UPDATE hosts SET name=? WHERE id=?`, auth.HostName, hostID)
 	}
+	// The platform is reported on every connection. Persist it so a host that
+	// was paired from a different machine or upgraded to another OS does not
+	// keep stale inventory metadata.
+	if auth.OS != "" || auth.Arch != "" || auth.Version != "" {
+		_, _ = s.store.db.Exec(`UPDATE hosts SET os=COALESCE(NULLIF(?, ''), os), arch=COALESCE(NULLIF(?, ''), arch), version=COALESCE(NULLIF(?, ''), version) WHERE id=?`,
+			auth.OS, auth.Arch, auth.Version, hostID)
+	}
 	features := []string{"session-delta-v1"}
 	if s.signer != nil {
 		features = append(features, "hub-signing-v1")

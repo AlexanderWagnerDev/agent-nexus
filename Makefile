@@ -1,8 +1,12 @@
-.PHONY: build test test-race lint vuln run-hub run-daemon docker
+.PHONY: build demo test test-race lint vuln run-hub run-daemon docker
 
 build:
 	CGO_ENABLED=0 go build -trimpath -o bin/nexus-hub ./cmd/nexus-hub
 	CGO_ENABLED=0 go build -trimpath -o bin/nexusd ./cmd/nexusd
+
+# Synthetic host for screenshots and UI development. Never shipped in releases.
+demo:
+	CGO_ENABLED=0 go build -trimpath -o bin/nexus-demo ./cmd/nexus-demo
 
 test:
 	go test ./...
@@ -14,8 +18,10 @@ lint:
 	gofmt -l .
 	go vet ./...
 	node --check web/assets/app.js
+	node --check web/assets/i18n.js
 	node --check web/assets/markdown.js
 	node --check web/assets/chat-format.js
+	node --check web/assets/diff.js
 	node --check web/assets/theme.js
 
 web-test:

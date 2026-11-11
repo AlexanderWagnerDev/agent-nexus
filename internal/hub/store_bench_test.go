@@ -57,3 +57,58 @@ func BenchmarkListSessions5000(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkReplaceHostSessions10000(b *testing.B) {
+	store, err := OpenStore(b.TempDir() + "/hub.db")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+	user, _ := store.CreateUser("owner", "hash", "secret")
+	hostID, _ := store.CreateHost(user.ID, "bench", make([]byte, 32), "linux", "amd64", "alpha")
+	sessions := benchmarkSessions(10000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, _, err := store.ReplaceHostSessions(hostID, sessions); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkListSessions10000(b *testing.B) {
+	store, err := OpenStore(b.TempDir() + "/hub.db")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+	user, _ := store.CreateUser("owner", "hash", "secret")
+	hostID, _ := store.CreateHost(user.ID, "bench", make([]byte, 32), "linux", "amd64", "alpha")
+	if _, _, err := store.ReplaceHostSessions(hostID, benchmarkSessions(10000)); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := store.ListSessions(user.ID, "", "", "", "", "", 500, 0, true); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkListProjects10000(b *testing.B) {
+	store, err := OpenStore(b.TempDir() + "/hub.db")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+	user, _ := store.CreateUser("owner", "hash", "secret")
+	hostID, _ := store.CreateHost(user.ID, "bench", make([]byte, 32), "linux", "amd64", "alpha")
+	if _, _, err := store.ReplaceHostSessions(hostID, benchmarkSessions(10000)); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := store.ListProjects(user.ID, true, 500); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
