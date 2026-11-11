@@ -98,7 +98,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
-| **Operations** | Multi-arch GHCR image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
+| **Operations** | Multi-arch GHCR and Docker Hub image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
 ### Agent support in the alpha
 
@@ -164,7 +164,7 @@ cp .env.example .env      # set HUB_DOMAIN and HUB_NAME
 docker compose up -d --build
 ```
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`) and Docker Hub (`alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Security
 

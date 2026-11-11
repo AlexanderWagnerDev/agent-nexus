@@ -32,10 +32,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Docker Hub needs the repository secrets DOCKERHUB_USERNAME and
+      # DOCKERHUB_TOKEN (a Docker Hub access token with read/write scope).
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: |
+            ghcr.io/${{ github.repository }}
+            docker.io/alexanderwagnerdev/agent-nexus
           # Alpha-only labels. Deliberately no semver and no "latest": there is
           # no official version and ordinary commits must not look like a
           # release. The moving "alpha" tag is for development testing only.

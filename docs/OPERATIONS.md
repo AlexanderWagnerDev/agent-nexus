@@ -20,15 +20,22 @@ and what has actually been tested, not the 1.0 target.
 `~/Library/Application Support` on macOS. Native agent sessions stay in the
 agents' own stores; the hub never rewrites them.
 
-## Docker image and GHCR
+## Docker image (GHCR and Docker Hub)
 
-Development images are published to GitHub Container Registry. There is no
-official version yet: `alpha` tracks `main`, and `sha-<short>` pins a commit.
+Development images are published to GitHub Container Registry and to
+[Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus) with the
+same tags. There is no official version yet: `alpha` tracks `main`, and
+`sha-<short>` pins a commit.
 
 ```bash
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:alpha
 docker pull ghcr.io/alexanderwagnerdev/agent-nexus:sha-167a829   # pinned build
+docker pull alexanderwagnerdev/agent-nexus:alpha                 # Docker Hub
 ```
+
+The Docker Hub push in `.github/workflows/docker.yml` needs two repository
+secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
+access token with read/write scope).
 
 The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
 nonroot user (UID 65532), writes only to `/data`, and exposes a
