@@ -29,7 +29,7 @@ func TestStoreSessionsAndAudit(t *testing.T) {
 	if err != nil || n != 2 || del != 0 {
 		t.Fatalf("unexpected snapshot result: %d %d %v", n, del, err)
 	}
-	sessions, err := s.ListSessions(u.ID, "", "", "", "", "", 10, true)
+	sessions, err := s.ListSessions(u.ID, "", "", "", "", "", 10, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +50,65 @@ func TestStoreSessionsAndAudit(t *testing.T) {
 	}
 	if broken, err := s.VerifyAudit(); err != nil || broken != 0 {
 		t.Fatalf("audit chain broken at %d: %v", broken, err)
+	}
+}
+
+func TestStoreProjectsFavoritesAndNotifications(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	hostID, err := s.CreateHost(u.ID, "alpha", make([]byte, 32), "linux", "amd64", "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, _, err := s.ReplaceHostSessions(hostID, []protocol.Session{
+		{NativeID: "a", Agent: "codex", Title: "one", Cwd: "/work/app", GitBranch: "main", CreatedAt: now, UpdatedAt: now, State: protocol.StateRunning},
+		{NativeID: "b", Agent: "opencode", Title: "two", Cwd: "/work/app", CreatedAt: now, UpdatedAt: now, State: protocol.StateIdle},
+		{NativeID: "c", Agent: "codex", Title: "three", Cwd: "/work/other", CreatedAt: now, UpdatedAt: now.Add(-time.Hour), State: protocol.StateIdle},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	projects, err := s.ListProjects(u.ID, true, 10)
+	if err != nil || len(projects) != 2 {
+		t.Fatalf("projects: %+v %v", projects, err)
+	}
+	if projects[0].Sessions != 2 || projects[0].Active != 1 || projects[0].Branch != "main" {
+		t.Fatalf("unexpected project aggregate: %+v", projects[0])
+	}
+	sessions, _ := s.ListSessions(u.ID, "", "", "", "", "", 10, 0, true)
+	if len(sessions) != 3 {
+		t.Fatalf("expected 3 sessions, got %d", len(sessions))
+	}
+	if err := s.SetSessionFavorite(u.ID, sessions[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	favorites, err := s.FavoriteSessions(u.ID, true)
+	if err != nil || len(favorites) != 1 || favorites[0].ID != sessions[0].ID {
+		t.Fatalf("favorites: %+v %v", favorites, err)
+	}
+	if err := s.SetSessionFavorite(u.ID, sessions[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if favorites, _ := s.FavoriteSessions(u.ID, true); len(favorites) != 0 {
+		t.Fatalf("favorite was not removed: %+v", favorites)
+	}
+	if err := s.AddNotification(u.ID, "completed", "Run finished", "A run finished.", "run-1", "/#/runs/run-1"); err != nil {
+		t.Fatal(err)
+	}
+	if seen, err := s.NotificationExists(u.ID, "run-1", "completed"); err != nil || !seen {
+		t.Fatalf("notification dedupe lookup failed: %v %v", seen, err)
+	}
+	items, unread, err := s.ListNotifications(u.ID, 10)
+	if err != nil || len(items) != 1 || unread != 1 || items[0].Read {
+		t.Fatalf("notifications: %+v %d %v", items, unread, err)
+	}
+	remaining, err := s.MarkNotificationsRead(u.ID, "")
+	if err != nil || remaining != 0 {
+		t.Fatalf("mark read: %d %v", remaining, err)
 	}
 }
 

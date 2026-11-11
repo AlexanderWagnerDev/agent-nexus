@@ -256,9 +256,38 @@ type RunView struct {
 	HostName      string     `json:"host_name,omitempty"`
 	SessionTitle  string     `json:"session_title,omitempty"`
 	Agent         string     `json:"agent,omitempty"`
+	Cwd           string     `json:"cwd,omitempty"`
+	GitBranch     string     `json:"git_branch,omitempty"`
 	Mode          string     `json:"mode"`
 	State         string     `json:"state"`
-	LeaseDeviceID string     `json:"-"`
+	LeaseDeviceID string     `json:"lease_device_id,omitempty"`
+	LastEventSeq  uint64     `json:"last_event_seq,omitempty"`
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
+}
+
+// ProjectView groups native sessions that share a working directory on one
+// host. The hub never stores file contents; this is metadata only.
+type ProjectView struct {
+	HostID   string    `json:"host_id"`
+	HostName string    `json:"host_name"`
+	Cwd      string    `json:"cwd"`
+	Name     string    `json:"name"`
+	Branch   string    `json:"git_branch,omitempty"`
+	Sessions int       `json:"sessions"`
+	Active   int       `json:"active"`
+	Agents   []string  `json:"agents"`
+	LastAt   time.Time `json:"last_at"`
+}
+
+// Notification is a content-free in-app event for the run owner.
+type Notification struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	RunID     string    `json:"run_id,omitempty"`
+	Link      string    `json:"link,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	Read      bool      `json:"read"`
 }

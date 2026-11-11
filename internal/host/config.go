@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // Policy is enforced on the host and cannot be overridden by the hub.
 type Policy struct {

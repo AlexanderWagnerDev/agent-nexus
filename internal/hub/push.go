@@ -78,14 +78,24 @@ func (s *Server) handlePushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unsubscribed"})
 }
 
-// notifyRun sends a content-free Web Push message to the run owner's devices.
-// It deliberately contains no transcript, tool command, path or approval text.
-func (s *Server) notifyRun(runID, title, body string) {
-	if s.vapidPrivate == "" || s.vapidPublic == "" {
-		return
-	}
+// notifyRun records a content-free in-app notification and, when configured,
+// sends the same message as Web Push. It deliberately contains no transcript,
+// tool command, path or approval text.
+func (s *Server) notifyRun(runID, kind, title, body string) {
 	_, ownerID, err := s.store.RunByID(runID)
 	if err != nil {
+		return
+	}
+	link := "/#/runs/" + runID
+	if kind != "approval" {
+		if seen, err := s.store.NotificationExists(ownerID, runID, kind); err == nil && seen {
+			return
+		}
+	}
+	if err := s.store.AddNotification(ownerID, kind, title, body, runID, link); err != nil {
+		s.log.Debug("notification history failed", "error", err)
+	}
+	if s.vapidPrivate == "" || s.vapidPublic == "" {
 		return
 	}
 	subs, err := s.store.PushSubscriptions(ownerID)
@@ -95,7 +105,7 @@ func (s *Server) notifyRun(runID, title, body string) {
 	payload, _ := json.Marshal(map[string]string{
 		"title": title,
 		"body":  body,
-		"url":   "/#/runs/" + runID,
+		"url":   link,
 	})
 	for _, sub := range subs {
 		response, err := webpush.SendNotification(payload, &webpush.Subscription{

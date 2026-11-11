@@ -546,12 +546,27 @@ func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	q := r.URL.Query()
-	sessions, err := s.store.ListSessions(u.ID, q.Get("host"), q.Get("agent"), q.Get("project"), q.Get("state"), q.Get("q"), atoiOr(q.Get("limit"), 100), isAdminRole(u.Role))
+	limit := atoiOr(q.Get("limit"), 100)
+	if limit < 1 {
+		limit = 100
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+	offset := atoiOr(q.Get("offset"), 0)
+	sessions, err := s.store.ListSessions(u.ID, q.Get("host"), q.Get("agent"), q.Get("project"), q.Get("state"), q.Get("q"), limit+1, offset, isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	hasMore := len(sessions) > limit
+	if hasMore {
+		sessions = sessions[:limit]
+	}
+	if sessions == nil {
+		sessions = []protocol.SessionView{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "has_more": hasMore, "offset": offset})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -866,6 +881,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "not your run")
 		return
 	}
+	run.LastEventSeq = s.runEventCursor(run.ID)
 	writeJSON(w, http.StatusOK, run)
 }
 

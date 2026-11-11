@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -41,6 +42,9 @@ type Daemon struct {
 	lastSnapshot string
 	lastByAgent  map[string][]protocol.Session
 	connectedAt  atomic.Int64
+
+	gitMu       sync.Mutex
+	gitBranches map[string]gitBranchCache
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
@@ -55,6 +59,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		starting:     map[string]bool{},
 		startingRuns: map[string]bool{},
 		lastByAgent:  map[string][]protocol.Session{},
+		gitBranches:  map[string]gitBranchCache{},
 	}
 	d.adapters = DetectAdapters(logger)
 	return d
@@ -276,7 +281,7 @@ func (d *Daemon) sendSessions(force bool) error {
 }
 
 func (d *Daemon) discoveryLoop(ctx context.Context) {
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(15 * time.Second)
 	defer t.Stop()
 	for {
 		select {
@@ -319,6 +324,19 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 		d.lastByAgent[a.Name()] = sessions
 		out = append(out, sessions...)
 	}
+	// Normalize path separators so the hub groups Windows sessions from
+	// different adapters under one project. Forward slashes work in all Go
+	// filesystem and exec paths on Windows.
+	for i := range out {
+		out[i].Cwd = filepath.ToSlash(out[i].Cwd)
+	}
+	// Fill in branch names for adapters whose store does not record them.
+	// Branches are cached by directory so discovery stays cheap.
+	for i := range out {
+		if out[i].GitBranch == "" && out[i].Cwd != "" {
+			out[i].GitBranch = d.gitBranch(ctx, out[i].Cwd)
+		}
+	}
 	// Overlay live run state so the hub does not mark a resumed session idle.
 	d.runMu.Lock()
 	active := map[string]string{}
@@ -328,15 +346,15 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 		ours[r.sessionKey] = true
 	}
 	for _, r := range d.structured {
-		active[r.sessionKey] = protocol.StateRunning
+		active[r.sessionKey] = r.currentState()
 		ours[r.sessionKey] = true
 	}
 	for _, r := range d.codexRuns {
-		active[r.sessionKey] = protocol.StateRunning
+		active[r.sessionKey] = r.currentState()
 		ours[r.sessionKey] = true
 	}
 	for _, r := range d.acpRuns {
-		active[r.sessionKey] = protocol.StateRunning
+		active[r.sessionKey] = r.currentState()
 		ours[r.sessionKey] = true
 	}
 	d.runMu.Unlock()

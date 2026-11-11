@@ -191,6 +191,25 @@ CREATE TABLE IF NOT EXISTS passkeys (
   created_at INTEGER NOT NULL,
   last_used INTEGER
 );
+CREATE TABLE IF NOT EXISTS session_favorites (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, session_id)
+);
+CREATE INDEX IF NOT EXISTS session_favorites_user_idx ON session_favorites(user_id, created_at);
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  run_id TEXT NOT NULL DEFAULT '',
+  link TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, created_at);
 `)
 	if err != nil {
 		return err
@@ -751,9 +770,12 @@ func (s *Store) ReplaceHostSessions(hostID string, sessions []protocol.Session) 
 	return upserted, deleted, tx.Commit()
 }
 
-func (s *Store) ListSessions(userID, hostID, agent, project, state, query string, limit int, all bool) ([]protocol.SessionView, error) {
-	if limit <= 0 || limit > 2000 {
+func (s *Store) ListSessions(userID, hostID, agent, project, state, query string, limit, offset int, all bool) ([]protocol.SessionView, error) {
+	if limit <= 0 || limit > 2001 {
 		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
@@ -784,8 +806,8 @@ func (s *Store) ListSessions(userID, hostID, agent, project, state, query string
 		q += ` AND (s.title LIKE ? OR s.cwd LIKE ?)`
 		args = append(args, "%"+query+"%", "%"+query+"%")
 	}
-	q += ` ORDER BY s.updated_at DESC LIMIT ?`
-	args = append(args, limit)
+	q += ` ORDER BY s.updated_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -852,12 +874,12 @@ func (s *Store) RunByID(id string) (protocol.RunView, string, error) {
 	var ended sql.NullInt64
 	var startedBy string
 	err := s.db.QueryRow(`SELECT r.id,r.session_id,r.host_id,COALESCE(h.name,''),COALESCE(s.title,''),COALESCE(s.agent,''),
-		r.mode,r.state,r.lease_device_id,r.created_at,r.ended_at,r.started_by
+		COALESCE(s.cwd,''),COALESCE(s.git_branch,''),r.mode,r.state,r.lease_device_id,r.created_at,r.ended_at,r.started_by
 		FROM runs r
 		LEFT JOIN sessions s ON s.id=r.session_id
 		LEFT JOIN hosts h ON h.id=r.host_id
 		WHERE r.id=?`, id).
-		Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy)
+		Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Cwd, &r.GitBranch, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy)
 	r.StartedAt = fromMS(created)
 	if ended.Valid {
 		t := fromMS(ended.Int64)
@@ -908,7 +930,7 @@ func (s *Store) ActiveRuns(hostID string) ([]protocol.RunView, error) {
 // grant. It is intentionally bounded: the dashboard only needs recent runs.
 func (s *Store) ActiveRunsForUser(userID string, all bool) ([]protocol.RunView, error) {
 	q := `SELECT r.id,r.session_id,r.host_id,COALESCE(h.name,''),COALESCE(s.title,''),
-		COALESCE(s.agent,''),r.mode,r.state,r.created_at
+		COALESCE(s.agent,''),COALESCE(s.cwd,''),COALESCE(s.git_branch,''),r.mode,r.state,r.created_at
 		FROM runs r
 		JOIN hosts h ON h.id=r.host_id
 		LEFT JOIN sessions s ON s.id=r.session_id
@@ -928,7 +950,7 @@ func (s *Store) ActiveRunsForUser(userID string, all bool) ([]protocol.RunView, 
 	for rows.Next() {
 		var r protocol.RunView
 		var created int64
-		if err := rows.Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Mode, &r.State, &created); err != nil {
+		if err := rows.Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Cwd, &r.GitBranch, &r.Mode, &r.State, &created); err != nil {
 			return nil, err
 		}
 		r.StartedAt = fromMS(created)

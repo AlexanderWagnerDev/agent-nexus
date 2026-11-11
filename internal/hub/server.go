@@ -25,7 +25,7 @@ const (
 )
 
 // Version is overridden at build time for release images and binaries.
-var Version = "0.1.0"
+var Version = "0.2.0"
 
 // Server is the AgentNexus hub: REST API, browser WebSocket gateway, host
 // link gateway, relay and metadata index.
@@ -123,12 +123,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))
 
+	mux.HandleFunc("GET /api/v1/projects", s.requireAuth(s.handleProjects))
+	mux.HandleFunc("GET /api/v1/favorites", s.requireAuth(s.handleFavorites))
+	mux.HandleFunc("GET /api/v1/notifications", s.requireAuth(s.handleNotifications))
+	mux.HandleFunc("POST /api/v1/notifications/read", s.requireAuth(s.handleNotificationsRead))
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.requireAuth(s.handleSession))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/transcript", s.requireAuth(s.handleTranscript))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/export", s.requireAuth(s.handleExport))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/git", s.requireAuth(s.handleSessionGit))
 	mux.HandleFunc("POST /api/v1/sessions/{id}/runs", s.requireAuth(s.handleCreateRun))
+	mux.HandleFunc("PUT /api/v1/sessions/{id}/favorite", s.requireAuth(func(w http.ResponseWriter, r *http.Request) { s.handleSetFavorite(w, r, true) }))
+	mux.HandleFunc("DELETE /api/v1/sessions/{id}/favorite", s.requireAuth(func(w http.ResponseWriter, r *http.Request) { s.handleSetFavorite(w, r, false) }))
 	mux.HandleFunc("GET /api/v1/search", s.requireAuth(s.handleSearch))
 	mux.HandleFunc("GET /api/v1/audit", s.requireAuth(s.handleAudit))
 
@@ -379,7 +385,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		if msg.Event != nil {
 			s.appendRunEvent(msg.RunID, *msg.Event)
 			if msg.Event.Type == "approval.requested" {
-				go s.notifyRun(msg.RunID, "Approval needed", "An agent is waiting for your approval.")
+				go s.notifyRun(msg.RunID, "approval", "Approval needed", "An agent is waiting for your approval.")
 			}
 		}
 	case "run.exit":
@@ -390,12 +396,16 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.setRunState(msg.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.exit", RunID: msg.RunID, State: state, Message: msg.Reason})
 		s.log.Info("run exited", "run_id", msg.RunID, "code", msg.Code, "reason", msg.Reason)
-		go s.notifyRun(msg.RunID, "Agent run finished", "A run finished. Open AgentNexus for details.")
+		if state == protocol.StateFailed {
+			go s.notifyRun(msg.RunID, "failed", "Agent run failed", "A run exited with an error. Open AgentNexus for details.")
+		} else {
+			go s.notifyRun(msg.RunID, "completed", "Agent run finished", "A run finished. Open AgentNexus for details.")
+		}
 	case "run.error":
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
 		s.audit("host:"+hc.id, "run.failed", map[string]string{"run_id": msg.RunID, "error": msg.Error})
-		go s.notifyRun(msg.RunID, "Agent error", "A run failed. Open AgentNexus for details.")
+		go s.notifyRun(msg.RunID, "failed", "Agent error", "A run failed. Open AgentNexus for details.")
 	case "pong", "pong ":
 	default:
 		s.log.Debug("unknown host message", "type", msg.Type, "host_id", hc.id)
@@ -429,7 +439,7 @@ func (s *Server) unregisterHost(id string, hc *hostConn) {
 		for _, r := range runs {
 			s.setRunState(r.ID, protocol.StateFailed)
 			s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: r.ID, Error: "host disconnected"})
-			go s.notifyRun(r.ID, "Agent disconnected", "The host disconnected while the run was active.")
+			go s.notifyRun(r.ID, "disconnected", "Agent disconnected", "The host disconnected while the run was active.")
 		}
 	}
 	s.broadcastHostUpdate(id)
@@ -835,6 +845,13 @@ func (s *Server) setRunState(id, state string) {
 			s.store.SetSessionState(sess.SessionID, protocol.StateIdle)
 		}
 	}
+}
+
+func (s *Server) runEventCursor(id string) uint64 {
+	rs := s.runState(id)
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return rs.eventSeq
 }
 
 func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
