@@ -232,7 +232,7 @@ flowchart LR
     DB2 -- outbound WSS --> H
 ```
 
-The host link carries JSON envelopes in this build; see [ADR-014](docs/PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-01x). Protobuf envelopes and a React migration remain future options.
+The host link carries JSON envelopes in this build; see [ADR-014](docs/PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-the-alpha). Protobuf envelopes and a React migration remain future options.
 
 ## Repository layout
 

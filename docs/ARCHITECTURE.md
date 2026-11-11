@@ -245,7 +245,7 @@ Structured drivers translate agent-specific events into the **normalized event m
 
 ### 6.1 Host link
 
-> **Implementation note (0.1.x):** the same WebSocket, channel and replay semantics are used, but the envelope is JSON (`internal/protocol`) instead of Protobuf. See [ADR-014](PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-01x).
+> **Implementation note (alpha):** the same WebSocket, channel and replay semantics are used, but the envelope is JSON (`internal/protocol`) instead of Protobuf. See [ADR-014](PLAN.md#adr-014--json-host-link-and-dependency-light-web-client-for-the-alpha).
 
 - **Transport:** `wss://<hub>/v1/host/connect`. TLS 1.3 preferred, TLS 1.2 minimum. Works behind reverse proxies with WebSocket upgrade support (ADR-006).
 - **Framing:** each WebSocket binary message carries one Protobuf `Envelope`:
@@ -534,7 +534,7 @@ The cache is disposable: deleting it triggers a full re-index from native stores
 
 ## 9. Frontend
 
-> **Implementation note (0.1.x):** the embedded client is dependency-free ES modules plus vendored xterm.js and has no build step. The route and state model below is the target; a React migration remains an option (ADR-014).
+> **Implementation note (alpha):** the embedded client is dependency-free ES modules plus vendored xterm.js and has no build step. The route and state model below is the target; a React migration remains an option (ADR-014).
 
 - **Routes:** `/` (overview), `/hosts`, `/sessions` (global list), `/sessions/:id` (detail + transcript + export), `/runs` (live multi-run dashboard), `/runs/:id` (terminal or chat), `/search`, `/devices`, `/users`, `/audit`.
 - **State:** server state via TanStack Query; live updates from the client WebSocket patch the query cache; no global client store beyond UI preferences.

@@ -4,19 +4,19 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 
 > **Status:** design plus implemented subset. The current alpha build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### 0.1.x implementation notes
+### alpha implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
 | Password login | Argon2id (m=64 MiB, t=3, p=2), min length 10 | no recovery codes or local admin reset command |
 | Second factor | Optional TOTP, validated with ±1 time-step | TOTP secret encrypted at rest (see §8); TOTP is not mandatory on non-loopback hubs |
-| Passkeys | WebAuthn registration and username-first login, user verification required for step-up | credential JSON is stored unencrypted in `hub.db` |
+| Passkeys | WebAuthn registration and username-first login, user verification required for step-up | credential JSON is public-key material and is stored unencrypted in `hub.db` |
 | Step-up | Sensitive actions require a fresh passkey or password + TOTP confirmation; the window is five minutes and is bound to the session | no per-action confirmation list is configurable yet |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
 | CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
 | Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window; hub commands signed and replay-protected after authentication | hub key is a `0600` file, not OS keystore/DPAPI; client/device signatures not implemented |
 | Host policy | allowed roots (symlinks resolved), allowed agents, new/fork switches, forbidden flags; enforced on host | no per-action launch profiles |
-| Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in 0.1.x |
+| Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in the alpha |
 | Audit | hash-chained append-only table plus host-local JSONL audit, verification endpoint/UI | host-local log is not hash-chained |
 | Device revocation | deletes sessions and closes open browser sockets | push subscriptions are not deleted with the device |
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |

@@ -18,8 +18,8 @@ This document is the single source of truth for **what** AgentNexus must do (req
   rollback, hardened IPv6/proxy Portainer stacks, online backups and per-user
   services on Linux/macOS/Windows.
 - **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
-  (CI; the local Windows shell had no cgo toolchain), `gofmt`, 19 JavaScript
-  unit tests, the browser smoke test, an axe-core WCAG scan on desktop and
+  (CI; the local Windows shell had no cgo toolchain), `gofmt`, staticcheck, JavaScript unit
+  tests, the browser smoke test, an axe-core WCAG scan on desktop and
   mobile in English and German, cross-compilation for six targets, CodeQL
   (SARIF artifact because the private repository has no GHAS), Windows Task
   Scheduler install/status/uninstall on Windows 11, live Codex `app-server` and
@@ -29,7 +29,8 @@ This document is the single source of truth for **what** AgentNexus must do (req
   concurrent run, a synthetic three-host demo hub with fixture sessions and
   scripted runs, host update staging, split-view, changes-page, model-picker and
   diff browser QA, transcript export against a 1,000+ message session, an
-  online backup restore, and 10,000-session store benchmarks.
+  online backup restore, and 10,000-session store benchmarks. Statement
+  coverage is 53.1% in `internal/hub` and 50.4% in `internal/host`.
 - **Measured here (Windows, AMD EPYC 7543, SQLite):** full replacement of
   10,000 session rows 1.42 s; listing 500 of 10,000 sessions 140 ms; project
   aggregation over 10,000 sessions 197 ms. These are store-level measurements,
@@ -312,14 +313,14 @@ Each decision records context, the decision, alternatives and consequences. Deci
 
 - **Decision:** The web app (PWA) is the primary client. Native desktop/mobile apps (Phase 6, optional) wrap the same UI (e.g. Tauri 2) and add OS keystore-backed device keys (needed for full signed-command protection) and native notifications.
 
-### ADR-014 — JSON host link and dependency-light web client for 0.1.x
+### ADR-014 — JSON host link and dependency-light web client for the alpha
 
-- **Context:** The 0.1.x implementation needed a working end-to-end path quickly, without a Protobuf code-generation step or a Node build pipeline in the release binary.
+- **Context:** The alpha implementation needed a working end-to-end path quickly, without a Protobuf code-generation step or a Node build pipeline in the release binary.
 - **Decision:**
   - The host link uses JSON envelopes over the same single WebSocket and logical channels described in ADR-006. The envelope types live in `internal/protocol` and can be mapped to Protobuf later without changing the relay semantics.
   - The browser client is dependency-free ES modules with vendored xterm.js, embedded into the hub binary. It has no build step. React/TanStack (ADR-011) remains the target if UI complexity grows.
 - **Alternatives:** Protobuf + Buf now — better wire efficiency and schema discipline, but adds tooling and generated-code churn before the adapter model is stable. React/Vite now — better component ecosystem, but requires a Node build in every release path.
-- **Consequences:** The wire format is more verbose and has no generated schema. This is acceptable for a single-user/self-hosted 0.1.x and must be revisited before 1.0 (NFR-12 protocol compatibility) or if relay throughput becomes a bottleneck.
+- **Consequences:** The wire format is more verbose and has no generated schema. This is acceptable for a single-user/self-hosted alpha and must be revisited before 1.0 (NFR-12 protocol compatibility) or if relay throughput becomes a bottleneck.
 
 ## 8. Technology stack
 
@@ -329,7 +330,7 @@ Versions are intentionally given as "current stable" here; exact versions are pi
 | --- | --- | --- | --- |
 | Language (backend) | Go, CGO disabled | Hub and host daemon | ✅ |
 | HTTP/WebSocket | `net/http`, `github.com/coder/websocket` (or `gorilla/websocket`) | API, WebSocket endpoints | ✅ libraries exist; final pick in WP-0.4 |
-| Serialization | Protocol Buffers (`buf` toolchain), JSON for REST — **0.1.x uses JSON envelopes, see ADR-014** | Host link envelopes, API | ✅ |
+| Serialization | Protocol Buffers (`buf` toolchain), JSON for REST — **the alpha uses JSON envelopes, see ADR-014** | Host link envelopes, API | ✅ |
 | PTY | `github.com/creack/pty` (Unix) + ConPTY wrapper for Windows (`github.com/aymanbagabas/go-pty` or `UserExistsError/conpty`) | Terminal mode | ⚠️ Windows library choice and maintenance status to be validated in SP-5 |
 | ACP client | `github.com/coder/acp-go-sdk` (Apache-2.0) | Structured mode via ACP | ⚠️ API stability (pre-1.0) — pin version |
 | Database | SQLite via `modernc.org/sqlite`; PostgreSQL via `pgx` (Phase 5) | Hub metadata, host cache/FTS | ⚠️ FTS5 support in pure-Go driver to confirm |
@@ -338,7 +339,7 @@ Versions are intentionally given as "current stable" here; exact versions are pi
 | Crypto | Go standard library (`crypto/ed25519`, `crypto/ecdh`), `golang.org/x/crypto/chacha20poly1305` | Host keys, secret encryption | ✅ |
 | File watching | `github.com/fsnotify/fsnotify` + periodic rescan | Incremental discovery | ✅ (rescan covers platforms where watching is unreliable) |
 | Service install | `github.com/kardianos/service` or hand-written unit/plist/task templates | Per-user service | ⚠️ per-user mode on Windows to verify; fallback: own templates |
-| Frontend | ES modules + xterm.js (0.1.x); React + TypeScript + Vite is the target (ADR-011/ADR-014) | Web app | ✅ |
+| Frontend | ES modules + xterm.js (alpha); React + TypeScript + Vite is the target (ADR-011/ADR-014) | Web app | ✅ |
 | Push | Web Push (VAPID) via `github.com/SherClockHolmes/webpush-go` | Notifications | ✅ (iOS requires the PWA to be installed to the home screen, iOS 16.4+) |
 | Testing | Go `testing` + `testify`, Playwright (pre-installed in CI images), Vitest | All levels | ✅ |
 | Release | GoReleaser, cosign/Sigstore signatures, SBOM (Syft) | Distribution | ✅ |

@@ -38,8 +38,11 @@ tested versus what is still open.
 
 ### Alpha verification (2026-11-11)
 
-- Go unit and integration tests pass; `go vet` and `gofmt` are clean.
-- 19 JavaScript unit tests pass; the browser smoke test and the axe-core scan
+- Go unit and integration tests pass; `go vet`, `gofmt` and staticcheck are
+  clean. Statement coverage is 53.1% in `internal/hub` and 50.4% in
+  `internal/host`, including HTTP/WebSocket/RBAC/grant tests, a fake-hub host
+  link with terminal runs, policy rejection, Codex JSON-RPC and Gemini search.
+- 24 JavaScript unit tests pass; the browser smoke test and the axe-core scan
   pass on desktop and mobile in English and German.
 - Store benchmarks at 10,000 sessions: full snapshot replacement 1.42 s,
   listing 500 sessions 140 ms, project aggregation 197 ms.
@@ -53,7 +56,7 @@ tested versus what is still open.
 | --- | --- | --- | --- |
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
-| 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search, best-effort native-process detection, fail-soft parsers | FTS5 cache, 10k-session performance proof |
+| 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text), best-effort native-process detection, fail-soft parsers | Host-side FTS5 cache, 10k-session search proof |
 | 3 | 🟡 MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork, guaranteed process-tree termination |
 | 4 | ✅ partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository identity, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Manual WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP runs have no model/attachment controls |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
@@ -77,8 +80,9 @@ tested versus what is still open.
 - The browser client is dependency-free ES modules plus vendored xterm.js, not
   the React app described in ADR-011. See ADR-014.
 - The host link uses JSON envelopes, not Protobuf. See ADR-014.
-- Passkeys and password + optional TOTP are implemented. The TOTP secret and
-  VAPID private key are stored in the hub database unencrypted.
+- Passkeys and password + optional TOTP are implemented. TOTP secrets and the
+  VAPID private key are encrypted at rest with AES-256-GCM under `secret.key`;
+  legacy plaintext values are migrated on startup.
 - Structured mode is implemented for OpenCode and Codex, and for any agent
   with an ACP adapter configured (`nexusd acp`; `claude-agent-acp` and
   `claude-code-acp` are detected automatically). Approvals are forwarded for OpenCode permission requests,
@@ -103,9 +107,10 @@ tested versus what is still open.
   `user_settings` on the hub. A Playwright smoke test covers login, themes,
   navigation, projects, command palette, notifications, sidebar collapse and a
   390 px mobile viewport in CI; Markdown/tool formatting has Node unit tests.
-- Screenshots in `docs/screenshots/` were captured from a running hub with a
-  real Windows host and OpenCode/Codex sessions, including tool calls and a Git
-  review; they are not mockups.
+- Screenshots in `docs/screenshots/` are generated from the synthetic
+  `cmd/nexus-demo` hosts and sessions, including tool cards, diffs and a Git
+  review. They show the real UI and renderer, but no real user, host, project or
+  transcript data.
 
 
 ## Priorities
@@ -220,7 +225,7 @@ External dependencies: availability and stability of the agents' interfaces list
 **Work packages:** WP-4.1 … WP-4.7. **Requirements:** FR-17, FR-22, FR-29, FR-31, FR-42.
 **Depends on:** M3. WP-4.2, WP-4.3, WP-4.4 can be built in parallel after WP-4.1.
 
-> **0.1.x implementation:** OpenCode and Codex structured modes, generic ACP
+> **alpha implementation:** OpenCode and Codex structured modes, generic ACP
 > adapters (Claude Code via `claude-agent-acp`), the approval broker and Web
 > Push, QR/link device pairing are implemented. The main views and the paired
 > host, step-up and pairing dialogs were reviewed at 360 px with no horizontal
@@ -242,7 +247,7 @@ External dependencies: availability and stability of the agents' interfaces list
 **Work packages:** WP-5.1 … WP-5.6. **Requirements:** FR-43 (multi-user), FR-46, FR-50 (PostgreSQL), FR-54, all NFRs.
 **Depends on:** M4.
 
-> **0.1.x implementation:** roles (`owner`, `admin`, `member`, `viewer`) and
+> **alpha implementation:** roles (`owner`, `admin`, `member`, `viewer`) and
 > per-host grants are implemented. Signed commands, PostgreSQL, signed release
 > artifacts and the external penetration test remain open.
 
