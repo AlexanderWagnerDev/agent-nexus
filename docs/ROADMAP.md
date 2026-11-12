@@ -60,11 +60,13 @@ tested versus what is still open.
 - Screenshots are generated from `cmd/nexus-demo` fixtures, not real sessions.
 - **Still unproven:** physical three-host operation, real Linux/macOS agent
   sessions, Docker/Portainer runtime deployment, update/rollback against a real
-  release feed, manual WCAG 2.2 AA and an external penetration test.
+  release feed, a real Claude ACP session, client/device-signed commands,
+  PostgreSQL, load/soak tests, manual WCAG 2.2 AA and an external penetration
+  test. Visual baselines exist only for Windows 11.
 
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
-| 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | Written spike reports; per-OS agent matrix |
+| 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | SP-1 to SP-5 reports in docs/spikes/; per-OS real-agent matrix |
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text) with a host-local FTS5 cache, index progress in the UI, `nexusd index rebuild`, best-effort native-process detection, fail-soft parsers | Adapter-driven 10k-session initial-index measurement, per-version fixture matrix |
 | 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork |
