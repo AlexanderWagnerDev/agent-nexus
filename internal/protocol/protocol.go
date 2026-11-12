@@ -115,6 +115,30 @@ type PromptOptions struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
+// PromptQueueItem is one queued structured prompt. Only metadata and the
+// prompt itself are stored on the hub; the agent still runs on the host.
+type PromptQueueItem struct {
+	ID          string         `json:"id"`
+	RunID       string         `json:"run_id"`
+	UserID      string         `json:"-"`
+	DeviceID    string         `json:"-"`
+	Text        string         `json:"text"`
+	Options     *PromptOptions `json:"options,omitempty"`
+	Position    int            `json:"position"`
+	ScheduledAt *time.Time     `json:"scheduled_at,omitempty"`
+	State       string         `json:"state"`
+	Attempts    int            `json:"attempts"`
+	LastError   string         `json:"last_error,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// PromptQueue is the queue view for one run.
+type PromptQueue struct {
+	Items  []PromptQueueItem `json:"items"`
+	Paused bool              `json:"paused"`
+}
+
 // ModelOption is one model advertised by a native agent runtime.
 type ModelOption struct {
 	ID             string   `json:"id"`

@@ -98,6 +98,18 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B2: persistent prompt queue (2026-11-12)
+
+Structured runs have a per-run SQLite prompt queue. Items can be scheduled,
+reordered, edited, removed and paused; the hub delivers at most one prompt per
+run and only after the host reports a transition to idle. Every delivery
+re-checks the controller lease, session resume permission and host state.
+Delivery is claimed atomically, and an item left in `sending` by a hub crash is
+marked failed rather than resent, so a reconnect cannot execute a prompt twice.
+The chat composer exposes the queue with a clock button and an inline panel.
+Queues are only available for structured runs. Verified by store and fake-host
+API tests; scheduled delivery is polled every two seconds.
+
 ### A11: structured fork (2026-11-12)
 
 Codex `app-server` `thread/fork` is implemented and tested against a scripted

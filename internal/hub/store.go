@@ -170,6 +170,23 @@ CREATE TABLE IF NOT EXISTS runs (
   ended_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS runs_host_idx ON runs(host_id, state);
+CREATE TABLE IF NOT EXISTS prompt_queue (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL DEFAULT '',
+  position INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  options TEXT NOT NULL DEFAULT '',
+  scheduled_at INTEGER,
+  state TEXT NOT NULL DEFAULT 'queued',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS prompt_queue_run_idx ON prompt_queue(run_id, state, position);
+CREATE INDEX IF NOT EXISTS prompt_queue_due_idx ON prompt_queue(state, scheduled_at);
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at INTEGER NOT NULL,
@@ -279,6 +296,7 @@ CREATE INDEX IF NOT EXISTS sessions_messages_idx ON sessions(message_count DESC)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_url TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN disabled_at INTEGER`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
+	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 

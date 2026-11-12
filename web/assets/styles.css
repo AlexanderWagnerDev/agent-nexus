@@ -708,6 +708,22 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 
 .composer-wrap { position: relative; flex: 0 0 auto; padding: 6px 24px 14px; background: var(--bg); }
 .approval-slot { width: 100%; max-width: 900px; margin: 0 auto 7px; display: grid; gap: 6px; }
+.prompt-queue { width: 100%; max-width: 900px; margin: 0 auto 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg-elev); }
+.prompt-queue-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.prompt-queue-head strong { font-size: 12px; font-weight: 600; }
+.prompt-queue-head .btn { margin-left: auto; }
+.prompt-queue-schedule { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.prompt-queue-items { max-height: 220px; overflow-y: auto; display: grid; }
+.prompt-queue-item { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); display: grid; gap: 4px; }
+.prompt-queue-item:last-child { border-bottom: 0; }
+.prompt-queue-text { font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 72px; overflow: hidden; }
+.prompt-queue-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.prompt-queue-actions { display: flex; gap: 4px; align-items: center; }
+.prompt-queue-actions .icon-btn:disabled { opacity: .35; }
+@media (max-width: 640px) {
+  .prompt-queue-items { max-height: 160px; }
+  .prompt-queue-schedule .label-inline { display: grid; gap: 4px; }
+}
 .approval-card { border: 1px solid color-mix(in srgb, var(--amber) 38%, var(--line)); background: color-mix(in srgb, var(--amber) 7%, transparent); border-radius: 3px; padding: 10px 12px; display: grid; gap: 8px; }
 .approval-head { display: flex; align-items: center; gap: 7px; color: var(--notice-text); font-size: 13px; }
 .approval-head strong { font-weight: 550; }

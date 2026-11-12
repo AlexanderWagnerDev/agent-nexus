@@ -66,6 +66,18 @@ export async function pageStructuredRun(id, run) {
           ${versionWarning ? `<div class="notice info small" role="status">${t('Untested agent version')}: ${esc(versionWarning)}</div>` : ''}
           <button class="jump-latest" id="jump-latest" type="button" hidden>${svgIcon('arrowDown', 14)} ${t('Jump to latest')}</button>
           <div id="approval-banner" class="approval-slot"></div>
+          <div class="prompt-queue" id="prompt-queue" hidden>
+            <div class="prompt-queue-head">
+              <strong>${t('Prompt queue')}</strong>
+              <span class="composer-pill" id="queue-count">0</span>
+              <span class="muted small" id="queue-state"></span>
+              <button class="btn ghost small" id="queue-pause" type="button">${t('Pause queue')}</button>
+            </div>
+            <div class="prompt-queue-schedule">
+              <label class="label-inline">${t('Schedule (optional)')}<input class="input" type="datetime-local" id="queue-schedule"></label>
+            </div>
+            <div class="prompt-queue-items" id="queue-items"></div>
+          </div>
           <form class="composer" id="prompt-form">
             <textarea id="prompt-text" rows="1" placeholder="${t('Message {agent}…', { agent: agent.label })}" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
             <div class="composer-config" id="composer-config"></div>
@@ -77,6 +89,7 @@ export async function pageStructuredRun(id, run) {
                 <input type="file" id="attach-input" multiple hidden>
                 <button class="icon-btn" id="attach-button" type="button" title="${t('Attach files')}" aria-label="${t('Attach files')}" hidden>${svgIcon('paperclip')}</button>
                 <button class="icon-btn composer-stop" id="interrupt-run" type="button" title="${t('Interrupt current turn')}" aria-label="${t('Interrupt current turn')}" hidden>${svgIcon('stop')}</button>
+                <button class="icon-btn" id="queue-prompt" type="button" title="${t('Add to prompt queue')}" aria-label="${t('Add to prompt queue')}">${svgIcon('clock')}</button>
                 <button class="send-button" id="send-prompt" type="submit" title="${t('Send message')}" aria-label="${t('Send message')}">${svgIcon('send')}</button>
               </div>
             </div>
@@ -659,6 +672,8 @@ export async function pageStructuredRun(id, run) {
 
   const handler = (msg) => {
     if (msg.run_id !== id && msg.type !== 'ready') return;
+    if (msg.type === 'queue.changed') loadQueue().catch(() => {});
+    if (msg.type === 'run.prompt.sent' && msg.message) appendUser(msg.message);
     if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
     if (msg.type === 'run.state') {
       const epochChanged = Boolean(msg.epoch && runEpoch && msg.epoch !== runEpoch);
@@ -788,6 +803,135 @@ export async function pageStructuredRun(id, run) {
     noteText(t('Agent is working'), true);
     scrollBottom(true);
   });
+
+  // ---- prompt queue ----
+  const queuePanel = document.getElementById('prompt-queue');
+  const queueItemsEl = document.getElementById('queue-items');
+  const queueCount = document.getElementById('queue-count');
+  const queueState = document.getElementById('queue-state');
+  const queuePause = document.getElementById('queue-pause');
+  const queueSchedule = document.getElementById('queue-schedule');
+  let queueItems = [];
+  let queuePaused = false;
+  let queueBusy = false;
+
+  const queueScheduleISO = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : '';
+  };
+  const renderQueue = () => {
+    const pending = queueItems.filter((item) => item.state !== 'sent');
+    queuePanel.hidden = pending.length === 0 && !queuePaused;
+    queueCount.textContent = String(pending.length);
+    queueState.textContent = queuePaused ? t('paused') : '';
+    queuePause.textContent = queuePaused ? t('Resume queue') : t('Pause queue');
+    if (!pending.length) {
+      queueItemsEl.innerHTML = `<div class="muted small">${t('Queue is empty. Use the clock button to add the current draft.')}</div>`;
+      return;
+    }
+    queueItemsEl.innerHTML = pending.map((item, index) => `
+      <div class="prompt-queue-item" data-id="${esc(item.id)}">
+        <div class="prompt-queue-text">${esc(item.text)}</div>
+        <div class="prompt-queue-meta">
+          <span class="badge ${item.state === 'failed' ? 'failed' : 'idle'}">${esc(t(item.state))}</span>
+          ${item.scheduled_at ? `<span>${esc(fmtStamp(item.scheduled_at))}</span>` : ''}
+          <span>${esc(t('position'))} ${index + 1}</span>
+        </div>
+        ${item.last_error ? `<div class="notice error small">${esc(item.last_error)}</div>` : ''}
+        <div class="prompt-queue-actions">
+          <button class="icon-btn" type="button" data-queue-action="up" title="${t('Move up')}" aria-label="${t('Move up')}" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button class="icon-btn" type="button" data-queue-action="down" title="${t('Move down')}" aria-label="${t('Move down')}" ${index === pending.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn ghost small" type="button" data-queue-action="edit">${t('Edit')}</button>
+          <button class="btn ghost small" type="button" data-queue-action="remove">${t('Remove')}</button>
+        </div>
+      </div>`).join('');
+  };
+  const loadQueue = async () => {
+    const data = await api(`/runs/${encodeURIComponent(id)}/queue`);
+    queueItems = data.items || [];
+    queuePaused = Boolean(data.paused);
+    renderQueue();
+  };
+  const reorderQueue = async (idToMove, direction) => {
+    if (queueBusy) return;
+    const ids = queueItems.filter((item) => item.state === 'queued').map((item) => item.id);
+    const index = ids.indexOf(idToMove);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    queueBusy = true;
+    try {
+      await api(`/runs/${encodeURIComponent(id)}/queue/order`, { method: 'PUT', body: { ids } });
+      await loadQueue();
+    } catch (err) { toast(err.message, true); } finally { queueBusy = false; }
+  };
+  const editQueueItem = (item) => {
+    const scheduled = item.scheduled_at ? new Date(item.scheduled_at).toISOString().slice(0, 16) : '';
+    modal(`
+      <h2>${t('Edit queued prompt')}</h2>
+      <label class="label">${t('Prompt')}<textarea class="input" id="queue-edit-text" rows="5">${esc(item.text)}</textarea></label>
+      <label class="label">${t('Schedule (optional)')}<input class="input" type="datetime-local" id="queue-edit-schedule" value="${esc(scheduled)}"></label>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="queue-edit-save">${t('Save')}</button></div>`);
+    document.getElementById('queue-edit-save').addEventListener('click', async () => {
+      const text = document.getElementById('queue-edit-text').value.trim();
+      if (!text) return;
+      try {
+        await api(`/runs/${encodeURIComponent(id)}/queue/${encodeURIComponent(item.id)}`, {
+          method: 'PATCH',
+          body: { text, scheduled_at: queueScheduleISO(document.getElementById('queue-edit-schedule').value) },
+        });
+        closeModal();
+        await loadQueue();
+        toast(t('Queue updated'));
+      } catch (err) { toast(err.message, true); }
+    });
+  };
+  queueItemsEl.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-queue-action]');
+    const row = event.target.closest('[data-id]');
+    if (!button || !row) return;
+    const item = queueItems.find((entry) => entry.id === row.dataset.id);
+    if (!item) return;
+    const action = button.dataset.queueAction;
+    if (action === 'up') return reorderQueue(item.id, -1);
+    if (action === 'down') return reorderQueue(item.id, 1);
+    if (action === 'edit') return editQueueItem(item);
+    if (action === 'remove') {
+      try {
+        await api(`/runs/${encodeURIComponent(id)}/queue/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+        await loadQueue();
+        toast(t('Removed from queue'));
+      } catch (err) { toast(err.message, true); }
+    }
+  });
+  queuePause.addEventListener('click', async () => {
+    try {
+      await api(`/runs/${encodeURIComponent(id)}/queue/pause`, { method: 'POST', body: { paused: !queuePaused } });
+      await loadQueue();
+    } catch (err) { toast(err.message, true); }
+  });
+  document.getElementById('queue-prompt').addEventListener('click', async () => {
+    const text = textarea.value.trim();
+    if (!text) { toast(t('Write a prompt first'), true); return; }
+    const options = currentPromptOptions();
+    const body = { text };
+    if (Object.keys(options).length) body.options = options;
+    const scheduled = queueScheduleISO(queueSchedule.value);
+    if (scheduled) body.scheduled_at = scheduled;
+    try {
+      await api(`/runs/${encodeURIComponent(id)}/queue`, { method: 'POST', body });
+      textarea.value = '';
+      pendingAttachments = [];
+      renderAttachments();
+      storeSet(draftKey(id), '');
+      autosize();
+      queueSchedule.value = '';
+      await loadQueue();
+      toast(t('Added to prompt queue'));
+    } catch (err) { toast(err.message, true); }
+  });
+  loadQueue().catch(() => {});
 
   if (session) {
     document.getElementById('context-pin').addEventListener('click', async () => {

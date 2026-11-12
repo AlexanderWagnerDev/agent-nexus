@@ -59,6 +59,11 @@ type Server struct {
 
 	passkeySessions passkeySessionStore
 	metrics         *metrics
+
+	queueOnce  sync.Once
+	queueKick  chan struct{}
+	queueMu    sync.Mutex
+	queueArmed map[string]bool
 }
 
 type pendingRequest struct {
@@ -89,8 +94,14 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		hostIndex:          map[string]protocol.IndexStatus{},
 		epoch:              newID(),
 		metrics:            newMetrics(),
+		queueKick:          make(chan struct{}, 1),
+		queueArmed:         map[string]bool{},
 	}
 	s.ensureVAPID()
+	store.RecoverPromptQueue()
+	if queued, _ := store.HasQueuedPrompts(); queued {
+		s.kickQueue()
+	}
 	return s
 }
 
@@ -174,6 +185,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/runs/{id}/options", s.requireAuth(s.handleRunOptions))
 	mux.HandleFunc("POST /api/v1/runs/{id}/stop", s.requireAuth(s.handleStopRun))
 	mux.HandleFunc("POST /api/v1/runs/{id}/lease", s.requireAuth(s.handleLease))
+	mux.HandleFunc("GET /api/v1/runs/{id}/queue", s.requireAuth(s.handleGetPromptQueue))
+	mux.HandleFunc("POST /api/v1/runs/{id}/queue", s.requireAuth(s.handleAddPromptQueue))
+	mux.HandleFunc("PATCH /api/v1/runs/{id}/queue/{itemID}", s.requireAuth(s.handleEditPromptQueue))
+	mux.HandleFunc("DELETE /api/v1/runs/{id}/queue/{itemID}", s.requireAuth(s.handleDeletePromptQueue))
+	mux.HandleFunc("PUT /api/v1/runs/{id}/queue/order", s.requireAuth(s.handleReorderPromptQueue))
+	mux.HandleFunc("POST /api/v1/runs/{id}/queue/pause", s.requireAuth(s.handlePausePromptQueue))
 
 	mux.HandleFunc("GET /api/v1/ws", s.requireAuth(s.handleClientWS))
 	mux.HandleFunc("GET /v1/host/connect", s.handleHostWS)

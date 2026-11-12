@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -198,26 +197,9 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
 			return
 		}
-		if strings.TrimSpace(msg.Text) == "" {
+		if msgErr := validQueuedPrompt(msg.Text, msg.Options); msgErr != "" {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: msgErr})
 			return
-		}
-		if len(msg.Text) > maxPromptBytes {
-			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "prompt is too large"})
-			return
-		}
-		if msg.Options != nil && len(msg.Options.Attachments) > 6 {
-			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "at most 6 attachments are allowed"})
-			return
-		}
-		if msg.Options != nil {
-			total := 0
-			for _, attachment := range msg.Options.Attachments {
-				total += len(attachment.Data)
-			}
-			if total > 24<<20 {
-				c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "attachments are too large"})
-				return
-			}
 		}
 		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.prompt", RunID: msg.RunID, Message: msg.Text, Options: msg.Options}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})

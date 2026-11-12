@@ -30,6 +30,8 @@ func (s *Server) setRunState(id, state string) {
 		// A finished, failed or stopped run can no longer answer approvals.
 		// Drop their metric entries even if the host never sent a resolution.
 		s.metrics.approvalsEnded(id)
+		s.store.FailPendingPromptQueue(id, "run ended before the queued prompt was sent")
+		s.disarmQueue(id)
 	}
 }
 
@@ -52,6 +54,7 @@ func (s *Server) runEventCursor(id string) uint64 {
 func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	rs := s.runState(runID)
 	rs.mu.Lock()
+	previousState := rs.state
 	rs.eventSeq++
 	ev.Seq = rs.eventSeq
 	ev.RunID = runID
@@ -82,6 +85,18 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 			case protocol.StateIdle, protocol.StateCompleted, protocol.StateExited, protocol.StateFailed:
 				s.store.SetSessionState(run.SessionID, protocol.StateIdle)
 			}
+		}
+		switch {
+		case terminalRunState(ev.State):
+			s.store.FailPendingPromptQueue(runID, "run ended before the queued prompt was sent")
+			s.disarmQueue(runID)
+		case ev.State == protocol.StateIdle:
+			if previousState != protocol.StateIdle && s.store.HasQueuedPromptsForRun(runID) {
+				s.armQueue(runID)
+				s.kickQueue()
+			}
+		default:
+			s.disarmQueue(runID)
 		}
 	}
 	s.broadcast(protocol.ServerEnvelope{Type: "run.event", RunID: runID, Seq: ev.Seq, Event: &ev})
