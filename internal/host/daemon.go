@@ -472,12 +472,15 @@ func (d *Daemon) sendSessions(force bool) error {
 }
 
 func (d *Daemon) discoveryLoop(ctx context.Context) {
-	fallback := time.NewTicker(15 * time.Second)
+	// The fast poll only stats directory mtimes, the hottest session files and
+	// SQLite database files. A full scan every 30 seconds catches cold changes,
+	// adapters without a StoreWatcher and filesystems with coarse timestamps.
+	fallback := time.NewTicker(discoveryFullScanInterval)
 	defer fallback.Stop()
 	poll := time.NewTicker(discoveryPollInterval)
 	defer poll.Stop()
-	paths := d.watchPaths()
-	last := sessionFingerprint(paths)
+	watcher := newStoreWatcher(d.watchPaths())
+	watcher.FullScan()
 	var debounce *time.Timer
 	var debounceC <-chan time.Time
 	trigger := func() {
@@ -495,9 +498,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			}
 			return
 		case <-poll.C:
-			fingerprint := sessionFingerprint(paths)
-			if fingerprint != last {
-				last = fingerprint
+			if watcher.FastChanged(time.Now()) {
 				trigger()
 			}
 		case <-debounceC:
@@ -507,9 +508,12 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			}
 			d.writeRuntimeStatus()
 		case <-fallback.C:
-			// The fingerprint covers new and changed files. The periodic
-			// rescan remains a safety net for adapters without a watch path
-			// and for filesystems with coarse timestamp resolution.
+			if watcher.FullScan() {
+				trigger()
+			}
+			// The periodic delta remains a safety net for adapters without a
+			// watch path and for filesystems whose directory timestamps are
+			// unreliable.
 			if err := d.sendSessions(false); err != nil {
 				d.log.Debug("session refresh failed", "error", err)
 			}

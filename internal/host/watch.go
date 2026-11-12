@@ -1,45 +1,139 @@
 package host
 
 import (
-	"hash/fnv"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"time"
 )
 
-// discoveryPollInterval is the mtime-poll cadence. Together with the 500 ms
-// debounce it keeps discovery well inside the five-second requirement without
-// a platform-specific filesystem watcher.
+// discoveryPollInterval is the fast mtime-poll cadence. Together with the
+// 500 ms debounce it keeps new sessions well inside the five-second
+// requirement without a platform-specific filesystem watcher.
 const discoveryPollInterval = 2 * time.Second
 
-const discoveryDebounce = 500 * time.Millisecond
+const (
+	discoveryDebounce         = 500 * time.Millisecond
+	discoveryFullScanInterval = 30 * time.Second
+	discoveryHotFileLimit     = 200
+	discoveryDirtyDirLimit    = 8
+)
 
-// sessionFingerprint hashes names, sizes and modification times of the agent
-// stores. It reads no transcript content, so it is cheap compared with a full
-// discovery scan and safe to log.
-func sessionFingerprint(paths []string) uint64 {
-	h := fnv.New64a()
+type watchedFile struct {
+	modTime time.Time
+	size    int64
+}
+
+// storeWatcher tracks agent stores without walking every session file on each
+// poll. It stats directory mtimes (cheap), the hottest 200 files (the sessions
+// that are actually being written) and SQLite database/WAL files. A full scan
+// every 30 seconds catches cold changes, deleted files and filesystems with
+// coarse directory timestamps.
+type storeWatcher struct {
+	roots []string
+
+	files    map[string]watchedFile
+	dirs     map[string]time.Time
+	hot      []string
+	lastFull time.Time
+	ready    bool
+}
+
+func newStoreWatcher(paths []string) *storeWatcher {
 	seen := map[string]bool{}
-	for _, root := range paths {
-		if root == "" || seen[root] {
+	var roots []string
+	for _, path := range paths {
+		if path == "" || seen[path] {
 			continue
 		}
-		seen[root] = true
-		st, err := os.Stat(root)
+		seen[path] = true
+		roots = append(roots, path)
+	}
+	sort.Strings(roots)
+	return &storeWatcher{roots: roots}
+}
+
+// FastChanged checks the cheap signals. It falls back to a full scan when a
+// stat fails, when the 30-second safety window expires or before the first
+// full scan. The returned bool means "a discovery refresh is needed".
+func (w *storeWatcher) FastChanged(now time.Time) bool {
+	if !w.ready || now.Sub(w.lastFull) >= discoveryFullScanInterval {
+		return w.FullScan()
+	}
+	changed := false
+	// Snapshot the paths: scanDir updates the directory index, and ranging a
+	// map while inserting new entries makes the visited set nondeterministic.
+	dirs := make([]string, 0, len(w.dirs))
+	for path := range w.dirs {
+		dirs = append(dirs, path)
+	}
+	var dirty []string
+	for _, path := range dirs {
+		previous, ok := w.dirs[path]
+		if !ok {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() {
+			return w.FullScan()
+		}
+		if !info.ModTime().Equal(previous) {
+			dirty = append(dirty, path)
+		}
+	}
+	// A burst of directory changes (or lazy timestamp updates right after a
+	// full scan) is cheaper to resolve with one walk than with many small
+	// subtree walks.
+	if len(dirty) > discoveryDirtyDirLimit {
+		return w.FullScan()
+	}
+	for _, path := range dirty {
+		// A changed directory may contain new files, removed files or new
+		// subdirectories. Rescan only that subtree instead of the store.
+		if w.scanDir(path) {
+			changed = true
+		}
+	}
+	for _, root := range w.roots {
+		if info, err := os.Stat(root); err == nil && !info.IsDir() {
+			if w.scanDatabase(root) {
+				changed = true
+			}
+		}
+	}
+	for _, path := range w.hot {
+		info, err := os.Stat(path)
+		if err != nil {
+			return w.FullScan()
+		}
+		previous, ok := w.files[path]
+		if !ok {
+			return w.FullScan()
+		}
+		if !info.ModTime().Equal(previous.modTime) || info.Size() != previous.size {
+			// Do not re-sort the hot list here: an active session writes every
+			// few seconds and sorting 10k entries on each poll would defeat the
+			// point of this watcher. The 30-second full scan refreshes it.
+			w.files[path] = watchedFile{modTime: info.ModTime(), size: info.Size()}
+			changed = true
+		}
+	}
+	return changed
+}
+
+// FullScan rebuilds the file and directory indexes. It detects new, changed
+// and deleted files by comparing the snapshot with the previous one.
+func (w *storeWatcher) FullScan() bool {
+	files := map[string]watchedFile{}
+	dirs := map[string]time.Time{}
+	for _, root := range w.roots {
+		info, err := os.Stat(root)
 		if err != nil {
 			continue
 		}
-		if !st.IsDir() {
-			// OpenCode keeps the write-ahead log next to the database. A
-			// transaction can change the WAL without touching the main file.
-			for _, candidate := range []string{root, root + "-wal", root + "-shm"} {
-				if info, err := os.Stat(candidate); err == nil {
-					writeFingerprint(h, candidate, info)
-				}
-			}
+		if !info.IsDir() {
+			w.collectDatabase(files, root)
 			continue
 		}
 		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -47,34 +141,166 @@ func sessionFingerprint(paths []string) uint64 {
 				return nil
 			}
 			if d.IsDir() {
+				if di, err := d.Info(); err == nil {
+					dirs[path] = di.ModTime()
+				}
 				return nil
 			}
-			info, err := d.Info()
-			if err != nil {
-				return nil
+			if fi, err := d.Info(); err == nil {
+				files[path] = watchedFile{modTime: fi.ModTime(), size: fi.Size()}
 			}
-			writeFingerprint(h, path, info)
 			return nil
 		})
 	}
-	return h.Sum64()
+	changed := !w.ready || !sameFiles(w.files, files) || !sameDirs(w.dirs, dirs)
+	w.files = files
+	w.dirs = dirs
+	w.hot = w.sortHot()
+	w.lastFull = time.Now()
+	w.ready = true
+	return changed
 }
 
-func writeFingerprint(h interface {
-	Write([]byte) (int, error)
-}, path string, info os.FileInfo) {
-	_, _ = h.Write([]byte(path))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(info.ModTime().UTC().Format(time.RFC3339Nano)))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(itoa64(info.Size())))
-	_, _ = h.Write([]byte{0})
+func (w *storeWatcher) scanDatabase(root string) bool {
+	changed := false
+	for _, candidate := range []string{root, root + "-wal", root + "-shm"} {
+		info, err := os.Stat(candidate)
+		if err != nil {
+			if _, existed := w.files[candidate]; existed {
+				delete(w.files, candidate)
+				changed = true
+			}
+			continue
+		}
+		previous, existed := w.files[candidate]
+		next := watchedFile{modTime: info.ModTime(), size: info.Size()}
+		if !existed || !previous.modTime.Equal(next.modTime) || previous.size != next.size {
+			w.files[candidate] = next
+			changed = true
+		}
+	}
+	return changed
 }
 
-func itoa64(v int64) string { return strconv.FormatInt(v, 10) }
+func (w *storeWatcher) collectDatabase(files map[string]watchedFile, root string) {
+	for _, candidate := range []string{root, root + "-wal", root + "-shm"} {
+		if info, err := os.Stat(candidate); err == nil {
+			files[candidate] = watchedFile{modTime: info.ModTime(), size: info.Size()}
+		}
+	}
+}
+
+// scanDir rescans one directory subtree after its mtime changed. It updates
+// the file and directory indexes and returns whether anything differs.
+func (w *storeWatcher) scanDir(root string) bool {
+	changed := false
+	found := map[string]bool{}
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if di, err := d.Info(); err == nil {
+				w.dirs[path] = di.ModTime()
+			}
+			return nil
+		}
+		if fi, err := d.Info(); err == nil {
+			found[path] = true
+			previous, existed := w.files[path]
+			next := watchedFile{modTime: fi.ModTime(), size: fi.Size()}
+			if !existed || !previous.modTime.Equal(next.modTime) || previous.size != next.size {
+				changed = true
+			}
+			w.files[path] = next
+		}
+		return nil
+	})
+	// Remove files and directories that disappeared from this subtree.
+	for path := range w.files {
+		if !found[path] && pathWithin(root, path) {
+			delete(w.files, path)
+			changed = true
+		}
+	}
+	for path := range w.dirs {
+		if path != root && pathWithin(root, path) {
+			if _, err := os.Stat(path); err != nil {
+				delete(w.dirs, path)
+			}
+		}
+	}
+	if changed {
+		w.hot = w.sortHot()
+	}
+	return changed
+}
+
+func pathWithin(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !filepath.IsAbs(rel) && (rel == "." || !startsWithDotDot(rel))
+}
+
+func startsWithDotDot(rel string) bool {
+	return len(rel) >= 2 && rel[0] == '.' && rel[1] == '.'
+}
+
+func (w *storeWatcher) sortHot() []string {
+	type entry struct {
+		path string
+		mod  time.Time
+	}
+	entries := make([]entry, 0, len(w.files))
+	for path, file := range w.files {
+		entries = append(entries, entry{path: path, mod: file.modTime})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].mod.Equal(entries[j].mod) {
+			return entries[i].path < entries[j].path
+		}
+		return entries[i].mod.After(entries[j].mod)
+	})
+	if len(entries) > discoveryHotFileLimit {
+		entries = entries[:discoveryHotFileLimit]
+	}
+	out := make([]string, len(entries))
+	for i, entry := range entries {
+		out[i] = entry.path
+	}
+	return out
+}
+
+func sameFiles(a, b map[string]watchedFile) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for path, file := range a {
+		other, ok := b[path]
+		if !ok || !file.modTime.Equal(other.modTime) || file.size != other.size {
+			return false
+		}
+	}
+	return true
+}
+
+func sameDirs(a, b map[string]time.Time) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for path, mod := range a {
+		other, ok := b[path]
+		if !ok || !mod.Equal(other) {
+			return false
+		}
+	}
+	return true
+}
 
 // watchPaths returns the store roots of every watcher adapter. Adapters that
-// do not implement StoreWatcher simply fall back to the 15-second rescan.
+// do not implement StoreWatcher simply fall back to the periodic full refresh.
 func (d *Daemon) watchPaths() []string {
 	var out []string
 	for _, a := range d.adapters {

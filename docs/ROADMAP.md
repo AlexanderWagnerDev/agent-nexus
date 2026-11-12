@@ -74,6 +74,30 @@ tested versus what is still open.
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
+### NFR-06: discovery watcher (2026-11-12)
+
+The daemon no longer walks every session file on the two-second poll. It stats
+directory mtimes, the 200 most recently modified session files and SQLite
+database/WAL files; a full scan runs every 30 seconds as a safety net.
+
+Measured with `go test ./internal/host -run '^$' -bench 'StoreWatcher|LegacyWalk' -benchtime=10x`
+on 10,000 synthetic session files (Windows 11, AMD EPYC 7543):
+
+| Operation | Result |
+| --- | --- |
+| Fast poll (steady state) | 3.07 ms/op |
+| Full safety scan | 48.1 ms/op |
+| Previous full walk every 2 s | 34.8 ms/op |
+| New file detected | 19 ms |
+| Changed hot file detected | 3 ms |
+
+The fast poll costs about 0.15 % of one core at a two-second cadence; the old
+walk cost about 1.7 %. Directory timestamp updates can lag on Windows right
+after a bulk import, so one poll may fall back to a full scan; steady state is
+measured after that. Cold files (outside the newest 200) are detected by the
+30-second full scan. Adapters without a watch path still rely on the periodic
+delta refresh.
+
 ### Earlier UI and workflow pass
 
 - Chat now renders Markdown/GFM, highlighted code, tables, collapsible tool
