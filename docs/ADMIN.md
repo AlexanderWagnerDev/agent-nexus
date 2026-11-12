@@ -98,6 +98,7 @@ AgentNexus does not copy chats into a new session.
 
 ## Active runs and approvals
 
+
 - **Runs** shows all live terminal/structured runs the user can see.
 - One native session can have only one AgentNexus run on a host, regardless of
   mode. A second attempt is rejected before a process starts.
@@ -129,6 +130,27 @@ as "not searched", never silently ignored.
 Transcript export is available as Markdown or JSON from a session. It is read
 from the host on demand, requires `read_transcript`, and is bounded at 10,000
 messages per export. The hub never persists transcript content.
+
+## Tasks and delegation
+
+Tasks are visible only to their owner (admins may see all). Creating a task
+does not start anything. Delegation requires the task's project, host and agent
+for a new session, or an existing session for resume/fork, and re-checks the
+user's host grant. Unfinished dependencies block delegation; dependency cycles
+are rejected. Delegated prompts use the same durable prompt queue as interactive
+chats, so a host disconnect does not lose the prompt. A task whose run vanished
+across a hub restart is marked failed; a task with a live run remains running.
+
+## Host health and diagnostics
+
+The host detail page derives `healthy`, `degraded`, `offline`, `pending` or
+`disabled` from reported inventory, index, update and policy state. Reasons are
+machine-readable codes such as `agent_untested_version`, `index_error`,
+`policy_no_roots` or `host_offline`; the hub never probes a host for the page.
+Administrators can open **Settings -> Diagnostics** for hub uptime, database
+ping, counts, host health, updates and recent failures. The redacted JSON export
+requires step-up and omits host identities, session ids, actors and audit
+details.
 
 ## Audit
 

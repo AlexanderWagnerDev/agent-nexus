@@ -69,9 +69,9 @@ tested versus what is still open.
 | 0 | 🟡 mostly | Go module, CI matrix, embedded web client, host-link and PTY prototypes, synthetic adapter fixtures | SP-1 to SP-5 reports in docs/spikes/; per-OS real-agent matrix |
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text) with a host-local FTS5 cache, index progress in the UI, `nexusd index rebuild`, best-effort native-process detection, fail-soft parsers | Adapter-driven 10k-session initial-index measurement, per-version fixture matrix |
-| 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test, OpenCode fork |
-| 4 | ✅ partial | OpenCode and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository identity, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Manual WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only |
-| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
+| 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test |
+| 4 | ✅ partial | OpenCode 2.2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Manual WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
 ### NFR-06: discovery watcher (2026-11-12)
@@ -113,10 +113,31 @@ manual (see [VERIFICATION.md](VERIFICATION.md)).
 
 Codex CLI 0.156.1 and OpenCode 2.2.7 are installed. The Codex app-server schema
 was generated and `thread/fork`/`thread/resume` are present; the structured
-driver is fake-agent tested. OpenCode 2.2.7 is outside the tested structured
-band and its structured mode is disabled with a warning; `--session` exists in
-its help. Claude Code and Gemini CLI are not installed. No real prompt was sent
-through AgentNexus to any of them in this run.
+driver is fake-agent tested. OpenCode 2.2.7 was inspected against its live
+SQLite schema and `/openapi.json`: session create, prompt, SSE, permission,
+interrupt and native fork paths are implemented, and the tested structured band
+is now `>= 2.2.0 < 3.0.0`. No paid model turn was sent; the fork contract was
+exercised only up to OpenCode's documented "cannot fork empty session" response.
+Claude Code and Gemini CLI are not installed.
+
+### P0e: task orchestration (2026-11-12)
+
+Tasks are persisted per user with cycle-checked dependencies and a closed status
+set. Delegation starts a native structured session and delivers the prompt
+through the existing durable queue; run and approval events update the task, and
+hub restart reconciles orphaned tasks. Tested with a fake host for start, prompt
+delivery, completion and dependency blocking. No agent pipeline or automatic
+fan-out scheduler is implemented.
+
+### P0f: operations and diagnostics (2026-11-12)
+
+Added explainable host health (`healthy`, `degraded`, `offline`, `pending`,
+`disabled`), host detail pages, per-user host favorites, run concurrency limits,
+run error classification, admin diagnostics with a step-up redacted export,
+bulk device revocation, per-connection browser WebSocket rate limits,
+session relationship/usage views and fan-out changed-file comparison. The real
+Portainer/three-host drill, external penetration test and 72-hour soak remain
+manual.
 
 ### P0d: security and stability tests (2026-11-12)
 

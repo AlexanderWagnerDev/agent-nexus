@@ -112,6 +112,17 @@ can be dragged between 240 and 520 px; its width is stored locally.
   positioned inside its pane so it always fills the available height instead of
   falling back to its intrinsic height.
 
+## Tasks and host detail
+
+The task board is a compact table, not a card wall: title, status, priority,
+project, host, agent, dependency count and update time. Task editing and
+delegation happen in a focused modal with a status editor, dependency list and
+an explicit delegation section. The host detail page uses the same
+two-column detail layout as sessions: health reasons, agent table, active runs,
+recent sessions and audit events on the left; connection, workspace counts,
+policy and update state on the right. Both pages use the shared table, badge
+and event-row primitives.
+
 ## Responsive behavior
 
 | Width | Behavior |

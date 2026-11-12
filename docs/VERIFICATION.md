@@ -18,6 +18,14 @@ conservative.
 | Multi-host simulation | Three fake hosts, six sessions, three parallel structured runs, host-disconnect isolation and hub-restart metadata persistence |
 | Installer/update | Active-run refusal, stale runtime snapshot, checksum and version checks, rollback path, fake-host tests |
 | Prompt queue | Store/API tests for order, schedule, pause, atomic claim, lease mismatch, crash recovery, duplicate prevention |
+| Tasks | API tests for creation, ownership isolation, dependency blocking, transitive cycle rejection, readiness propagation, delegation prompt delivery, run/approval lifecycle sync and hub-restart reconciliation |
+| Host health/detail | Unit tests for every health branch and an API test for health, recent sessions, audit access and favorites |
+| Diagnostics | Admin payload and redacted export tests; non-admin denial; no secret-like fields in the export |
+| Run limits | Per-host/user/project limit rejection returns HTTP 429 `run_limit` before a host command is created |
+| Run error codes | Classifier table test and persistence test for failed runs |
+| Devices | Bulk revoke-others test keeps the current device and revokes another session |
+| Session relations/usage | Parent/forks/children API and reported usage aggregation tests |
+| Fan-out diffs | Host stat-only git mode test and browser fan-out rendering; changed-file comparison uses host-reported status only |
 | MCP | Auth, revocation, initialize, tools/list, tool calls and error results |
 | CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
 | OpenCode 2.2.7 protocol | Read-only SQLite schema and `/openapi.json` inspected on a local 2.2.7 install; native session create/interrupt and fork contract exercised without a paid model turn; daily driver tests use a fake HTTP server |

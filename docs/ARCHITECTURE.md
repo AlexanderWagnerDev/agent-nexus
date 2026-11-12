@@ -141,10 +141,14 @@ OpenAPI document yet):
 | --- | --- |
 | `POST /api/v1/auth/passkey/begin`, `/api/v1/auth/passkey/finish` | Passkey login |
 | `POST /api/v1/auth/step-up/begin`, `/passkey`, `/password` | Fresh confirmation for sensitive actions |
-| `GET /api/v1/hosts` | Hosts with state and agent inventory |
+| `GET /api/v1/hosts` | Hosts with state, health, favorites and agent inventory |
+| `GET /api/v1/hosts/{id}` | Host detail with health reasons, active runs, recent sessions and manager-only audit |
+| `PUT/DELETE /api/v1/hosts/{id}/favorite` | Per-user host pinning |
 | `POST /api/v1/hosts/pairing-codes` | Create a one-time pairing code |
 | `DELETE /api/v1/hosts/{hostId}` | Revoke host |
 | `GET /api/v1/sessions?host=&agent=&project=&state=&q=&limit=&offset=` | Paged session records |
+| `GET /api/v1/sessions/{id}/related` | Native parent, forks and child sessions |
+| `GET /api/v1/sessions/{id}/usage` | Reported token/cost totals for the session |
 | `GET /api/v1/projects?limit=` | Session metadata grouped by host and working directory |
 | `GET /api/v1/favorites`, `PUT/DELETE /api/v1/sessions/{sessionId}/favorite` | Per-user pinned sessions |
 | `GET /api/v1/sessions/{sessionId}/transcript?offset=&limit=` | Paged transcript (fetched from host) |
@@ -158,7 +162,13 @@ OpenAPI document yet):
 | WebSocket `approval` message | Answer an approval request through the run lease |
 | `GET /api/v1/notifications`, `POST /api/v1/notifications/read` | In-app notification history and read state |
 | `GET /api/v1/search?q=` | Federated full-text search |
+| `GET /api/v1/tasks`, `POST /api/v1/tasks` | Per-user task board |
+| `PATCH/DELETE /api/v1/tasks/{id}`, `POST /api/v1/tasks/{id}/delegate` | Edit, remove or delegate a task |
+| `POST/DELETE /api/v1/tasks/{id}/dependencies[/{dep}]` | Cycle-checked task dependencies |
 | `GET /api/v1/devices`, `DELETE /api/v1/devices/{id}` | Device management |
+| `POST /api/v1/devices/revoke-others` | Step-up sign-out of every other device |
+| `GET /api/v1/admin/diagnostics` | Admin-only hub/host/queue status |
+| `GET /api/v1/admin/diagnostics/export` | Step-up redacted JSON diagnostics export |
 | `GET /api/v1/audit` | Audit log (verified chain) |
 
 `sessionId` is the hub's opaque ID; the tuple `(hostId, agent, nativeSessionId)` is unique.
@@ -405,6 +415,18 @@ stateDiagram-v2
     exited --> [*]
 ```
 
+### 7.5 Task delegation
+
+A task is a user-owned planning record; it never executes on its own. Delegation
+re-checks host access, unfinished dependencies and the configured run limits,
+starts a native structured session (new, resume or fork) through the same path
+as an interactive run, and enqueues the task prompt in the durable prompt
+queue. The queue delivers only after the run is idle and the controller lease
+still matches. Run state and approval events update the task
+(`running`/`waiting_for_approval`), and run exit marks it completed or failed.
+At hub start, tasks whose run no longer exists are marked failed; tasks with a
+live run stay running so a reconnecting host can continue them.
+
 ## 8. Data model
 
 ### 8.1 Hub database
@@ -422,6 +444,10 @@ erDiagram
     RUN ||--o{ APPROVAL : raises
     CLIENT_DEVICE ||--o{ PUSH_SUBSCRIPTION : has
     USER ||--o{ AUDIT_EVENT : causes
+    USER ||--o{ TASK : owns
+    TASK ||--o{ TASK_DEPENDENCY : depends_on
+    TASK |o--o| RUN : delegates
+    USER ||--o{ HOST_FAVORITE : pins
 
     USER {
         uuid id PK
@@ -481,18 +507,47 @@ erDiagram
         int message_count
         string state
         bool active_elsewhere
+        string parent_native_id
+        string forked_from_native_id
         bigint host_revision
         json local_tags
     }
     RUN {
         uuid id PK
         uuid session_id FK
+        string cwd
         string mode "terminal|structured"
         uuid started_by FK
         uuid lease_device_id
         string state
+        string error_code
+        string error_message
         timestamp started_at
         timestamp ended_at
+    }
+    TASK {
+        uuid id PK
+        uuid user_id FK
+        string title
+        string description
+        string host_id
+        string agent
+        string status
+        string priority
+        uuid session_id
+        uuid run_id
+        json tags
+        timestamp created_at
+        timestamp updated_at
+        timestamp completed_at
+    }
+    TASK_DEPENDENCY {
+        uuid task_id FK
+        uuid depends_on FK
+    }
+    HOST_FAVORITE {
+        uuid user_id FK
+        uuid host_id FK
     }
     APPROVAL {
         uuid id PK
