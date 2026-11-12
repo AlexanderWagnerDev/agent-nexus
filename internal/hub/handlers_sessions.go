@@ -609,6 +609,8 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setRunState(run.ID, protocol.StateStopping)
+	// Stop invalidates any approval that is still waiting.
+	s.metrics.approvalsEnded(run.ID)
 	s.audit(u.Username, "run.stopped", map[string]string{"run_id": run.ID})
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "stopping"})
 }

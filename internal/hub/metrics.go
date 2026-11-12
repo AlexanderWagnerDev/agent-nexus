@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+// approvalMetricCap bounds the pending-approval bookkeeping. Beyond this
+// point the oldest entry is evicted; a missing metric is preferable to an
+// unbounded map after a bug or a huge number of abandoned approvals.
+const approvalMetricCap = 10000
+
+type approvalMetric struct {
+	start time.Time
+	runID string
+	seq   uint64
+}
+
 // metrics is a deliberately small Prometheus text-format exporter. It avoids
 // a client-library dependency and keeps labels to closed sets (route patterns,
 // status codes) so cardinality stays bounded.
@@ -25,7 +36,11 @@ type metrics struct {
 	pushFailures    uint64
 	approvalSeconds float64
 	approvals       int64
-	approvalStart   map[string]time.Time
+	// approvalStart is keyed by run ID and approval ID: hosts may reuse an
+	// approval ID in a different run.
+	approvalStart map[string]approvalMetric
+	approvalByRun map[string]map[string]struct{}
+	approvalSeq   uint64
 }
 
 func newMetrics() *metrics {
@@ -33,8 +48,13 @@ func newMetrics() *metrics {
 		requests:      map[string]int64{},
 		durationSum:   map[string]float64{},
 		durationCount: map[string]int64{},
-		approvalStart: map[string]time.Time{},
+		approvalStart: map[string]approvalMetric{},
+		approvalByRun: map[string]map[string]struct{}{},
 	}
+}
+
+func approvalKey(runID, id string) string {
+	return runID + "\x00" + id
 }
 
 func (m *metrics) observeRequest(route string, status int, d time.Duration) {
@@ -58,24 +78,87 @@ func (m *metrics) pushFailed() {
 	m.mu.Unlock()
 }
 
-func (m *metrics) approvalRequested(id string) {
+// approvalRequested records the start of one approval. If the map is full the
+// oldest entry is dropped before inserting the new one.
+func (m *metrics) approvalRequested(runID, id string) {
 	if id == "" {
 		return
 	}
+	key := approvalKey(runID, id)
 	m.mu.Lock()
-	m.approvalStart[id] = time.Now()
+	if _, exists := m.approvalStart[key]; !exists && len(m.approvalStart) >= approvalMetricCap {
+		m.evictOldestApprovalLocked()
+	}
+	m.approvalSeq++
+	m.approvalStart[key] = approvalMetric{start: time.Now(), runID: runID, seq: m.approvalSeq}
+	if runID != "" {
+		ids := m.approvalByRun[runID]
+		if ids == nil {
+			ids = map[string]struct{}{}
+			m.approvalByRun[runID] = ids
+		}
+		ids[key] = struct{}{}
+	}
 	m.mu.Unlock()
 }
 
-func (m *metrics) approvalAnswered(id string) {
+// approvalAnswered records a decision and removes the pending entry.
+func (m *metrics) approvalAnswered(runID, id string) {
+	if id == "" {
+		return
+	}
+	key := approvalKey(runID, id)
 	m.mu.Lock()
-	start, ok := m.approvalStart[id]
-	if ok {
-		delete(m.approvalStart, id)
-		m.approvalSeconds += time.Since(start).Seconds()
+	if metric, ok := m.approvalStart[key]; ok {
+		delete(m.approvalStart, key)
+		m.approvalSeconds += time.Since(metric.start).Seconds()
 		m.approvals++
 	}
+	m.dropApprovalFromRunLocked(runID, key)
 	m.mu.Unlock()
+}
+
+// approvalsEnded drops every pending approval for a finished, stopped or
+// disconnected run. This covers timeouts and hosts that never answer.
+func (m *metrics) approvalsEnded(runID string) {
+	if runID == "" {
+		return
+	}
+	m.mu.Lock()
+	for key := range m.approvalByRun[runID] {
+		delete(m.approvalStart, key)
+	}
+	delete(m.approvalByRun, runID)
+	m.mu.Unlock()
+}
+
+func (m *metrics) dropApprovalFromRunLocked(runID, key string) {
+	ids := m.approvalByRun[runID]
+	if ids == nil {
+		return
+	}
+	delete(ids, key)
+	if len(ids) == 0 {
+		delete(m.approvalByRun, runID)
+	}
+}
+
+// evictOldestApprovalLocked is O(n) and only runs once the 10k cap is reached.
+// That is cheap relative to the number of approvals and keeps the map bounded.
+func (m *metrics) evictOldestApprovalLocked() {
+	var oldestKey string
+	var oldestSeq uint64
+	for key, metric := range m.approvalStart {
+		if oldestKey == "" || metric.seq < oldestSeq {
+			oldestKey, oldestSeq = key, metric.seq
+		}
+	}
+	if oldestKey == "" {
+		return
+	}
+	metric := m.approvalStart[oldestKey]
+	delete(m.approvalStart, oldestKey)
+	m.dropApprovalFromRunLocked(metric.runID, oldestKey)
 }
 
 type httpMetricsWriter struct {
@@ -172,6 +255,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "# HELP nexus_push_failures_total Web Push delivery failures.\n# TYPE nexus_push_failures_total counter\nnexus_push_failures_total %d\n", s.metrics.pushFailures)
 	fmt.Fprintf(&b, "# HELP nexus_approval_latency_seconds Time between approval request and decision.\n# TYPE nexus_approval_latency_seconds summary\n")
 	fmt.Fprintf(&b, "nexus_approval_latency_seconds_sum %g\nnexus_approval_latency_seconds_count %d\n", s.metrics.approvalSeconds, s.metrics.approvals)
+	fmt.Fprintf(&b, "# HELP nexus_approvals_pending Approvals waiting for a decision.\n# TYPE nexus_approvals_pending gauge\nnexus_approvals_pending %d\n", len(s.metrics.approvalStart))
 	requestKeys := make([]string, 0, len(s.metrics.requests))
 	for key := range s.metrics.requests {
 		requestKeys = append(requestKeys, key)

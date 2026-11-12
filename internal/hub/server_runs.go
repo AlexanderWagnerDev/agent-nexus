@@ -26,6 +26,20 @@ func (s *Server) setRunState(id, state string) {
 			s.store.SetSessionState(sess.SessionID, protocol.StateIdle)
 		}
 	}
+	if terminalRunState(state) {
+		// A finished, failed or stopped run can no longer answer approvals.
+		// Drop their metric entries even if the host never sent a resolution.
+		s.metrics.approvalsEnded(id)
+	}
+}
+
+func terminalRunState(state string) bool {
+	switch state {
+	case protocol.StateExited, protocol.StateCompleted, protocol.StateFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) runEventCursor(id string) uint64 {
@@ -45,7 +59,10 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 		rs.state = ev.State
 	}
 	if ev.Type == "approval.requested" && ev.ApprovalID != "" {
-		s.metrics.approvalRequested(ev.ApprovalID)
+		s.metrics.approvalRequested(runID, ev.ApprovalID)
+	}
+	if ev.Type == "approval.resolved" && ev.ApprovalID != "" {
+		s.metrics.approvalAnswered(runID, ev.ApprovalID)
 	}
 	rs.events = append(rs.events, ev)
 	if len(rs.events) > 500 {
@@ -54,6 +71,9 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	rs.mu.Unlock()
 
 	if ev.Type == "run.state" && ev.State != "" {
+		if terminalRunState(ev.State) {
+			s.metrics.approvalsEnded(runID)
+		}
 		s.store.UpdateRunState(runID, ev.State)
 		if run, _, err := s.store.RunByID(runID); err == nil && run.SessionID != "" {
 			switch ev.State {
