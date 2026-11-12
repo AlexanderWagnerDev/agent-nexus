@@ -42,6 +42,10 @@ func (a *indexTestAdapter) BuildCommand(Action) (Command, error) { return Comman
 func newIndexFixture(t *testing.T) (*SearchIndex, *indexTestAdapter, string) {
 	t.Helper()
 	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	index, err := OpenSearchIndex(filepath.Join(t.TempDir(), "search-index.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +54,7 @@ func newIndexFixture(t *testing.T) (*SearchIndex, *indexTestAdapter, string) {
 	updated := time.Now().UTC()
 	adapter := &indexTestAdapter{
 		sessions: []protocol.Session{
-			{Agent: "opencode", NativeID: "inside", Title: "Fix the upload retry", Cwd: filepath.Join(root, "project"), UpdatedAt: updated, MessageCount: 2},
+			{Agent: "opencode", NativeID: "inside", Title: "Fix the upload retry", Cwd: project, UpdatedAt: updated, MessageCount: 2},
 			{Agent: "opencode", NativeID: "outside", Title: "Secret work", Cwd: filepath.Join(t.TempDir(), "elsewhere"), UpdatedAt: updated, MessageCount: 1},
 		},
 		transcripts: map[string]protocol.Transcript{
