@@ -150,7 +150,8 @@ machine-readable codes such as `agent_untested_version`, `index_error`,
 Administrators can open **Settings -> Diagnostics** for hub uptime, database
 ping, counts, host health, updates and recent failures. The redacted JSON export
 requires step-up and omits host identities, session ids, actors and audit
-details.
+details. The host detail page can also run the host-side doctor on demand; that
+response is sanitized (no paths, ids or keys).
 
 ## Audit
 

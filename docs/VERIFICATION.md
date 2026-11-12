@@ -20,6 +20,7 @@ conservative.
 | Prompt queue | Store/API tests for order, schedule, pause, atomic claim, lease mismatch, crash recovery, duplicate prevention |
 | Tasks | API tests for creation, ownership isolation, dependency blocking, transitive cycle rejection, readiness propagation, delegation prompt delivery, run/approval lifecycle sync and hub-restart reconciliation |
 | Host health/detail | Unit tests for every health branch and an API test for health, recent sessions, audit access and favorites |
+| Host doctor | Host-side safe-report test (no paths/keys) and hub API test with a scripted host answering `doctor` |
 | Diagnostics | Admin payload and redacted export tests; non-admin denial; no secret-like fields in the export |
 | Run limits | Per-host/user/project limit rejection returns HTTP 429 `run_limit` before a host command is created |
 | Run error codes | Classifier table test and persistence test for failed runs |
