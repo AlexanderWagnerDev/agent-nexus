@@ -22,12 +22,12 @@ const port = Number(process.env.DEMO_PORT || 8790);
 const base = process.env.DEMO_BASE || `http://127.0.0.1:${port}`;
 const maxRatio = Number(process.env.VISUAL_MAX_RATIO || 0.02);
 
+// Activity views (home, projects) render live elapsed times for the scripted
+// demo runs and are intentionally excluded from the pixel diff.
 const views = [
-  ['#/', 'dashboard-dark.png'],
-  ['#/projects', 'projects-dark.png'],
-  ['#/sessions', 'sessions-dark.png'],
-  ['#/hosts', 'hosts-dark.png'],
-  ['#/settings', 'settings-dark.png'],
+  ['#/sessions', 'sessions-dark.png', 'Sessions'],
+  ['#/hosts', 'hosts-dark.png', 'Hosts'],
+  ['#/settings', 'settings-dark.png', 'Settings'],
 ];
 
 fs.mkdirSync(baselineDir, { recursive: true });
@@ -127,10 +127,12 @@ async function capture() {
       });
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(900);
-    for (const [route, name] of views) {
+    await page.waitForSelector('.nav', { timeout: 15000 });
+    await page.waitForTimeout(400);
+    for (const [route, name, title] of views) {
       await page.goto(base + '/' + route, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1100);
+      await page.waitForFunction((expected) => document.getElementById('page-title')?.textContent === expected, title, { timeout: 15000 });
+      await page.waitForTimeout(700);
       shots.set(name, await page.screenshot());
     }
     await ctx.close();

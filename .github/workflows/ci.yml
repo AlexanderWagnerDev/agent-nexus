@@ -136,6 +136,12 @@ jobs:
         env:
           E2E_SPAWN_HUB: "1"
         run: node e2e/smoke.mjs
+      - name: Run virtualized session-list test
+        working-directory: web
+        env:
+          E2E_SPAWN_HUB: "1"
+          E2E_VIRTUAL_PORT: "18789"
+        run: node e2e/virtual.mjs
 
   vulnerability:
     name: govulncheck

@@ -11,6 +11,7 @@ export const state = {
   wsGen: 0,
   wsHandlers: new Set(),
   pageCleanup: null,
+  pageGen: 0,
   run: null,
   favorites: new Set(),
   notifications: [],

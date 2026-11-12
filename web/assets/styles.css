@@ -523,6 +523,45 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 .session-group-head svg { color: var(--muted-2); }
 .session-row .agent-glyph { margin-left: 2px; }
 
+.session-virtual {
+  position: relative;
+  height: calc(100dvh - 250px);
+  min-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  outline: none;
+}
+.session-virtual:focus-visible { border-color: var(--accent); }
+.session-virtual-spacer { position: absolute; top: 0; left: 0; width: 1px; }
+.session-virtual-window { position: absolute; top: 0; left: 0; right: 0; }
+.session-sentinel { position: absolute; left: 0; width: 1px; height: 1px; }
+.virtual-group {
+  height: 38px;
+  box-sizing: border-box;
+  padding: 7px 12px 0;
+  background: var(--bg-elev-2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
+}
+.virtual-row {
+  height: 56px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.virtual-row .row-tags { flex-wrap: nowrap; overflow: hidden; max-width: 210px; }
+.session-virtual .virtual-row:hover { background: var(--bg-hover); }
+@media (max-width: 900px) {
+  .session-virtual { height: calc(100dvh - 300px); }
+}
+@media (max-width: 640px) {
+  .session-virtual { height: calc(100dvh - 360px); min-height: 220px; }
+  .virtual-row .row-tags { display: none; }
+  .session-group-head code { max-width: 50vw; }
+}
+
 /* ---------- control room ---------- */
 
 .control-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); overflow: hidden; }

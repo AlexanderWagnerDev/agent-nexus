@@ -109,11 +109,67 @@ func (s *Store) ListSessionsFiltered(userID string, f SessionFilter, all bool) (
 	if offset < 0 {
 		offset = 0
 	}
+	where, args := s.sessionFilterClause(userID, f, all)
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
 		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
-		LEFT JOIN session_overrides o ON o.session_id=s.id AND o.user_id=?
-		WHERE h.revoked_at IS NULL`
+		LEFT JOIN session_overrides o ON o.session_id=s.id AND o.user_id=?` + where
+	sortColumn := "s.updated_at"
+	switch f.Sort {
+	case "created":
+		sortColumn = "s.created_at"
+	case "title":
+		sortColumn = "COALESCE(NULLIF(o.title,''), s.title) COLLATE NOCASE"
+	case "messages":
+		sortColumn = "s.message_count"
+	}
+	order := "DESC"
+	if strings.EqualFold(f.Order, "asc") {
+		order = "ASC"
+	}
+	q += ` ORDER BY ` + sortColumn + ` ` + order + `, s.id ` + order + ` LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []protocol.SessionView
+	for rows.Next() {
+		v, err := scanSessionView(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachSessionMetadata(userID, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CountSessionsFiltered returns the total number of rows matching a filter,
+// independent of the page size. The virtualized browser list uses it to show
+// an exact "x of y" count without loading every row.
+func (s *Store) CountSessionsFiltered(userID string, f SessionFilter, all bool) (int, error) {
+	where, args := s.sessionFilterClause(userID, f, all)
+	q := `SELECT COUNT(*) FROM sessions s JOIN hosts h ON h.id=s.host_id
+		LEFT JOIN session_overrides o ON o.session_id=s.id AND o.user_id=?` + where
+	var total int
+	if err := s.db.QueryRow(q, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+// sessionFilterClause builds the shared FROM/WHERE arguments. The first
+// argument belongs to the session_overrides join; callers append their own
+// SELECT and ORDER BY around it.
+func (s *Store) sessionFilterClause(userID string, f SessionFilter, all bool) (string, []any) {
+	q := ` WHERE h.revoked_at IS NULL`
 	args := []any{userID}
 	if !all {
 		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
@@ -151,41 +207,7 @@ func (s *Store) ListSessionsFiltered(userID string, f SessionFilter, all bool) (
 		q += ` AND s.updated_at<=?`
 		args = append(args, ms(f.Until))
 	}
-	sortColumn := "s.updated_at"
-	switch f.Sort {
-	case "created":
-		sortColumn = "s.created_at"
-	case "title":
-		sortColumn = "COALESCE(NULLIF(o.title,''), s.title) COLLATE NOCASE"
-	case "messages":
-		sortColumn = "s.message_count"
-	}
-	order := "DESC"
-	if strings.EqualFold(f.Order, "asc") {
-		order = "ASC"
-	}
-	q += ` ORDER BY ` + sortColumn + ` ` + order + `, s.id ` + order + ` LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
-	rows, err := s.db.Query(q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []protocol.SessionView
-	for rows.Next() {
-		v, err := scanSessionView(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if err := s.attachSessionMetadata(userID, out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return q, args
 }
 
 // attachSessionMetadata fills the per-user title override and tags for a page

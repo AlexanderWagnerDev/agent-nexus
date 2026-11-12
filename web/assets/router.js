@@ -14,6 +14,7 @@ export function setPageHandler(fn) {
 
 export async function route() {
   if (!state.me) return;
+  state.pageGen += 1;
   if (state.pageCleanup) {
     try { state.pageCleanup(); } catch { /* ignore */ }
     state.pageCleanup = null;

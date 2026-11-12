@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -95,5 +97,53 @@ func TestSessionTitleSortUsesPerUserLocalTitle(t *testing.T) {
 	}
 	if len(otherAsc) != 3 || otherAsc[0].NativeID != "alpha" || otherAsc[2].NativeID != "zulu" {
 		t.Fatalf("another user's override leaked into the sort: %+v", otherAsc)
+	}
+}
+
+func TestSessionsAPIReturnsTotalAndStablePages(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "total-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{
+		{NativeID: "n1", Agent: "opencode", Title: "One", Cwd: "/work/one", CreatedAt: now.Add(-3 * time.Hour), UpdatedAt: now.Add(-3 * time.Hour)},
+		{NativeID: "n2", Agent: "opencode", Title: "Two", Cwd: "/work/two", CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now.Add(-2 * time.Hour)},
+		{NativeID: "n3", Agent: "opencode", Title: "Three", Cwd: "/work/three", CreatedAt: now.Add(-1 * time.Hour), UpdatedAt: now.Add(-1 * time.Hour)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, body := hub.do(nil, http.MethodGet, "/api/v1/sessions?limit=1&sort=created&order=asc", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "first page")
+	var page struct {
+		Sessions []protocol.SessionView `json:"sessions"`
+		HasMore  bool                   `json:"has_more"`
+		Offset   int                    `json:"offset"`
+		Total    int                    `json:"total"`
+	}
+	if err := json.Unmarshal(body, &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 3 || len(page.Sessions) != 1 || !page.HasMore || page.Sessions[0].NativeID != "n1" {
+		t.Fatalf("first page: %+v", page)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/sessions?limit=1&offset=1&sort=created&order=asc", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "second page")
+	if err := json.Unmarshal(body, &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 3 || page.Sessions[0].NativeID != "n2" || !page.HasMore {
+		t.Fatalf("second page: %+v", page)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/sessions?limit=1&offset=2&sort=created&order=asc", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "third page")
+	if err := json.Unmarshal(body, &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 3 || page.Sessions[0].NativeID != "n3" || page.HasMore {
+		t.Fatalf("third page: %+v", page)
 	}
 }

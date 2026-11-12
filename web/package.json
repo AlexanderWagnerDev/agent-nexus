@@ -8,7 +8,8 @@
     "e2e:a11y": "node e2e/a11y.mjs",
     "test": "node --test test/*.test.mjs",
     "e2e:visual": "node e2e/demo/visual.mjs",
-    "e2e:visual:update": "node e2e/demo/visual.mjs --update"
+    "e2e:visual:update": "node e2e/demo/visual.mjs --update",
+    "e2e:virtual": "node e2e/virtual.mjs"
   },
   "devDependencies": {
     "axe-core": "^4.14.0",

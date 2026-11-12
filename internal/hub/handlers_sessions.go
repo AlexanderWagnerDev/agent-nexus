@@ -60,6 +60,11 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.store.CountSessionsFiltered(u.ID, filter, isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	hasMore := len(sessions) > limit
 	if hasMore {
 		sessions = sessions[:limit]
@@ -67,7 +72,9 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if sessions == nil {
 		sessions = []protocol.SessionView{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "has_more": hasMore, "offset": offset})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessions": sessions, "has_more": hasMore, "offset": offset, "total": total,
+	})
 }
 
 // validTag keeps tags short, searchable and safe in a URL query.

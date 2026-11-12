@@ -276,6 +276,8 @@ Object.assign(de, {
   '{n} worktrees': '{n} Worktrees',
   '{n} messages': '{n} Nachrichten',
   '{n} shown': '{n} angezeigt',
+  '{shown} of {total}': '{shown} von {total}',
+  'Loading…': 'Lädt…',
   '{n} open runs': '{n} offene Runs',
   '{n} files': '{n} Dateien',
   '{n} reasoning levels': '{n} Reasoning-Stufen',

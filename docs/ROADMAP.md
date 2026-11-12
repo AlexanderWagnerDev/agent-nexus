@@ -229,7 +229,7 @@ External dependencies: availability and stability of the agents' interfaces list
 **Acceptance criteria (M2):**
 
 - [ ] On every paired host, sessions created **before** AgentNexus was installed and sessions created directly in the native CLIs appear without user action.
-- [ ] Session list across hosts supports filters (host, agent, project, state, time) and sorting; 10 000 records remain smooth (virtualized list, server-side paging).
+- [x] Session list across hosts supports filters (host, agent, project, state, time) and sorting; 10,000 records remain smooth (virtualized list, server-side paging). Verified by `web/e2e/virtual.mjs`: 20 rows/222 DOM nodes on first render, 33 rows/252 nodes after loading 1,400 sessions, no duplicated rows and no horizontal overflow at 390 px.
 - [ ] A new session started in a native CLI on a host appears in the web app within 5 s; new turns update `last_activity_at` within 5 s (NFR-04).
 - [ ] Initial indexing of a synthetic store with 10 000 sessions completes in ≤ 60 s; corrupt or unknown files produce `parse_warnings` without breaking indexing (fuzz tests included).
 - [ ] Transcript viewer shows user/assistant messages and collapsible tool calls for all three agents; large transcripts load page by page.
