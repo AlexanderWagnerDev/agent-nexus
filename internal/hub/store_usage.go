@@ -64,6 +64,32 @@ type UsageReport struct {
 	Runs      []UsageRun   `json:"runs"`
 }
 
+type SessionUsage struct {
+	InputTokens      int64   `json:"input_tokens"`
+	OutputTokens     int64   `json:"output_tokens"`
+	CacheReadTokens  int64   `json:"cache_read_tokens"`
+	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	CostUSD          float64 `json:"cost_usd"`
+	Runs             int     `json:"runs"`
+	RunsWithUsage    int     `json:"runs_with_usage"`
+	UnavailableRuns  int     `json:"unavailable_runs"`
+}
+
+// SessionUsage aggregates only measurements reported for runs of one session.
+func (s *Store) SessionUsage(sessionID string) (SessionUsage, error) {
+	var out SessionUsage
+	err := s.db.QueryRow(`SELECT
+		COALESCE(SUM(u.input_tokens),0),COALESCE(SUM(u.output_tokens),0),
+		COALESCE(SUM(u.cache_read_tokens),0),COALESCE(SUM(u.cache_write_tokens),0),
+		COALESCE(SUM(CASE WHEN u.cost_usd IS NULL THEN 0 ELSE u.cost_usd END),0),
+		COUNT(r.id),COUNT(u.run_id)
+		FROM runs r LEFT JOIN run_usage u ON u.run_id=r.id
+		WHERE r.session_id=?`, sessionID).
+		Scan(&out.InputTokens, &out.OutputTokens, &out.CacheReadTokens, &out.CacheWriteTokens, &out.CostUSD, &out.Runs, &out.RunsWithUsage)
+	out.UnavailableRuns = out.Runs - out.RunsWithUsage
+	return out, err
+}
+
 func (s *Store) UpsertRunUsage(runID string, usage protocol.Usage) error {
 	source := usage.Source
 	if source == "" {

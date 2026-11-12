@@ -255,6 +255,25 @@ func (s *Server) handleSessionRelated(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleSessionUsage(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	usage, err := s.store.SessionUsage(sess.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, usage)
+}
+
 func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))

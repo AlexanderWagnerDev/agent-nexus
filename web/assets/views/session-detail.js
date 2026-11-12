@@ -18,6 +18,7 @@ export async function pageSession(id) {
   const s = await api(`/sessions/${id}`);
   if (pageGen !== state.pageGen) return;
   const related = await api(`/sessions/${encodeURIComponent(id)}/related`).catch(() => ({ parent: null, forks: [], children: [] }));
+  const usage = await api(`/sessions/${encodeURIComponent(id)}/usage`).catch(() => null);
   const agent = agentMeta(s.agent);
   let tags = Array.isArray(s.tags) ? [...s.tags] : [];
   let versionWarning = '';
@@ -75,6 +76,9 @@ export async function pageSession(id) {
             <div><span>${t('Host')}</span><strong>${esc(s.host_name)}</strong></div>
             <div><span>${t('Created')}</span><strong>${esc(fmtTime(s.created_at))}</strong></div>
             <div><span>${t('Updated')}</span><strong>${esc(fmtTime(s.updated_at))}</strong></div>
+            ${usage ? `<div><span>${t('Tokens (reported)')}</span><strong>${Number((usage.input_tokens || 0) + (usage.output_tokens || 0)).toLocaleString()}</strong></div>
+            <div><span>${t('Cost (reported)')}</span><strong>${usage.runs_with_usage ? `$${Number(usage.cost_usd || 0).toFixed(4)}` : '—'}</strong></div>
+            <div><span>${t('Runs with usage')}</span><strong>${usage.runs_with_usage}/${usage.runs}</strong></div>` : ''}
           </div>
         </div>
         <div class="aside-section">

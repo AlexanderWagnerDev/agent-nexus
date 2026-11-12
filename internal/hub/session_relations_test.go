@@ -63,4 +63,20 @@ func TestSessionRelationsAPI(t *testing.T) {
 	if forkPayload.Parent == nil || forkPayload.Parent.NativeID != "ses-src" {
 		t.Fatalf("fork parent: %+v", forkPayload.Parent)
 	}
+	if err := hub.store.CreateRun("run-usage", src.ID, hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	cost := 0.25
+	if err := hub.store.UpsertRunUsage("run-usage", protocol.Usage{InputTokens: 100, OutputTokens: 20, CacheReadTokens: 5, CostUSD: &cost}); err != nil {
+		t.Fatal(err)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/sessions/"+src.ID+"/usage", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "session usage")
+	var usage SessionUsage
+	if err := json.Unmarshal(body, &usage); err != nil {
+		t.Fatal(err)
+	}
+	if usage.InputTokens != 100 || usage.OutputTokens != 20 || usage.RunsWithUsage != 1 || usage.CostUSD != 0.25 {
+		t.Fatalf("session usage: %+v", usage)
+	}
 }

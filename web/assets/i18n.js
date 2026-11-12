@@ -1049,6 +1049,9 @@ Object.assign(de, {
   'Unpin host': 'Host lösen',
   'Host pinned': 'Host angeheftet',
   'Host unpinned': 'Host gelöst',
+  'Tokens (reported)': 'Tokens (gemeldet)',
+  'Cost (reported)': 'Kosten (gemeldet)',
+  'Runs with usage': 'Runs mit Nutzungsdaten',
 });
 
 const supported = ['en', 'de'];
