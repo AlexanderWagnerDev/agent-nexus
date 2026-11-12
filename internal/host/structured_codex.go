@@ -147,6 +147,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		return
 	}
 	configureProcessGroup(cmd)
+	suspendExecForJob(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
 		fail("cannot start codex app-server: " + err.Error())

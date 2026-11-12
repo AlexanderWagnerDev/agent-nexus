@@ -31,6 +31,8 @@ func NewClaudeAdapter(bin string) *ClaudeAdapter {
 
 func (a *ClaudeAdapter) Name() string { return "claude" }
 
+func (a *ClaudeAdapter) WatchPaths() []string { return []string{filepath.Join(a.root, "projects")} }
+
 func (a *ClaudeAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	info, err := detectInfo("claude", a.bin)
 	if err != nil {

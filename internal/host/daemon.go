@@ -276,6 +276,7 @@ func (d *Daemon) connect(ctx context.Context) error {
 	if err := d.sendActiveRuns(); err != nil {
 		d.log.Warn("run snapshot failed", "error", err)
 	}
+	d.replayRunOutput()
 	d.sendStoredUpdateStatus()
 
 	// Discovery refresh: rescan on start and every 30 seconds. Change
@@ -343,6 +344,29 @@ func (d *Daemon) sendActiveRuns() error {
 	return d.send(protocol.Envelope{Type: "active_runs", Runs: runs})
 }
 
+// replayRunOutput resends the bounded terminal buffer after a reconnect. The
+// hub discards chunks it already has by sequence number, so this is safe even
+// when the disconnect was brief. Output here is best effort and never includes
+// structured-event history.
+func (d *Daemon) replayRunOutput() {
+	d.runMu.Lock()
+	runs := make([]*Run, 0, len(d.runs))
+	for _, r := range d.runs {
+		runs = append(runs, r)
+	}
+	d.runMu.Unlock()
+	for _, r := range runs {
+		if r.buffer == nil {
+			continue
+		}
+		for _, chunk := range r.buffer.snapshot() {
+			if err := d.send(protocol.Envelope{Type: "run.output", RunID: r.id, Seq: chunk.seq, Data: chunk.data}); err != nil {
+				return
+			}
+		}
+	}
+}
+
 // startSearchIndex builds the host-local FTS5 cache in the background. Until
 // it is ready, search falls back to the adapters.
 func (d *Daemon) startSearchIndex(ctx context.Context) {
@@ -387,6 +411,22 @@ func (d *Daemon) searchIndexStatus() *protocol.IndexStatus {
 }
 
 func (d *Daemon) sendInventory() error {
+	agents := d.inventoryAgents()
+	summary := &protocol.PolicySummary{
+		AllowedRoots:  d.policy.AllowedRoots,
+		AllowedAgents: d.policy.AllowedAgents,
+		AllowNew:      d.policy.AllowNew,
+		AllowFork:     d.policy.AllowFork,
+	}
+	return d.send(protocol.Envelope{
+		Type: "inventory", Version: Version, Agents: agents, Policy: summary, Index: d.searchIndexStatus(),
+	})
+}
+
+// inventoryAgents reports detected agents plus capabilities that come from a
+// configured adapter rather than the agent's own binary. Keeping this separate
+// from the hub link makes the capability rules testable.
+func (d *Daemon) inventoryAgents() []protocol.AgentInfo {
 	agents := make([]protocol.AgentInfo, 0, len(d.adapters))
 	for _, a := range d.adapters {
 		info, err := a.Detect(context.Background())
@@ -400,15 +440,7 @@ func (d *Daemon) sendInventory() error {
 		}
 		agents = append(agents, info)
 	}
-	summary := &protocol.PolicySummary{
-		AllowedRoots:  d.policy.AllowedRoots,
-		AllowedAgents: d.policy.AllowedAgents,
-		AllowNew:      d.policy.AllowNew,
-		AllowFork:     d.policy.AllowFork,
-	}
-	return d.send(protocol.Envelope{
-		Type: "inventory", Version: Version, Agents: agents, Policy: summary, Index: d.searchIndexStatus(),
-	})
+	return agents
 }
 
 func (d *Daemon) sendSessions(force bool) error {
@@ -440,13 +472,44 @@ func (d *Daemon) sendSessions(force bool) error {
 }
 
 func (d *Daemon) discoveryLoop(ctx context.Context) {
-	t := time.NewTicker(15 * time.Second)
-	defer t.Stop()
+	fallback := time.NewTicker(15 * time.Second)
+	defer fallback.Stop()
+	poll := time.NewTicker(discoveryPollInterval)
+	defer poll.Stop()
+	paths := d.watchPaths()
+	last := sessionFingerprint(paths)
+	var debounce *time.Timer
+	var debounceC <-chan time.Time
+	trigger := func() {
+		if debounce != nil {
+			debounce.Stop()
+		}
+		debounce = time.NewTimer(discoveryDebounce)
+		debounceC = debounce.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
+			if debounce != nil {
+				debounce.Stop()
+			}
 			return
-		case <-t.C:
+		case <-poll.C:
+			fingerprint := sessionFingerprint(paths)
+			if fingerprint != last {
+				last = fingerprint
+				trigger()
+			}
+		case <-debounceC:
+			debounceC = nil
+			if err := d.sendSessions(false); err != nil {
+				d.log.Debug("session refresh failed", "error", err)
+			}
+			d.writeRuntimeStatus()
+		case <-fallback.C:
+			// The fingerprint covers new and changed files. The periodic
+			// rescan remains a safety net for adapters without a watch path
+			// and for filesystems with coarse timestamp resolution.
 			if err := d.sendSessions(false); err != nil {
 				d.log.Debug("session refresh failed", "error", err)
 			}

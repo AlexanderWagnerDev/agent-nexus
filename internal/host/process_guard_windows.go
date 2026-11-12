@@ -22,6 +22,10 @@ type processGuard struct {
 func newProcessGuard() *processGuard { return &processGuard{} }
 
 func (g *processGuard) Attach(pid int) error {
+	// The child was created with CREATE_SUSPENDED. Resume it on every path,
+	// including job-assignment failure, so a broken guard cannot leave the
+	// agent process frozen forever.
+	defer resumeSuspended(pid)
 	if g.job != 0 {
 		return nil
 	}
@@ -63,6 +67,23 @@ func (g *processGuard) Close() {
 		_ = windows.CloseHandle(g.job)
 		g.job = 0
 	}
+}
+
+var ntResumeProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
+
+// resumeSuspended releases a process created with CREATE_SUSPENDED. Windows
+// does not expose the primary thread handle through os.Process, so the
+// documented-by-observation NtResumeProcess entry point is used instead.
+func resumeSuspended(pid int) {
+	if pid <= 0 {
+		return
+	}
+	proc, err := windows.OpenProcess(windows.PROCESS_SUSPEND_RESUME, false, uint32(pid))
+	if err != nil {
+		return
+	}
+	defer windows.CloseHandle(proc)
+	_, _, _ = ntResumeProcess.Call(uintptr(proc))
 }
 
 // configureProcessGroup is a no-op on Windows; the Job Object provides the

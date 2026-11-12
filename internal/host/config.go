@@ -50,6 +50,9 @@ type Config struct {
 	HubPublicKey       string `json:"hub_public_key,omitempty"`
 	HubSigningRequired bool   `json:"hub_signing_required,omitempty"`
 	Policy             Policy `json:"policy"`
+	// RunBufferBytes bounds the per-run terminal replay buffer. Omitted means
+	// 1 MiB; values below 64 KiB or above 16 MiB are clamped.
+	RunBufferBytes int `json:"run_buffer_bytes,omitempty"`
 	// ACPCommands maps an agent name to an Agent Client Protocol adapter
 	// command line, for example {"claude": "claude-code-acp"}. When empty the
 	// daemon looks for the claude-agent-acp or claude-code-acp binary on PATH.
@@ -60,6 +63,22 @@ type Config struct {
 	// SearchIndex enables the host-local FTS5 transcript cache. Omitted means
 	// enabled; set it to false to keep transcript text out of a local index.
 	SearchIndex *bool `json:"search_index,omitempty"`
+}
+
+// RunBufferBytesOrDefault returns the bounded terminal replay size.
+func (c Config) RunBufferBytesOrDefault() int {
+	const min, max = 64 << 10, 16 << 20
+	value := c.RunBufferBytes
+	if value <= 0 {
+		value = 1 << 20
+	}
+	if value < min {
+		value = min
+	}
+	if value > max {
+		value = max
+	}
+	return value
 }
 
 // SearchIndexEnabled reports whether the local search index may be built.

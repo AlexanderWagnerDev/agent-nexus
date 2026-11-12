@@ -33,6 +33,8 @@ func NewCodexAdapter(bin string) *CodexAdapter {
 
 func (a *CodexAdapter) Name() string { return "codex" }
 
+func (a *CodexAdapter) WatchPaths() []string { return []string{filepath.Join(a.root, "sessions")} }
+
 func (a *CodexAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	info, err := detectInfo("codex", a.bin)
 	if err != nil {

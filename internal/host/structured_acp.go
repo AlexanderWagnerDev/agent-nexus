@@ -150,6 +150,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		return
 	}
 	configureProcessGroup(cmd)
+	suspendExecForJob(cmd)
 	if err := cmd.Start(); err != nil {
 		cancel()
 		fail("cannot start ACP adapter: " + err.Error())

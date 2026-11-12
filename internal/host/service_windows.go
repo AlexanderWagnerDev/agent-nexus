@@ -57,6 +57,9 @@ func installWindowsTask(exe string) error {
 		return fmt.Errorf("schtasks create failed: %v: %s", err, strings.TrimSpace(out))
 	}
 	removeLegacyStartupLauncher()
+	if out, err := runWindowsCommand("schtasks", "/Run", "/TN", windowsTaskName); err != nil {
+		fmt.Printf("warning: the task was installed but could not be started yet: %v: %s\n", err, strings.TrimSpace(out))
+	}
 	fmt.Printf("installed scheduled task %q for user %s\n", windowsTaskName, userID)
 	fmt.Println("The task starts at logon, restarts up to three times on failure, and runs with least privilege.")
 	return nil

@@ -33,3 +33,10 @@ type Adapter interface {
 	Search(ctx context.Context, query string, limit int) ([]protocol.SearchHit, error)
 	BuildCommand(Action) (Command, error)
 }
+
+// StoreWatcher is implemented by adapters that can name the local files whose
+// mtimes change when a session is created or extended. The daemon polls this
+// small fingerprint instead of rescanning every session file on every tick.
+type StoreWatcher interface {
+	WatchPaths() []string
+}

@@ -33,6 +33,58 @@ type Run struct {
 	stopped    atomic.Bool
 	closeOnce  sync.Once
 	writeMu    sync.Mutex
+	buffer     *outputBuffer
+}
+
+// outputBuffer keeps the most recent terminal bytes for one run. It is bounded
+// per run, copies every chunk and drops the oldest chunks first. Sequence
+// numbers are never rewritten, so the hub can discard duplicates after a
+// reconnect.
+type outputBuffer struct {
+	mu      sync.Mutex
+	chunks  []bufferedChunk
+	bytes   int
+	limit   int
+	dropped int
+}
+
+type bufferedChunk struct {
+	seq  uint64
+	data []byte
+}
+
+func newOutputBuffer(limit int) *outputBuffer {
+	if limit <= 0 {
+		limit = 1 << 20
+	}
+	return &outputBuffer{limit: limit}
+}
+
+func (b *outputBuffer) append(seq uint64, data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	cp := append([]byte(nil), data...)
+	if len(cp) > b.limit {
+		b.dropped += len(cp) - b.limit
+		cp = cp[len(cp)-b.limit:]
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.chunks = append(b.chunks, bufferedChunk{seq: seq, data: cp})
+	b.bytes += len(cp)
+	for b.bytes > b.limit && len(b.chunks) > 1 {
+		b.bytes -= len(b.chunks[0].data)
+		b.chunks = b.chunks[1:]
+	}
+}
+
+func (b *outputBuffer) snapshot() []bufferedChunk {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]bufferedChunk, len(b.chunks))
+	copy(out, b.chunks)
+	return out
 }
 
 func (r *Run) Write(data []byte) (int, error) {
@@ -113,6 +165,12 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		d.log.Warn("run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if spec.Action == protocol.ActionResume && !spec.Force {
+		if d.activeElsewhere(ctx, spec.Agent, spec.NativeID) {
+			fail("session is active in another terminal; close it or fork the session")
+			return
+		}
+	}
 	if spec.Mode == protocol.ModeStructured {
 		d.startStructuredRun(ctx, spec)
 		return
@@ -126,7 +184,6 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		return
 	}
 	cwd := spec.Cwd
-	activeElsewhere := false
 	if a := d.adapter(spec.Agent); a != nil {
 		if sessions, err := a.ListSessions(ctx); err == nil {
 			for _, s := range sessions {
@@ -134,15 +191,10 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 					if cwd == "" {
 						cwd = s.Cwd
 					}
-					activeElsewhere = s.ActiveElsewhere
 					break
 				}
 			}
 		}
-	}
-	if activeElsewhere && spec.Action == protocol.ActionResume {
-		fail("session is active in another terminal; close it or fork the session")
-		return
 	}
 	if cwd == "" {
 		fail("session working directory is unknown")
@@ -201,6 +253,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 	}
 	c := p.Command(cmd.Path, cmd.Args...)
 	c.Dir = cmd.Cwd
+	suspendForJob(c)
 	env := cmd.Env
 	if env == nil {
 		env = os.Environ()
@@ -220,14 +273,15 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		}
 	}
 	r := &Run{id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, pty: p, cmd: c,
-		guard: guard, grace: d.policy.ProcessGrace(), cols: cols, rows: rows}
+		guard: guard, grace: d.policy.ProcessGrace(), cols: cols, rows: rows,
+		buffer: newOutputBuffer(d.cfg.RunBufferBytesOrDefault())}
 	d.runMu.Lock()
 	d.runs[spec.RunID] = r
 	d.runMu.Unlock()
 
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: spec.Action})
 	d.log.Info("run started", "run_id", spec.RunID, "agent", spec.Agent, "cwd", cwd, "action", spec.Action)
-	hostAudit("run.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd, "action": spec.Action})
+	hostAudit("run.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd, "action": spec.Action, "forced_active_elsewhere": spec.Force})
 	_ = d.sendSessions(true)
 
 	go func() {
@@ -237,11 +291,14 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 			if n > 0 {
 				seq := r.seq.Add(1)
 				data := append([]byte(nil), buf[:n]...)
-				// A hub outage must not kill the agent. Output produced while
-				// disconnected is not replayed; the native session remains the
-				// source of truth and the run reconnects through active_runs.
+				// Keep a bounded replay buffer so a short hub outage or
+				// browser reconnect does not lose terminal output. The
+				// native session remains the source of truth.
+				if r.buffer != nil {
+					r.buffer.append(seq, data)
+				}
 				if sendErr := d.send(protocol.Envelope{Type: "run.output", RunID: spec.RunID, Seq: seq, Data: data}); sendErr != nil {
-					d.log.Debug("run output dropped while hub is offline", "run_id", spec.RunID)
+					d.log.Debug("run output buffered while hub is offline", "run_id", spec.RunID)
 				}
 			}
 			if err != nil {

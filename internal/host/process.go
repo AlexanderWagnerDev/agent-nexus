@@ -45,6 +45,29 @@ func matchActiveSessions(lines []string, sessions []protocol.Session) map[string
 	return active
 }
 
+// activeElsewhere checks one native session through the same best-effort scan
+// that fills the discovery snapshot. It is only consulted for resume requests
+// that did not carry an explicit force decision.
+func (d *Daemon) activeElsewhere(ctx context.Context, agent, nativeID string) bool {
+	if nativeID == "" {
+		return false
+	}
+	a := d.adapter(agent)
+	if a == nil {
+		return false
+	}
+	sessions, err := a.ListSessions(ctx)
+	if err != nil {
+		return false
+	}
+	for _, s := range sessions {
+		if s.NativeID == nativeID && s.ActiveElsewhere {
+			return true
+		}
+	}
+	return false
+}
+
 var processCache struct {
 	mu    sync.Mutex
 	lines []string

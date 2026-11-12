@@ -49,6 +49,8 @@ func openCodeDBPath(bin string) string {
 
 func (a *OpenCodeAdapter) Name() string { return "opencode" }
 
+func (a *OpenCodeAdapter) WatchPaths() []string { return []string{a.db} }
+
 func (a *OpenCodeAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	info, err := detectInfo("opencode", a.bin)
 	if err != nil {

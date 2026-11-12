@@ -26,6 +26,8 @@ func NewGeminiAdapter(bin string) *GeminiAdapter {
 
 func (a *GeminiAdapter) Name() string { return "gemini" }
 
+func (a *GeminiAdapter) WatchPaths() []string { return []string{a.root} }
+
 func (a *GeminiAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	info, err := detectInfo("gemini", a.bin)
 	if err != nil {
