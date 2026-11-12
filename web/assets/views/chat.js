@@ -88,6 +88,7 @@ export async function pageStructuredRun(id, run) {
                 <span class="composer-hint">${t('Enter to send · Shift+Enter newline')}</span>
                 <input type="file" id="attach-input" multiple hidden>
                 <button class="icon-btn" id="attach-button" type="button" title="${t('Attach files')}" aria-label="${t('Attach files')}" hidden>${svgIcon('paperclip')}</button>
+                <button class="icon-btn" id="template-button" type="button" title="${t('Prompt templates')}" aria-label="${t('Prompt templates')}">${svgIcon('file')}</button>
                 <button class="icon-btn composer-stop" id="interrupt-run" type="button" title="${t('Interrupt current turn')}" aria-label="${t('Interrupt current turn')}" hidden>${svgIcon('stop')}</button>
                 <button class="icon-btn" id="queue-prompt" type="button" title="${t('Add to prompt queue')}" aria-label="${t('Add to prompt queue')}">${svgIcon('clock')}</button>
                 <button class="send-button" id="send-prompt" type="submit" title="${t('Send message')}" aria-label="${t('Send message')}">${svgIcon('send')}</button>
@@ -781,10 +782,20 @@ export async function pageStructuredRun(id, run) {
       form.requestSubmit();
     }
   });
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const text = textarea.value.trim();
+    let text = textarea.value.trim();
     if (!text) return;
+    const slash = text.match(/^\/(?:tpl|template)\s+(.+)$/i);
+    if (slash) {
+      const templates = await loadTemplates().catch(() => []);
+      const template = templates.find((item) => item.name.toLowerCase() === slash[1].trim().toLowerCase());
+      if (!template) {
+        toast(t('Template not found: {name}', { name: slash[1].trim() }), true);
+        return;
+      }
+      text = renderTemplateBody(template.body);
+    }
     const promptOptions = currentPromptOptions();
     const message = { type: 'prompt', run_id: id, text };
     if (Object.keys(promptOptions).length) message.options = promptOptions;
@@ -932,6 +943,96 @@ export async function pageStructuredRun(id, run) {
     } catch (err) { toast(err.message, true); }
   });
   loadQueue().catch(() => {});
+
+  // ---- prompt templates ----
+  let templatesCache = null;
+  const loadTemplates = async (force = false) => {
+    if (templatesCache && !force) return templatesCache;
+    const data = await api('/templates');
+    templatesCache = data.templates || [];
+    return templatesCache;
+  };
+  const templateContext = () => ({
+    branch: session?.git_branch || run.git_branch || '',
+    project: projectName(session?.cwd || run.cwd || ''),
+    selection: textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
+  });
+  const renderTemplateBody = (body, context = templateContext()) => String(body)
+    .replaceAll('{{branch}}', context.branch)
+    .replaceAll('{{project}}', context.project)
+    .replaceAll('{{selection}}', context.selection);
+  const openTemplateEditor = (item) => {
+    const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
+    modal(`
+      <h2>${item ? t('Edit template') : t('New template')}</h2>
+      <label class="label">${t('Name')}<input class="input" id="template-name" maxlength="80" value="${esc(item?.name || '')}"></label>
+      <label class="label">${t('Template body')}<textarea class="input" id="template-body" rows="6">${esc(item?.body || '')}</textarea></label>
+      <p class="hint">${t('Variables: {{branch}}, {{project}}, {{selection}}')}</p>
+      ${isAdmin ? `<label class="setting-row"><span>${t('Share with every user')}</span><input type="checkbox" id="template-shared" ${item?.shared ? 'checked' : ''}></label>` : ''}
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="template-save">${t('Save')}</button></div>`);
+    document.getElementById('template-save').addEventListener('click', async () => {
+      const name = document.getElementById('template-name').value.trim();
+      const body = document.getElementById('template-body').value.trim();
+      if (!name || !body) { toast(t('Name and template body are required'), true); return; }
+      const payload = { name, body, shared: Boolean(document.getElementById('template-shared')?.checked) };
+      try {
+        if (item) await api(`/templates/${encodeURIComponent(item.id)}`, { method: 'PUT', body: payload });
+        else await api('/templates', { method: 'POST', body: payload });
+        templatesCache = null;
+        closeModal();
+        toast(t('Template saved'));
+        openTemplates().catch((err) => toast(err.message, true));
+      } catch (err) { toast(err.message, true); }
+    });
+  };
+  const openTemplates = async () => {
+    const templates = await loadTemplates(true);
+    modal(`
+      <div class="split"><h2>${t('Prompt templates')}</h2><button class="btn small" type="button" id="template-new">${t('New template')}</button></div>
+      <label class="search-field">${svgIcon('search')}<input class="input" id="template-search" placeholder="${t('Search templates')}" autocomplete="off"></label>
+      <div class="template-list" id="template-list"></div>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Close')}</button></div>`);
+    const list = document.getElementById('template-list');
+    const render = (query = '') => {
+      const q = query.trim().toLowerCase();
+      const visible = templates.filter((item) => !q || item.name.toLowerCase().includes(q) || item.body.toLowerCase().includes(q));
+      list.innerHTML = visible.length ? visible.map((item) => `<div class="template-row" data-template="${esc(item.id)}">
+        <div><strong>${esc(item.name)}</strong>${item.shared ? `<span class="composer-pill">${t('shared')}</span>` : ''}<small>${esc(item.body.slice(0, 160))}</small></div>
+        <div class="template-actions"><button class="btn small" type="button" data-template-insert>${t('Insert')}</button>${item.owner ? `<button class="btn ghost small" type="button" data-template-edit>${t('Edit')}</button><button class="btn ghost small" type="button" data-template-delete>${t('Delete')}</button>` : ''}</div>
+      </div>`).join('') : `<p class="muted">${t('No templates yet.')}</p>`;
+    };
+    render();
+    document.getElementById('template-search').addEventListener('input', (event) => render(event.target.value));
+    document.getElementById('template-new').addEventListener('click', () => openTemplateEditor(null));
+    list.addEventListener('click', async (event) => {
+      const row = event.target.closest('[data-template]');
+      if (!row) return;
+      const item = templates.find((entry) => entry.id === row.dataset.template);
+      if (!item) return;
+      if (event.target.closest('[data-template-insert]')) {
+        const context = templateContext();
+        const text = renderTemplateBody(item.body, context);
+        textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
+        autosize();
+        storeSet(draftKey(id), textarea.value);
+        closeModal();
+        textarea.focus();
+        return;
+      }
+      if (event.target.closest('[data-template-edit]')) return openTemplateEditor(item);
+      if (event.target.closest('[data-template-delete]')) {
+        try {
+          await api(`/templates/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+          templatesCache = null;
+          closeModal();
+          toast(t('Template deleted'));
+          openTemplates().catch((err) => toast(err.message, true));
+        } catch (err) { toast(err.message, true); }
+      }
+    });
+  };
+  document.getElementById('template-button').addEventListener('click', () => openTemplates().catch((err) => toast(err.message, true)));
+  loadTemplates().catch(() => {});
 
   if (session) {
     document.getElementById('context-pin').addEventListener('click', async () => {

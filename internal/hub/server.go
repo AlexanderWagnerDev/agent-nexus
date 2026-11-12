@@ -195,6 +195,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/fanouts", s.requireAuth(s.handleCreateFanout))
 	mux.HandleFunc("GET /api/v1/fanouts", s.requireAuth(s.handleListFanouts))
 	mux.HandleFunc("GET /api/v1/fanouts/{id}", s.requireAuth(s.handleGetFanout))
+	mux.HandleFunc("GET /api/v1/templates", s.requireAuth(s.handleListTemplates))
+	mux.HandleFunc("POST /api/v1/templates", s.requireAuth(s.handleCreateTemplate))
+	mux.HandleFunc("PUT /api/v1/templates/{id}", s.requireAuth(s.handleUpdateTemplate))
+	mux.HandleFunc("DELETE /api/v1/templates/{id}", s.requireAuth(s.handleDeleteTemplate))
 
 	mux.HandleFunc("GET /api/v1/ws", s.requireAuth(s.handleClientWS))
 	mux.HandleFunc("GET /v1/host/connect", s.handleHostWS)

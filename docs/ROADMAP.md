@@ -100,6 +100,15 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B5: prompt templates (2026-11-12)
+
+Prompt templates are stored in SQLite, scoped to the owner and optionally shared
+by an admin. The composer lists and searches them, inserts a rendered body at
+the cursor, and expands `/tpl <name>` on send. `{{branch}}`, `{{project}}` and
+`{{selection}}` are resolved from the current session and selection; unknown
+variables are left untouched. CRUD, ownership and sharing are covered by API
+tests. Slash expansion is checked in the browser during the final manual pass.
+
 ### B1: multi-agent fan-out (2026-11-12)
 
 The Fan-out page starts one new structured native session per selected host and

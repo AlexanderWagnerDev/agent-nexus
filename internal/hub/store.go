@@ -211,6 +211,16 @@ CREATE TABLE IF NOT EXISTS fanout_runs (
   error TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (fanout_id, run_id)
 );
+CREATE TABLE IF NOT EXISTS prompt_templates (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  shared INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS prompt_templates_user_idx ON prompt_templates(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at INTEGER NOT NULL,

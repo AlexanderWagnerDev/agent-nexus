@@ -428,6 +428,11 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .fanout-history-row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); color: inherit; text-align: left; }
 .fanout-history-row:hover { background: var(--bg-hover); }
 .fanout-history-row small { color: var(--muted); white-space: nowrap; }
+.template-list { display: grid; gap: 4px; max-height: 50vh; overflow-y: auto; margin-top: 8px; }
+.template-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); }
+.template-row strong { font-size: 12.5px; margin-right: 6px; }
+.template-row small { display: block; color: var(--muted); font-size: 11px; max-width: 60ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-actions { display: flex; gap: 4px; flex-shrink: 0; }
 @media (max-width: 640px) {
   .fanout-target { grid-template-columns: 1fr 1fr 28px; }
   .fanout-target [data-target-cwd] { grid-column: 1 / 3; }
