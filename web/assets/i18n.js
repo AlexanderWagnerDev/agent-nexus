@@ -1056,6 +1056,10 @@ Object.assign(de, {
   'All tasks': 'Alle Aufgaben',
   'No open tasks': 'Keine offenen Aufgaben',
   'Create a task to delegate work and track its run.': 'Lege eine Aufgabe an, um Arbeit zu delegieren und den zugehörigen Run zu verfolgen.',
+  'Run diagnostics': 'Diagnose starten',
+  'Running diagnostics...': 'Diagnose läuft…',
+  'Run the host-side doctor. Only sanitized checks are returned; paths, ids and keys stay on the host.': 'Startet den hostseitigen Doctor. Es werden nur bereinigte Prüfungen zurückgegeben; Pfade, IDs und Schlüssel bleiben auf dem Host.',
+  'Host-reported checks only. No paths, ids or keys are included.': 'Nur hostseitig gemeldete Prüfungen. Keine Pfade, IDs oder Schlüssel enthalten.',
 });
 
 const supported = ['en', 'de'];

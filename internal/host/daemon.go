@@ -798,6 +798,8 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			return nil, err
 		}
 		return d.gitViewOptions(context.Background(), p.Cwd, p.StatOnly)
+	case "doctor":
+		return d.safeDoctor(), nil
 	case "update.check":
 		var p struct {
 			Channel string `json:"channel"`

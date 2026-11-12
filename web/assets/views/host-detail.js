@@ -45,7 +45,8 @@ export async function pageHostDetail(id) {
     <button class="btn small ghost" id="host-favorite" type="button">${svgIcon('star')} ${h.favorite ? t('Unpin host') : t('Pin host')}</button>
     <button class="btn small" id="host-new-session" ${h.status !== 'online' || h.disabled ? 'disabled' : ''}>${t('New session')}</button>
     <button class="btn small" id="host-share">${t('Share')}</button>
-    <button class="btn small" id="host-update-check">${t('Check for updates')}</button>`);
+    <button class="btn small" id="host-update-check">${t('Check for updates')}</button>
+    <button class="btn small" id="host-diagnostics">${t('Run diagnostics')}</button>`);
 
   const reasons = (health.reasons || []).map((reason) => `
     <div class="health-reason ${esc(reason.severity)}">
@@ -162,6 +163,10 @@ export async function pageHostDetail(id) {
             ${update.available ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div>` : ''}` : `<p class="aside-note">${t('Check the GitHub release feed. Installation stays on the host:')} <code>nexusd update --install</code>.</p>`}
           </div>
         </div>
+        <div class="section-card">
+          <div class="section-head"><h2>${t('Diagnostics')}</h2></div>
+          <div id="host-diagnostics-result"><p class="aside-note">${t('Run the host-side doctor. Only sanitized checks are returned; paths, ids and keys stay on the host.')}</p></div>
+        </div>
       </aside>
     </div>`;
 
@@ -174,6 +179,27 @@ export async function pageHostDetail(id) {
     } catch (err) { toast(err.message, true); }
   });
   document.getElementById('host-share')?.addEventListener('click', () => shareHostDialog(h));
+  document.getElementById('host-diagnostics')?.addEventListener('click', async (event) => {
+    const box = document.getElementById('host-diagnostics-result');
+    const button = event.currentTarget;
+    if (!box || button.disabled) return;
+    button.disabled = true;
+    box.innerHTML = `<div class="empty compact"><span class="spinner"></span>${t('Running diagnostics...')}</div>`;
+    try {
+      const report = await api(`/hosts/${encodeURIComponent(h.id)}/diagnostics`);
+      box.innerHTML = `<div class="health-list">${(report.checks || []).map((check) => `
+        <div class="health-reason ${check.status === 'ok' ? 'info' : check.status === 'error' ? 'error' : 'warning'}">
+          ${reasonIcon(check.status === 'ok' ? 'info' : check.status === 'error' ? 'error' : 'warning')}
+          <div><strong>${esc(check.id.replaceAll('_', ' '))}</strong><span>${esc(check.detail)}</span></div>
+        </div>`).join('')}</div>
+        <p class="aside-note mt-1">${t('Host-reported checks only. No paths, ids or keys are included.')}</p>`;
+    } catch (err) {
+      box.innerHTML = `<div class="notice error small">${esc(err.message)}</div>`;
+      toast(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
   document.getElementById('host-update-check')?.addEventListener('click', async (event) => {
     const box = document.getElementById('host-update-result');
     const button = event.currentTarget;

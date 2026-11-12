@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -29,6 +30,23 @@ func TestBuildHostHealth(t *testing.T) {
 	}
 	if got := buildHostHealth(base, false); got.State != "disabled" {
 		t.Fatalf("disabled host is disabled regardless of link: %+v", got)
+	}
+}
+
+func TestAPIHostDiagnostics(t *testing.T) {
+	hub := newSetupHub(t)
+	owner, _ := hub.store.UserByUsername("owner")
+	host := startFakeHost(t, hub, owner, "diagnostics-host")
+	host.setAnswer(func(method string, params json.RawMessage) (any, string) {
+		if method != "doctor" {
+			return nil, "unexpected method"
+		}
+		return map[string]any{"version": "test", "issues": 0, "checks": []map[string]string{{"id": "pairing", "status": "ok", "detail": "paired"}}}, ""
+	})
+	status, body := hub.do(nil, http.MethodGet, "/api/v1/hosts/"+host.hostID+"/diagnostics", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "host diagnostics")
+	if !jsonContains(body, `"pairing"`) || !jsonContains(body, `"ok"`) {
+		t.Fatalf("diagnostics payload: %s", body)
 	}
 }
 

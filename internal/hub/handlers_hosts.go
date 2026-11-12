@@ -292,6 +292,35 @@ func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {
 
 // ---- sessions ----
 
+// handleHostDiagnostics runs the host-side, sanitized doctor. It requires host
+// view permission, an online link and never returns paths, ids or keys.
+func (s *Server) handleHostDiagnostics(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("id")
+	if !s.hostPermission(u, hostID, "view") {
+		writeError(w, http.StatusForbidden, "host view permission required")
+		return
+	}
+	if !s.hostOnline(hostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, hostID, "doctor", nil)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var report any
+	if err := json.Unmarshal(raw, &report); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	s.audit(u.Username, "host.diagnostics", map[string]string{"host_id": hostID})
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	hostID := r.PathValue("id")
