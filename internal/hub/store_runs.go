@@ -25,12 +25,13 @@ func (s *Store) RunByID(id string) (protocol.RunView, string, error) {
 	var ended sql.NullInt64
 	var startedBy string
 	err := s.db.QueryRow(`SELECT r.id,r.session_id,r.host_id,COALESCE(h.name,''),COALESCE(s.title,''),COALESCE(s.agent,''),
-		COALESCE(s.cwd,''),COALESCE(s.git_branch,''),r.mode,r.state,r.lease_device_id,r.created_at,r.ended_at,r.started_by
+		COALESCE(s.cwd,''),COALESCE(s.git_branch,''),r.mode,r.state,r.lease_device_id,r.created_at,r.ended_at,r.started_by,
+		r.error_code,r.error_message
 		FROM runs r
 		LEFT JOIN sessions s ON s.id=r.session_id
 		LEFT JOIN hosts h ON h.id=r.host_id
 		WHERE r.id=?`, id).
-		Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Cwd, &r.GitBranch, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy)
+		Scan(&r.ID, &r.SessionID, &r.HostID, &r.HostName, &r.SessionTitle, &r.Agent, &r.Cwd, &r.GitBranch, &r.Mode, &r.State, &r.LeaseDeviceID, &created, &ended, &startedBy, &r.ErrorCode, &r.ErrorMessage)
 	r.StartedAt = fromMS(created)
 	if ended.Valid {
 		t := fromMS(ended.Int64)
@@ -64,6 +65,16 @@ func (s *Store) UpdateRunState(id, state string) {
 		return
 	}
 	s.db.Exec(`UPDATE runs SET state=? WHERE id=?`, state, id)
+}
+
+// SetRunError stores a stable classification and a bounded message. Callers
+// pass text that agents or the host reported; the hub does not synthesize
+// errors for successful runs.
+func (s *Store) SetRunError(id, code, message string) {
+	if len(message) > 2000 {
+		message = message[:2000]
+	}
+	s.db.Exec(`UPDATE runs SET error_code=?, error_message=? WHERE id=?`, code, message, id)
 }
 
 func (s *Store) ActiveRuns(hostID string) ([]protocol.RunView, error) {

@@ -170,7 +170,9 @@ CREATE TABLE IF NOT EXISTS runs (
   started_by TEXT NOT NULL,
   lease_device_id TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
-  ended_at INTEGER
+  ended_at INTEGER,
+  error_code TEXT NOT NULL DEFAULT '',
+  error_message TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_host_idx ON runs(host_id, state);
 CREATE TABLE IF NOT EXISTS prompt_queue (
@@ -387,6 +389,8 @@ CREATE INDEX IF NOT EXISTS task_dependencies_dep_idx ON task_dependencies(depend
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN error_code TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN error_message TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN parent_native_id TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN forked_from_native_id TEXT NOT NULL DEFAULT ''`)
 	return nil

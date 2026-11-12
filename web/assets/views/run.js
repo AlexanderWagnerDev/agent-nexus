@@ -26,6 +26,7 @@ export async function pageRun(id) {
     <div class="terminal-page">
       <div class="terminal-statusbar">
         ${stateBadge(run.state)}
+        ${run.error_code ? `<span class="badge failed" title="${esc(run.error_message || '')}">${esc(run.error_code)}</span>` : ''}
         ${agentGlyph(run.agent)}
         <span>${esc(agentMeta(run.agent).label)}</span><span class="chat-sep">·</span><span>${esc(projectName(run.cwd))}</span><span class="chat-sep">·</span><span>${esc(run.host_name || run.host_id)}</span>
         <span class="chat-connection right" id="run-note"><span class="connection-dot"></span>Connecting…</span>

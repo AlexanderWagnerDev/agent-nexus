@@ -313,6 +313,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		state := protocol.StateExited
 		if msg.Code != 0 {
 			state = protocol.StateFailed
+			s.store.SetRunError(msg.RunID, ClassifyRunError(msg.Reason), msg.Reason)
 		}
 		s.setRunState(msg.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.exit", RunID: msg.RunID, State: state, Message: msg.Reason})
@@ -324,6 +325,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 	case "run.error":
 		s.metrics.protocolError()
+		s.store.SetRunError(msg.RunID, ClassifyRunError(msg.Error), msg.Error)
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
 		s.audit("host:"+hc.id, "run.failed", map[string]string{"run_id": msg.RunID, "error": msg.Error})
@@ -421,6 +423,7 @@ func (s *Server) unregisterHost(id string, hc *hostConn) {
 	if runs, err := s.store.ActiveRuns(id); err == nil {
 		for _, r := range runs {
 			s.setRunState(r.ID, protocol.StateFailed)
+			s.store.SetRunError(r.ID, ErrCodeNetwork, "host disconnected")
 			s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: r.ID, Error: "host disconnected"})
 			go s.notifyRun(r.ID, "disconnected", "Agent disconnected", "The host disconnected while the run was active.")
 		}

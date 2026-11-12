@@ -438,6 +438,8 @@ type RunView struct {
 	LastEventSeq  uint64     `json:"last_event_seq,omitempty"`
 	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
+	ErrorCode     string     `json:"error_code,omitempty"`
+	ErrorMessage  string     `json:"error_message,omitempty"`
 }
 
 // ProjectView groups native sessions that share a working directory on one

@@ -344,6 +344,15 @@ command is created. Existing runs are never stopped by a limit change. Prompt
 queues are additionally capped at 100 pending items per run
 (`reason: queue_limit`).
 
+## Run error codes
+
+Failed and exited runs store a stable code next to the original message:
+`network`, `authentication`, `authorization`, `agent_unavailable`,
+`unsupported_version`, `session_conflict`, `host_policy`, `agent_protocol`,
+`process_crash`, `timeout`, `database`, `update` or `internal`. The classifier
+only reads text the host or agent already reported; it never invents an error
+for a successful run.
+
 ## Metrics
 
 `/metrics` is disabled by default. Enable it on the hub container and set a long
