@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -351,7 +352,11 @@ func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "\n... (truncated)"
+	cut := n
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "\n... (truncated)"
 }
 
 func parseTime(v string) time.Time {

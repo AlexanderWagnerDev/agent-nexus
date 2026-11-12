@@ -438,6 +438,7 @@ export async function pageStructuredRun(id, run) {
     scrollBottom(true);
   });
 
+  let gitRefreshHook = null;
   const setState = (state) => {
     currentState = state || 'unknown';
     run.state = state;
@@ -451,6 +452,7 @@ export async function pageStructuredRun(id, run) {
     const topStop = document.getElementById('stop-run');
     topStop.hidden = !busy;
     topStop.disabled = !busy;
+    if (!busy && gitRefreshHook) gitRefreshHook();
     scrollBottom();
   };
   setState(run.state || 'starting');
@@ -799,27 +801,39 @@ export async function pageStructuredRun(id, run) {
     });
     document.getElementById('context-terminal').addEventListener('click', () => startRun(session, false, 'terminal'));
   }
-  const loadGit = async () => {
+  const loadGit = async (silent = false) => {
     if (!session) return;
     const box = document.getElementById('context-git');
-    box.innerHTML = '<div class="empty compact"><span class="spinner"></span></div>';
+    if (!box) return;
+    if (!silent) box.innerHTML = '<div class="empty compact"><span class="spinner"></span></div>';
     try {
       const g = await api(`/sessions/${session.id}/git`);
+      const signature = [g.branch, g.root, g.status, g.stat, g.diff, g.file_count, g.diff_truncated].join('\u0000');
+      if (silent && signature === lastGitSignature) return;
+      lastGitSignature = signature;
+      const truncated = g.status_truncated || g.stat_truncated || g.diff_truncated;
       box.innerHTML = `
         <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtTime(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
         ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
-        <pre class="git-status">${esc(g.status?.trim() || 'Clean working tree')}</pre>
+        ${g.file_count ? `<div class="muted small">${esc(countLabel(g.file_count, 'changed file', 'changed files'))}</div>` : ''}
+        <pre class="git-status">${esc(g.status?.trim() || t('Clean working tree'))}</pre>
         ${g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : ''}
-        ${g.diff ? `<details class="git-diff" open><summary>Uncommitted changes</summary>${renderDiffBlock(g.diff)}</details>` : ''}`;
+        ${truncated ? `<p class="hint">${t('The host truncated this output. Open the changes view for the complete diff.')}</p>` : ''}
+        ${g.diff ? `<details class="git-diff" open><summary>${t('Uncommitted changes')}</summary>${renderDiffBlock(g.diff)}</details>` : ''}`;
     } catch (err) {
+      // A background poll must not erase a readable diff because the host was
+      // briefly busy or offline. Manual refreshes still show the error.
+      if (silent) return;
       box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><button class="btn small block mt-1" id="context-git-load">Try again</button>`;
     }
   };
+  let lastGitSignature = '';
+  gitRefreshHook = () => loadGit(true).catch(() => {});
   document.getElementById('context-git').addEventListener('click', (event) => {
     if (event.target.closest('#context-git-load') || event.target.closest('#git-refresh')) loadGit();
   });
   // Live diff while a run is active: the host re-reads the working tree; the
-  // hub never stores the diff. Refresh only when the details panel is open.
+  // hub never stores the diff. Refresh only while the details panel is open.
   let gitTimer = null;
   const scheduleGitRefresh = () => {
     clearInterval(gitTimer);
@@ -828,8 +842,8 @@ export async function pageStructuredRun(id, run) {
       if (!document.getElementById('context-git')) return;
       if (!chatPage.classList.contains('context-open')) return;
       if (currentState !== 'running' && currentState !== 'waiting_for_input' && currentState !== 'starting') return;
-      loadGit().catch(() => {});
-    }, 8000);
+      loadGit(true).catch(() => {});
+    }, 5000);
   };
   scheduleGitRefresh();
 
@@ -849,6 +863,7 @@ export async function pageStructuredRun(id, run) {
   state.pageCleanup = () => {
     clearInterval(timer);
     clearInterval(gitTimer);
+    gitRefreshHook = null;
     state.wsHandlers.delete(handler);
   };
   textarea.focus();

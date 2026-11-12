@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestCopyFile(t *testing.T) {
@@ -50,6 +51,9 @@ func TestTextHelpers(t *testing.T) {
 	}
 	if got := truncate("abc", 4); got != "abc" {
 		t.Fatalf("truncate short: %q", got)
+	}
+	if got := truncate("äöüß", 3); !utf8.ValidString(got) || !strings.HasPrefix(got, "ä") {
+		t.Fatalf("multibyte truncate split a rune: %q", got)
 	}
 	if got := cleanTitle("  hello\nworld  "); got != "hello world" {
 		t.Fatalf("cleanTitle: %q", got)

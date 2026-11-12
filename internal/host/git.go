@@ -95,7 +95,13 @@ type gitView struct {
 	Status string `json:"status"`
 	Stat   string `json:"stat"`
 	Diff   string `json:"diff"`
-	Error  string `json:"error,omitempty"`
+	// Truncation flags tell the browser that the host bounded a field instead
+	// of silently showing an incomplete diff.
+	StatusTruncated bool   `json:"status_truncated,omitempty"`
+	StatTruncated   bool   `json:"stat_truncated,omitempty"`
+	DiffTruncated   bool   `json:"diff_truncated,omitempty"`
+	FileCount       int    `json:"file_count"`
+	Error           string `json:"error,omitempty"`
 }
 
 func (d *Daemon) gitView(ctx context.Context, cwd string) (gitView, error) {
@@ -107,21 +113,39 @@ func (d *Daemon) gitView(ctx context.Context, cwd string) (gitView, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	run := func(args ...string) string {
+	run := func(limit int, args ...string) (string, bool) {
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
 		cmd.Dir = cwd
 		hideProcessWindow(cmd)
 		out, err := cmd.CombinedOutput()
+		text := strings.TrimSpace(string(out))
 		if err != nil {
-			return strings.TrimSpace(string(out)) + "\n" + err.Error()
+			return text + "\n" + err.Error(), false
 		}
-		return strings.TrimSpace(string(out))
+		if len(text) > limit {
+			return truncate(text, limit), true
+		}
+		return text, false
+	}
+	branch, _ := run(4096, "rev-parse", "--abbrev-ref", "HEAD")
+	root, _ := run(4096, "rev-parse", "--show-toplevel")
+	status, statusTruncated := run(100_000, "status", "--porcelain=v1")
+	stat, statTruncated := run(100_000, "diff", "HEAD", "--stat", "--no-color")
+	diff, diffTruncated := run(200_000, "diff", "HEAD", "--no-color")
+	if strings.Contains(stat, "fatal: ambiguous argument 'HEAD'") || strings.Contains(diff, "fatal: ambiguous argument 'HEAD'") {
+		// A repository without a first commit has no HEAD.
+		stat, statTruncated = run(100_000, "diff", "--stat", "--no-color")
+		diff, diffTruncated = run(200_000, "diff", "--no-color")
+	}
+	fileCount := 0
+	for _, line := range strings.Split(status, "\n") {
+		if strings.TrimSpace(line) != "" {
+			fileCount++
+		}
 	}
 	return gitView{
-		Branch: run("rev-parse", "--abbrev-ref", "HEAD"),
-		Root:   run("rev-parse", "--show-toplevel"),
-		Status: run("status", "--porcelain=v1"),
-		Stat:   run("diff", "--stat", "--no-color"),
-		Diff:   truncate(run("diff", "--no-color"), 200_000),
+		Branch: branch, Root: root, Status: status, Stat: stat, Diff: diff,
+		StatusTruncated: statusTruncated, StatTruncated: statTruncated, DiffTruncated: diffTruncated,
+		FileCount: fileCount,
 	}, nil
 }

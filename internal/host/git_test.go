@@ -46,9 +46,22 @@ func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("one\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	git("add", "file.txt")
-	git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add file")
+	if err := os.WriteFile(filepath.Join(dir, "gone.txt"), []byte("gone\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "file.txt", "gone.txt")
+	git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add files")
 	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "file.txt")
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("three\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "gone.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,8 +73,14 @@ func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if view.Branch != "main" {
 		t.Fatalf("branch: %q", view.Branch)
 	}
-	if !strings.Contains(view.Status, "file.txt") || !strings.Contains(view.Diff, "+two") {
-		t.Fatalf("status/diff: %+v", view)
+	if !strings.Contains(view.Status, "file.txt") || !strings.Contains(view.Status, "gone.txt") || !strings.Contains(view.Status, "new.txt") {
+		t.Fatalf("status misses changed, deleted or new files: %+v", view)
+	}
+	if !strings.Contains(view.Diff, "+three") || !strings.Contains(view.Diff, "-gone") {
+		t.Fatalf("diff misses staged/unstaged or deleted content: %+v", view)
+	}
+	if view.FileCount != 3 {
+		t.Fatalf("file count: %d (%+v)", view.FileCount, view)
 	}
 	if view.Root == "" {
 		t.Fatal("root missing")
