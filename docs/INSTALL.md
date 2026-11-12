@@ -6,14 +6,14 @@ machines with coding agents installed.
 
 ## 1. Run the hub with Docker Compose
 
-Create a directory and copy the bundled files:
+The repository is private during alpha. Clone it with an authenticated Git
+client or the GitHub CLI; the raw download URLs used by public projects do not
+work here.
 
 ```bash
-mkdir agentnexus && cd agentnexus
-curl -LO https://raw.githubusercontent.com/AlexanderWagnerDev/agent-nexus/main/compose.yaml
-curl -LO https://raw.githubusercontent.com/AlexanderWagnerDev/agent-nexus/main/.env.example
-curl --create-dirs -LO https://raw.githubusercontent.com/AlexanderWagnerDev/agent-nexus/main/deploy/Caddyfile
-mv .env.example .env
+gh repo clone AlexanderWagnerDev/agent-nexus
+cd agent-nexus
+cp .env.example .env
 ```
 
 Edit `.env`:
@@ -86,33 +86,42 @@ IP address is not a valid WebAuthn origin).
 
 ## 3. Install and pair a host client
 
-Build the host daemon from `main`. There are no downloadable release archives
-during alpha.
+There are no published release archives during alpha. The daemon is built for
+`windows/amd64`, `windows/arm64`, `linux/amd64`, `linux/arm64`,
+`darwin/amd64` and `darwin/arm64` by the **Dev host binaries** workflow and
+uploaded as authenticated GitHub Actions artifacts (30-day retention). The
+installer scripts download the newest successful build from `main`, verify its
+SHA-256 and place it in the per-user install directory. They need the GitHub
+CLI (`gh auth login`) with read access to the private repository, but no Go
+toolchain.
+
+Clone the repository once on the machine that runs the installer so the script
+is available locally:
 
 ```bash
-go build -trimpath -o nexusd ./cmd/nexusd
+gh repo clone AlexanderWagnerDev/agent-nexus
 ```
 
-CI cross-compiles the daemon for `windows/amd64`, `windows/arm64`,
-`linux/amd64`, `linux/arm64`, `darwin/amd64` and `darwin/arm64`. Build on the
-target machine or cross-compile with `GOOS`/`GOARCH`.
+If you prefer a source build, `go build -trimpath -o nexusd ./cmd/nexusd`
+still works. Go 1.27.4 or newer is required.
 
 ### Windows (including Windows Server 2025)
 
 ```powershell
-go build -trimpath -o nexusd.exe ./cmd/nexusd
-.\nexusd.exe pair --hub https://nexus.example.com --code XXXX-XXXX --name my-laptop
+gh repo clone AlexanderWagnerDev/agent-nexus C:\AgentNexus
+powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `
+  -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
 ```
 
 The daemon prints a **Pairing SAS** (for example `123-456`). In the hub, open
 **Hosts**, compare the SAS and click **Confirm host**. The host stays blocked
 until this confirmation.
 
-Install the per-user background task:
+The installer also installs and starts the per-user background task. Check it
+with:
 
 ```powershell
-.\nexusd.exe service install
-.\nexusd.exe service status
+& "$env:LOCALAPPDATA\AgentNexus\nexusd.exe" service status
 ```
 
 The task starts at logon of the current user, runs with least privilege, ignores
@@ -123,37 +132,31 @@ MCP configuration are available. It needs no administrator rights and no WSL.
 To remove it:
 
 ```powershell
-.\nexusd.exe service uninstall
+& "$env:LOCALAPPDATA\AgentNexus\nexusd.exe" service uninstall
 ```
 
 ### Linux
 
 ```bash
-tar xzf agent-nexus_*_linux_amd64.tar.gz
-cd agent-nexus_*
-./nexusd pair --hub https://nexus.example.com --code XXXX-XXXX --name build-box
-./nexusd service install
-./nexusd service status
+gh repo clone AlexanderWagnerDev/agent-nexus
+./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-The systemd **user** unit is written to
-`~/.config/systemd/user/agentnexus.service`. To run it without an interactive
-login, enable lingering once:
+The script installs to `~/.local/bin/nexusd` and writes the systemd **user**
+unit to `~/.config/systemd/user/agentnexus.service`. To run it without an
+interactive login, enable lingering once:
 
 ```bash
 loginctl enable-linger "$USER"
 ```
 
-Uninstall with `./nexusd service uninstall`.
+Uninstall with `nexusd service uninstall`.
 
 ### macOS
 
 ```bash
-tar xzf agent-nexus_*_darwin_arm64.tar.gz
-cd agent-nexus_*
-./nexusd pair --hub https://nexus.example.com --code XXXX-XXXX --name macbook
-./nexusd service install
-./nexusd service status
+gh repo clone AlexanderWagnerDev/agent-nexus
+./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name macbook
 ```
 
 The LaunchAgent starts at login and is kept alive. Grant Full Disk Access /
@@ -244,8 +247,30 @@ WebSocket path through the proxy.
 
 1. Back up `hub.db` (see [OPERATIONS.md](OPERATIONS.md)).
 2. Change `NEXUS_TAG` to the new image tag and run `docker compose up -d`.
-3. Replace `nexusd` on each host and run `nexusd service install` again.
+3. Update `nexusd` on each host with the installer again
+   (`install-host.ps1` or `install-host.sh`). It keeps `nexusd.previous` for a
+   manual rollback and refuses nothing by itself: the updater in step 3a
+   coordinates with active runs.
 4. Check `nexusd doctor`, `/healthz` and `/readyz`.
+
+For a release-independent update on a host, the same installer can be re-run
+at any time. The signed `nexusd update` command remains the path for a future
+release feed; it is not usable until the first version is approved.
+
+## Uninstalling a host
+
+```powershell
+# Windows
+& "$env:LOCALAPPDATA\AgentNexus\nexusd.exe" service uninstall
+```
+
+```bash
+# Linux and macOS
+nexusd service uninstall
+```
+
+Then revoke the host on the **Hosts** page. Revoking fails active runs and
+requires a new pairing code for that machine.
 
 ## Troubleshooting
 
