@@ -334,7 +334,12 @@ Writing to a session from two processes at once can interleave or corrupt histor
 | OpenCode | Process scan (`opencode` processes, `--session <id>` in argv, `cwd`) + session `updated` timestamp ❓ | Medium |
 | Others | Process scan + modification time | Low |
 
-Process inspection uses `/proc` on Linux, `libproc`/`sysctl` equivalents on macOS (a CGO-free method for reading another process's `cwd` on macOS ❓ — SP-1; fallback `lsof -p`), and `NtQueryInformationProcess`/WMI on Windows. When confidence is not high, the UI shows **"possibly active elsewhere"** and offers *fork* as the safe default instead of resume.
+Process inspection is intentionally best effort: the daemon reads command lines
+with `ps -eo args=` on Linux/macOS and `Get-CimInstance Win32_Process` on
+Windows, caches the result for under a minute, and matches the agent name plus
+native session id. When it reports a match, the UI labels the session **Open in
+native terminal**, explains that the signal is heuristic, and offers read-only,
+fork or a forced resume instead of treating the scan as proof.
 
 Decision table when a user requests *resume*:
 
