@@ -1324,3 +1324,24 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .detail-aside { position: static; }
 }
 
+
+/* ---------- tasks ---------- */
+
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+.task-table .task-row { cursor: pointer; }
+.task-table .task-row:hover td { background: var(--bg-hover); }
+.task-title { display: block; font-weight: 550; }
+.task-error { display: block; color: var(--red); font-size: 10.5px; margin-top: 2px; }
+.task-priority { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+.task-priority.high { color: var(--amber); }
+.task-priority.urgent { color: var(--red); font-weight: 600; }
+.task-priority.low { color: var(--muted-2); }
+.dep-list { display: grid; gap: 4px; }
+.dep-row { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.dep-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-delegate-box { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); margin-bottom: 8px; }
+.task-delegate-box[hidden] { display: none; }
+
+@media (max-width: 640px) {
+  .form-grid { grid-template-columns: 1fr; }
+}

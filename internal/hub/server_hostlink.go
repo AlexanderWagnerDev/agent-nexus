@@ -388,6 +388,7 @@ func (s *Server) adoptNativeSession(runID, nativeID, reportedAgent, reportedCwd,
 		s.log.Warn("cannot bind run to forked session", "run_id", runID, "error", err)
 		return
 	}
+	s.store.AttachTaskSession(runID, sessionID)
 	s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: run.HostID})
 	s.log.Info("run adopted its forked session", "run_id", runID, "session_id", sessionID, "host_id", run.HostID)
 }

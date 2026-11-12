@@ -103,6 +103,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
+	store.ReconcileTasks()
 	if queued, _ := store.HasQueuedPrompts(); queued {
 		s.kickQueue()
 	}
@@ -205,6 +206,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/fanouts", s.requireAuth(s.handleCreateFanout))
 	mux.HandleFunc("GET /api/v1/fanouts", s.requireAuth(s.handleListFanouts))
 	mux.HandleFunc("GET /api/v1/fanouts/{id}", s.requireAuth(s.handleGetFanout))
+	mux.HandleFunc("GET /api/v1/tasks", s.requireAuth(s.handleTasks))
+	mux.HandleFunc("POST /api/v1/tasks", s.requireAuth(s.handleCreateTask))
+	mux.HandleFunc("GET /api/v1/tasks/{id}", s.requireAuth(s.handleTask))
+	mux.HandleFunc("PATCH /api/v1/tasks/{id}", s.requireAuth(s.handleUpdateTask))
+	mux.HandleFunc("DELETE /api/v1/tasks/{id}", s.requireAuth(s.handleDeleteTask))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/dependencies", s.requireAuth(s.handleTaskDependency))
+	mux.HandleFunc("DELETE /api/v1/tasks/{id}/dependencies/{dep}", s.requireAuth(s.handleDeleteTaskDependency))
+	mux.HandleFunc("POST /api/v1/tasks/{id}/delegate", s.requireAuth(s.handleDelegateTask))
 	mux.HandleFunc("GET /api/v1/templates", s.requireAuth(s.handleListTemplates))
 	mux.HandleFunc("POST /api/v1/templates", s.requireAuth(s.handleCreateTemplate))
 	mux.HandleFunc("PUT /api/v1/templates/{id}", s.requireAuth(s.handleUpdateTemplate))

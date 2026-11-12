@@ -8,6 +8,7 @@ test('routes the home and section pages', () => {
   assert.deepEqual(parseRoute('#/hosts/host-1'), { page: 'host', id: 'host-1' });
   assert.equal(parseRoute('#/projects').page, 'projects');
   assert.equal(parseRoute('#/sessions').page, 'sessions');
+  assert.equal(parseRoute('#/tasks').page, 'tasks');
   assert.equal(parseRoute('#/usage').page, 'usage');
   assert.equal(parseRoute('#/fanout').page, 'fanout');
   assert.equal(parseRoute('#/runs').page, 'runs');

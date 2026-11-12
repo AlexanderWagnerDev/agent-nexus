@@ -19,6 +19,7 @@ func (s *Server) setRunState(id, state string) {
 	rs.state = state
 	rs.mu.Unlock()
 	s.store.UpdateRunState(id, state)
+	s.store.SyncTaskRunState(id, state)
 	if sess, _, err := s.store.RunByID(id); err == nil && sess.SessionID != "" {
 		if state == protocol.StateRunning {
 			s.store.SetSessionState(sess.SessionID, protocol.StateRunning)
@@ -63,9 +64,11 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	}
 	if ev.Type == "approval.requested" && ev.ApprovalID != "" {
 		s.metrics.approvalRequested(runID, ev.ApprovalID)
+		s.store.SyncTaskRunState(runID, protocol.StateWaiting)
 	}
 	if ev.Type == "approval.resolved" && ev.ApprovalID != "" {
 		s.metrics.approvalAnswered(runID, ev.ApprovalID)
+		s.store.SyncTaskRunState(runID, protocol.StateRunning)
 	}
 	rs.events = append(rs.events, ev)
 	if len(rs.events) > 500 {
@@ -78,6 +81,7 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 			s.metrics.approvalsEnded(runID)
 		}
 		s.store.UpdateRunState(runID, ev.State)
+		s.store.SyncTaskRunState(runID, ev.State)
 		if run, _, err := s.store.RunByID(runID); err == nil && run.SessionID != "" {
 			switch ev.State {
 			case protocol.StateRunning, protocol.StateWaiting:

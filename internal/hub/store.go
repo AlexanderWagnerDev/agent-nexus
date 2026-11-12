@@ -340,6 +340,37 @@ CREATE INDEX IF NOT EXISTS session_tags_user_idx ON session_tags(user_id, tag);
 CREATE INDEX IF NOT EXISTS sessions_created_idx ON sessions(created_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_title_idx ON sessions(title COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS sessions_messages_idx ON sessions(message_count DESC);
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  project TEXT NOT NULL DEFAULT '',
+  host_id TEXT NOT NULL DEFAULT '',
+  agent TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  mode TEXT NOT NULL DEFAULT 'structured',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  status TEXT NOT NULL DEFAULT 'draft',
+  session_id TEXT NOT NULL DEFAULT '',
+  run_id TEXT NOT NULL DEFAULT '',
+  result TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  started_at INTEGER,
+  completed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS tasks_user_idx ON tasks(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS tasks_status_idx ON tasks(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS tasks_run_idx ON tasks(run_id);
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  depends_on TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  PRIMARY KEY (task_id, depends_on)
+);
+CREATE INDEX IF NOT EXISTS task_dependencies_dep_idx ON task_dependencies(depends_on);
 `)
 	if err != nil {
 		return err
