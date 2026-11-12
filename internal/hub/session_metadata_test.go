@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +46,11 @@ func TestSessionLocalMetadataAndFiltering(t *testing.T) {
 	expectStatus(t, status, http.StatusOK, body, "add tag")
 	status, body = hub.do(nil, http.MethodPost, "/api/v1/sessions/"+betaID+"/tags", map[string]any{"tag": "backend"}, nil)
 	expectStatus(t, status, http.StatusOK, body, "add tag")
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/sessions/tags", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "tag list")
+	if !strings.Contains(string(body), "frontend") || !strings.Contains(string(body), "backend") {
+		t.Fatalf("tag list missing entries: %s", body)
+	}
 
 	// The native title must survive the local override.
 	raw, err := hub.store.SessionByID(owner.ID, alphaID, true)
