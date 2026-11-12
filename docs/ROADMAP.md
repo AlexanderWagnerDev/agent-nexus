@@ -100,6 +100,15 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B7: voice input (2026-11-12)
+
+The composer exposes a microphone button only when the browser implements the
+Web Speech API. Dictation uses `de-DE` or `en-US` from the UI language, appends
+interim results to the existing draft, keeps the text editable and never sends
+automatically. Browsers without the API hide the control. No audio or
+transcript is stored by the hub. Manual browser verification only; the test
+environment cannot exercise a real microphone.
+
 ### B6: external notification channels (2026-11-12)
 
 Web Push can be complemented by ntfy, Gotify, Telegram, Discord, Slack and

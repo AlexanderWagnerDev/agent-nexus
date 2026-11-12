@@ -8,7 +8,7 @@ import { wsSend } from '../ws.js';
 import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, toolCardHtml, workingHtml } from '../components/transcript.js';
 import { startRun } from './session-detail.js';
 import { describeTool } from '../chat-format.js';
-import { t } from '../i18n.js';
+import { getLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
 import { agentMeta, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
@@ -89,6 +89,7 @@ export async function pageStructuredRun(id, run) {
                 <input type="file" id="attach-input" multiple hidden>
                 <button class="icon-btn" id="attach-button" type="button" title="${t('Attach files')}" aria-label="${t('Attach files')}" hidden>${svgIcon('paperclip')}</button>
                 <button class="icon-btn" id="template-button" type="button" title="${t('Prompt templates')}" aria-label="${t('Prompt templates')}">${svgIcon('file')}</button>
+                <button class="icon-btn" id="voice-button" type="button" title="${t('Start voice input')}" aria-label="${t('Start voice input')}" hidden>${svgIcon('mic')}</button>
                 <button class="icon-btn composer-stop" id="interrupt-run" type="button" title="${t('Interrupt current turn')}" aria-label="${t('Interrupt current turn')}" hidden>${svgIcon('stop')}</button>
                 <button class="icon-btn" id="queue-prompt" type="button" title="${t('Add to prompt queue')}" aria-label="${t('Add to prompt queue')}">${svgIcon('clock')}</button>
                 <button class="send-button" id="send-prompt" type="submit" title="${t('Send message')}" aria-label="${t('Send message')}">${svgIcon('send')}</button>
@@ -763,6 +764,50 @@ export async function pageStructuredRun(id, run) {
     noteText(t('Interrupt requested'));
   });
 
+  // Optional Web Speech API input. The transcript is inserted into the
+  // composer and is never sent automatically.
+  const voiceButton = document.getElementById('voice-button');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let voiceBase = '';
+  if (SpeechRecognition) {
+    voiceButton.hidden = false;
+    voiceButton.addEventListener('click', () => {
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+        voiceButton.classList.remove('active');
+        voiceButton.title = t('Start voice input');
+        voiceButton.setAttribute('aria-label', t('Start voice input'));
+        return;
+      }
+      recognition = new SpeechRecognition();
+      recognition.lang = getLang() === 'de' ? 'de-DE' : 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      voiceBase = textarea.value;
+      voiceButton.classList.add('active');
+      voiceButton.title = t('Stop voice input');
+      voiceButton.setAttribute('aria-label', t('Stop voice input'));
+      recognition.onresult = (event) => {
+        let text = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
+        textarea.value = `${voiceBase}${voiceBase && !voiceBase.endsWith(' ') ? ' ' : ''}${text}`;
+        autosize();
+        storeSet(draftKey(id), textarea.value);
+      };
+      recognition.onerror = (event) => {
+        if (event.error !== 'aborted' && event.error !== 'no-speech') toast(t('Voice input failed: {error}', { error: event.error }), true);
+      };
+      recognition.onend = () => {
+        recognition = null;
+        voiceButton.classList.remove('active');
+        voiceButton.title = t('Start voice input');
+        voiceButton.setAttribute('aria-label', t('Start voice input'));
+      };
+      recognition.start();
+    });
+  }
   const draft = storeGet(draftKey(id), '');
   if (draft) textarea.value = draft;
   const autosize = () => {
