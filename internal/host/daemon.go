@@ -791,12 +791,13 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		return map[string]string{"status": "ok"}, d.sendSessions(true)
 	case "git":
 		var p struct {
-			Cwd string `json:"cwd"`
+			Cwd      string `json:"cwd"`
+			StatOnly bool   `json:"stat_only"`
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
-		return d.gitView(context.Background(), p.Cwd)
+		return d.gitViewOptions(context.Background(), p.Cwd, p.StatOnly)
 	case "update.check":
 		var p struct {
 			Channel string `json:"channel"`

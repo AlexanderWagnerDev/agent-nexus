@@ -85,6 +85,13 @@ func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if view.Root == "" {
 		t.Fatal("root missing")
 	}
+	statOnly, err := d.gitViewOptions(context.Background(), dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statOnly.Diff != "" || statOnly.FileCount != 3 || !strings.Contains(statOnly.Status, "file.txt") {
+		t.Fatalf("stat-only view: %+v", statOnly)
+	}
 	if _, err := d.gitView(context.Background(), t.TempDir()); err == nil {
 		t.Fatal("git view outside allowed roots was accepted")
 	}

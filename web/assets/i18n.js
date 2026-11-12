@@ -1038,6 +1038,9 @@ Object.assign(de, {
   revoked: 'Widerrufen',
   'This signs out every other browser immediately. The current device stays signed in.': 'Dies meldet jeden anderen Browser sofort ab. Das aktuelle Gerät bleibt angemeldet.',
   '{n} devices signed out': '{n} Geräte abgemeldet',
+  '{n} changed files': '{n} geänderte Dateien',
+  'Files also changed by another run': 'Dateien, die auch ein anderer Run geändert hat',
+  'Overlapping files': 'Überschneidende Dateien',
 });
 
 const supported = ['en', 'de'];

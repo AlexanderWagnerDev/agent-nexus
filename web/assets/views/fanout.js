@@ -17,17 +17,28 @@ function targetRow(target, hosts) {
   </div>`;
 }
 
-function runCard(run) {
+function runCard(run, git, overlap) {
+  const changed = git?.file_count || 0;
   return `<article class="card fanout-run">
     <div class="split wrap"><strong>${esc(run.host_name || run.host_id)} · ${esc(agentMeta(run.agent).label)}</strong>${badge(t(run.state || 'unknown'), run.state || 'unknown')}</div>
     <div class="muted small">${esc(run.cwd || '')}</div>
     <div class="muted small">${esc(run.title || t('Waiting for native session'))}</div>
+    ${git ? `<div class="muted small">${t('{n} changed files', { n: changed })}${git.branch ? ` · ${esc(git.branch)}` : ''}${git.status_truncated ? ' · truncated' : ''}</div>` : ''}
+    ${overlap.length ? `<div class="notice error small">${t('Files also changed by another run')}: ${overlap.map(esc).join(', ')}</div>` : ''}
     ${run.error ? `<div class="notice error small">${esc(run.error)}</div>` : ''}
     <div class="split wrap mt-2">
       <a class="btn small" href="#/runs/${esc(run.run_id)}">${t('Open chat')}</a>
       ${run.session_id ? `<a class="btn small" href="#/sessions/${esc(run.session_id)}/changes">${t('Review changes')}</a>` : ''}
     </div>
   </article>`;
+}
+
+function statusFiles(status) {
+  return String(status || '').split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+    let path = line.slice(3).trim();
+    if (path.includes(' -> ')) path = path.split(' -> ').pop();
+    return path.replace(/^"|"$/g, '');
+  }).filter(Boolean);
 }
 
 export async function pageFanout() {
@@ -58,6 +69,7 @@ export async function pageFanout() {
     <section class="card" id="fanout-results" hidden>
       <div class="split"><h2 class="mt-0">${t('Fan-out result')}</h2><span class="muted small" id="fanout-created"></span></div>
       <div class="fanout-grid" id="fanout-runs"></div>
+      <div id="fanout-conflicts" class="mt-2"></div>
     </section>
     <section class="card">
       <h2 class="mt-0">${t('Recent fan-outs')}</h2>
@@ -101,12 +113,37 @@ export async function pageFanout() {
   });
 
   let poll = null;
+  const gitCache = new Map();
   const showFanout = async (id) => {
     const data = await api(`/fanouts/${encodeURIComponent(id)}`);
     if (pageGen !== state.pageGen) return;
+    await Promise.all(data.runs.map(async (run) => {
+      if (!run.session_id || gitCache.has(run.session_id)) return;
+      try {
+        gitCache.set(run.session_id, await api(`/sessions/${encodeURIComponent(run.session_id)}/git?stat=1`));
+      } catch {
+        gitCache.set(run.session_id, null);
+      }
+    }));
+    const byFile = new Map();
+    for (const run of data.runs) {
+      const git = gitCache.get(run.session_id);
+      for (const file of statusFiles(git?.status)) {
+        if (!byFile.has(file)) byFile.set(file, []);
+        byFile.get(file).push(run.host_name || run.host_id || 'run');
+      }
+    }
+    const shared = new Set([...byFile.entries()].filter(([, hosts]) => hosts.length > 1).map(([file]) => file));
     document.getElementById('fanout-results').hidden = false;
     document.getElementById('fanout-created').textContent = fmtStamp(data.created_at);
-    document.getElementById('fanout-runs').innerHTML = data.runs.map(runCard).join('');
+    document.getElementById('fanout-runs').innerHTML = data.runs.map((run) => {
+      const overlap = [...shared].filter((file) => statusFiles(gitCache.get(run.session_id)?.status).includes(file));
+      return runCard(run, gitCache.get(run.session_id), overlap);
+    }).join('');
+    const conflicts = document.getElementById('fanout-conflicts');
+    if (conflicts) {
+      conflicts.innerHTML = shared.size ? `<div class="notice error small"><strong>${t('Overlapping files')}</strong><div class="mono-small">${[...shared].map(esc).join('<br>')}</div></div>` : '';
+    }
     const active = data.runs.some((run) => !['exited', 'completed', 'failed'].includes(run.state));
     clearInterval(poll);
     if (active) poll = setInterval(() => showFanout(id).catch(() => {}), 3000);

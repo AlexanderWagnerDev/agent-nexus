@@ -105,6 +105,10 @@ type gitView struct {
 }
 
 func (d *Daemon) gitView(ctx context.Context, cwd string) (gitView, error) {
+	return d.gitViewOptions(ctx, cwd, false)
+}
+
+func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) (gitView, error) {
 	if !d.policy.WithinRoots(cwd) {
 		return gitView{}, errors.New("working directory is outside the allowed roots")
 	}
@@ -131,11 +135,16 @@ func (d *Daemon) gitView(ctx context.Context, cwd string) (gitView, error) {
 	root, _ := run(4096, "rev-parse", "--show-toplevel")
 	status, statusTruncated := run(100_000, "status", "--porcelain=v1")
 	stat, statTruncated := run(100_000, "diff", "HEAD", "--stat", "--no-color")
-	diff, diffTruncated := run(200_000, "diff", "HEAD", "--no-color")
+	diff, diffTruncated := "", false
+	if !statOnly {
+		diff, diffTruncated = run(200_000, "diff", "HEAD", "--no-color")
+	}
 	if strings.Contains(stat, "fatal: ambiguous argument 'HEAD'") || strings.Contains(diff, "fatal: ambiguous argument 'HEAD'") {
 		// A repository without a first commit has no HEAD.
 		stat, statTruncated = run(100_000, "diff", "--stat", "--no-color")
-		diff, diffTruncated = run(200_000, "diff", "--no-color")
+		if !statOnly {
+			diff, diffTruncated = run(200_000, "diff", "--no-color")
+		}
 	}
 	fileCount := 0
 	for _, line := range strings.Split(status, "\n") {
