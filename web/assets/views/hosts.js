@@ -19,10 +19,12 @@ function indexLabel(index) {
 }
 
 export async function pageHosts() {
+  const pageGen = state.pageGen;
   renderShell('hosts');
   const view = setPage(t('Hosts'), t('Machines running nexusd. Pairing is always initiated from this hub.'), `<button class="btn primary small" id="pair-host">${t('Pair a host')}</button>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const [{ hosts }] = await Promise.all([api('/hosts')]);
+  if (pageGen !== state.pageGen) return;
   document.getElementById('pair-host').addEventListener('click', pairHostDialog);
   state.wsHandlers.add((msg) => {
     if (msg.type === 'host.updated') pageHosts().catch(() => {});

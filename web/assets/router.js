@@ -27,6 +27,7 @@ export async function route() {
     return await pageHandler?.();
   } catch (err) {
     if (err.status === 401) return;
+    console.error('route failed', err);
     const target = document.getElementById('view');
     if (target) target.innerHTML = `<div class="notice error">${esc(err.message)}</div>`;
   } finally {

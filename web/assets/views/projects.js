@@ -7,10 +7,12 @@ import { svgIcon } from '../icons.js';
 import { esc, fmtRelative } from '../ui-format.js';
 
 export async function pageProjects() {
+  const pageGen = state.pageGen;
   renderShell('projects');
   const view = setPage(t('Projects'), t('Working directories discovered from native sessions, grouped by host and worktree.'), `<button class="btn primary small" id="projects-new">${t('New session')}</button>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const { projects } = await api('/projects?limit=500');
+  if (pageGen !== state.pageGen) return;
   document.getElementById('projects-new').addEventListener('click', newSessionPicker);
   const render = (filter = '') => {
     const list = document.getElementById('project-list');

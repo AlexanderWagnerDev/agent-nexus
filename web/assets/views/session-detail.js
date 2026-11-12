@@ -11,10 +11,12 @@ import { svgIcon } from '../icons.js';
 import { agentMeta, cwdKey, esc, fmtRelative, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
 
 export async function pageSession(id) {
+  const pageGen = state.pageGen;
   renderShell('sessions');
   const view = setPage(t('Session'), t('Loading transcript…'), `<a class="btn small" href="#/sessions">${t('Back')}</a>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const s = await api(`/sessions/${id}`);
+  if (pageGen !== state.pageGen) return;
   const agent = agentMeta(s.agent);
   let tags = Array.isArray(s.tags) ? [...s.tags] : [];
   let versionWarning = '';
@@ -26,6 +28,7 @@ export async function pageSession(id) {
     versionWarning = info?.version_warning || '';
     structuredAllowed = Boolean(info?.capabilities?.includes('structured'));
   } catch { /* keep the previous capability assumption */ }
+  if (pageGen !== state.pageGen) return;
   openTab({ id: s.id, key: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.local_title || s.title || 'Untitled session', agent: s.agent });
   rememberRecent({ id: s.id, title: s.local_title || s.title || 'Untitled session', agent: s.agent, hint: `${agent.label} · ${s.host_name} · ${projectName(s.cwd)}`, href: `#/sessions/${s.id}` });
   const title = s.local_title || s.title || 'Session';
@@ -151,6 +154,7 @@ export async function pageSession(id) {
   const append = async () => {
     const box = document.getElementById('transcript');
     const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${offset}&limit=100`);
+    if (pageGen !== state.pageGen) return;
     if (offset === 0) box.innerHTML = '';
     box.insertAdjacentHTML('beforeend', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : (!offset ? `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>` : ''));
     offset = tr.next || 0;
@@ -161,8 +165,10 @@ export async function pageSession(id) {
 }
 
 export async function pageSessionChanges(id) {
+  const pageGen = state.pageGen;
   renderShell('sessions');
   const s = await api(`/sessions/${id}`);
+  if (pageGen !== state.pageGen) return;
   const agent = agentMeta(s.agent);
   const title = s.title || 'Session';
   openTab({ id: `${s.id}:changes`, key: `${s.id}:changes`, kind: 'session', href: `#/sessions/${s.id}/changes`, title: `${title} / Changes`, agent: s.agent });
@@ -172,6 +178,7 @@ export async function pageSessionChanges(id) {
   let git;
   try {
     git = await api(`/sessions/${s.id}/git`);
+    if (pageGen !== state.pageGen) return;
   } catch (err) {
     view.innerHTML = `<div class="notice error">${esc(err.message)}</div>`;
     return;

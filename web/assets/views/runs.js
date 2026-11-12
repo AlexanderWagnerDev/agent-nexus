@@ -8,6 +8,7 @@ import { svgIcon } from '../icons.js';
 import { countLabel, cwdKey, esc, fmtDuration, projectName } from '../ui-format.js';
 
 export async function pageRuns() {
+  const pageGen = state.pageGen;
   renderShell('runs');
   const view = setPage(t('Control room'), t('All active terminal and structured runs across your machines.'), `<button class="btn primary small" id="runs-new">${t('New session')}</button><a class="btn small" href="#/workspace">${t('Split view')}</a><a class="btn small" href="#/sessions">${t('All sessions')}</a>`);
   view.innerHTML = `
@@ -68,6 +69,7 @@ export async function pageRuns() {
   };
   const load = async () => {
     const data = await api('/runs');
+    if (pageGen !== state.pageGen) return;
     runs = data.runs || [];
     render();
   };

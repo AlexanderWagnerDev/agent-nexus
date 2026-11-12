@@ -5,6 +5,7 @@ import { t } from '../i18n.js';
 import { esc, fmtRelative } from '../ui-format.js';
 
 export async function pageSearch() {
+  const pageGen = state.pageGen;
   renderShell('search');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   const initial = params.get('q') || '';
@@ -47,6 +48,7 @@ export async function pageSearch() {
     const box = document.getElementById('search-results');
     box.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
     data = await api('/search?q=' + encodeURIComponent(query));
+    if (pageGen !== state.pageGen) return;
     const agents = [...new Set((data.results || []).map((r) => r.agent).filter(Boolean))].sort();
     const hosts = [...new Set((data.results || []).map((r) => r.host_name).filter(Boolean))].sort();
     const agentSelect = document.getElementById('search-agent');

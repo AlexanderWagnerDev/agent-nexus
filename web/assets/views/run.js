@@ -11,8 +11,10 @@ import { svgIcon } from '../icons.js';
 import { agentMeta, esc, projectName, shortId } from '../ui-format.js';
 
 export async function pageRun(id) {
+  const pageGen = state.pageGen;
   renderShell('sessions');
   const run = await api(`/runs/${id}`);
+  if (pageGen !== state.pageGen) return;
   state.run = run;
   if (run.mode === 'structured') return pageStructuredRun(id, run);
   const title = run.session_title || t('Terminal');

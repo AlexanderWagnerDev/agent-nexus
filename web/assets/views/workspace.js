@@ -7,9 +7,11 @@ import { svgIcon } from '../icons.js';
 import { countLabel, esc, projectName } from '../ui-format.js';
 
 export async function pageWorkspace() {
+  const pageGen = state.pageGen;
   renderShell('runs');
   const view = setPage(t('Workspace'), t('Side-by-side agent sessions from any host.'), `<button class="btn small" id="workspace-add">${t('Add session')}</button><a class="btn small" href="#/runs">${t('Control room')}</a>`);
   const { runs } = await api('/runs');
+  if (pageGen !== state.pageGen) return;
   if (!runs.length) {
     view.innerHTML = `<div class="card empty"><strong>${t('No open runs')}</strong>${t('Resume a native session or start a new agent before opening a split workspace.')}</div>`;
     return;

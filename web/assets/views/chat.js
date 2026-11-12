@@ -14,6 +14,7 @@ import { renderMarkdown } from '../markdown.js';
 import { agentMeta, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
 
 export async function pageStructuredRun(id, run) {
+  const pageGen = state.pageGen;
   let session = null;
   if (run.session_id) {
     session = await api(`/sessions/${encodeURIComponent(run.session_id)}`).catch(() => null);
@@ -26,6 +27,7 @@ export async function pageStructuredRun(id, run) {
     const info = (hostInfo?.agents || []).find((a) => a.name === (run.agent || session?.agent));
     versionWarning = info?.version_warning || '';
   } catch { /* the banner is optional */ }
+  if (pageGen !== state.pageGen) return;
   const title = session?.title || run.session_title || t('Structured chat');
   const cwd = session?.cwd || run.cwd || '';
   const branch = session?.git_branch || run.git_branch || '';

@@ -6,9 +6,11 @@ import { t } from '../i18n.js';
 import { esc, fmtTime, shortId } from '../ui-format.js';
 
 export async function pageUsers() {
+  const pageGen = state.pageGen;
   renderShell('users');
   const view = setPage(t('Users'), t('Hub roles and per-host permissions. Per-host grants are the unit of least privilege; host policy is still enforced separately.'));
   const data = await api('/users');
+  if (pageGen !== state.pageGen) return;
   const isOwner = state.me.role === 'owner';
   view.innerHTML = `
     <div class="table-wrap">

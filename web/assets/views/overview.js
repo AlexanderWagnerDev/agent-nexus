@@ -8,6 +8,7 @@ import { svgIcon } from '../icons.js';
 import { countLabel, cwdKey, esc, fmtDuration, fmtRelative, projectName } from '../ui-format.js';
 
 export async function pageOverview() {
+  const pageGen = state.pageGen;
   renderShell('overview');
   const view = setPage(t('Home'), t('Your coding agents across every paired machine.'), `<button class="btn primary small" id="overview-new">${t('New session')}</button><a class="btn small" href="#/runs">${t('Control room')}</a>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -17,6 +18,7 @@ export async function pageOverview() {
     api('/projects?limit=200'),
     api('/runs'),
   ]);
+  if (pageGen !== state.pageGen) return;
   document.getElementById('overview-new').addEventListener('click', newSessionPicker);
   const online = hosts.filter((h) => h.status === 'online');
   const totalSessions = projects.reduce((sum, project) => sum + project.sessions, 0);

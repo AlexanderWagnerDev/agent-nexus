@@ -7,10 +7,12 @@ import { t } from '../i18n.js';
 import { esc, fmtTime, shortId } from '../ui-format.js';
 
 export async function pageDevices() {
+  const pageGen = state.pageGen;
   renderShell('devices');
   const view = setPage(t('Devices'), t('Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.'), `<button class="btn primary small" id="pair-device">${t('Pair a device')}</button>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const data = await api('/devices');
+  if (pageGen !== state.pageGen) return;
   view.innerHTML = `
     <div class="table-wrap">
       <table class="devices-table"><thead><tr><th>${t('Device')}</th><th>${t('Created')}</th><th>${t('Last seen')}</th><th></th></tr></thead><tbody>
