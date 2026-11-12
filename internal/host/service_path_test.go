@@ -21,7 +21,7 @@ func TestServicePathContainsUserAndSystemBinDirectories(t *testing.T) {
 }
 
 func TestXMLEscapeText(t *testing.T) {
-	if got := xmlEscapeText(`C:\Users\<demo>&"x"`); strings.ContainsAny(got, `<>`) {
+	if got := xmlEscapeText(`C:\demo\AgentNexus & "x"`); strings.ContainsAny(got, `<>`) {
 		t.Fatalf("XML escaping left markup characters: %s", got)
 	}
 }
