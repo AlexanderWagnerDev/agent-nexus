@@ -1033,6 +1033,7 @@ Object.assign(de, {
   'No recent failures recorded.': 'Keine aktuellen Fehler aufgezeichnet.',
   'update available': 'Update verfügbar',
   'up to date': 'aktuell',
+  Template: 'Vorlage',
 });
 
 const supported = ['en', 'de'];

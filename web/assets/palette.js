@@ -18,6 +18,7 @@ export function paletteActions() {
     { label: t('Home'), hint: t('Overview and active work'), icon: 'home', run: () => { location.hash = '#/'; } },
     { label: t('Projects'), hint: t('Grouped by repository and worktree'), icon: 'projects', run: () => { location.hash = '#/projects'; } },
     { label: t('Sessions'), hint: t('All discovered native sessions'), icon: 'sessions', run: () => { location.hash = '#/sessions'; } },
+    { label: t('Tasks'), hint: t('Delegated work, status and dependencies'), icon: 'task', run: () => { location.hash = '#/tasks'; } },
     { label: t('Active runs'), hint: t('Terminal and structured runs'), icon: 'runs', run: () => { location.hash = '#/runs'; } },
     { label: t('Split workspace'), hint: t('Open two agent chats side by side'), icon: 'panelRight', run: () => { location.hash = '#/workspace'; } },
     { label: t('Hosts'), hint: t('Paired machines and agent inventory'), icon: 'hosts', run: () => { location.hash = '#/hosts'; } },
@@ -89,9 +90,33 @@ export async function openPalette() {
     }
     state.palette.timer = setTimeout(async () => {
       try {
-        const { sessions } = await api(`/sessions?limit=12&q=${encodeURIComponent(query)}`);
+        const [sessionData, hostData, projectData, taskData, templateData] = await Promise.all([
+          api(`/sessions?limit=12&q=${encodeURIComponent(query)}`),
+          api('/hosts').catch(() => ({ hosts: [] })),
+          api('/projects?limit=500').catch(() => ({ projects: [] })),
+          api('/tasks?limit=100&q=' + encodeURIComponent(query)).catch(() => ({ tasks: [] })),
+          api('/templates').catch(() => ({ templates: [] })),
+        ]);
         if (!state.palette) return;
-        renderPaletteResults([...paletteActions().filter((a) => a.label.toLowerCase().includes(query.toLowerCase())), ...sessions.map(paletteSession)]);
+        const lower = query.toLowerCase();
+        const actions = paletteActions().filter((a) => a.label.toLowerCase().includes(lower));
+        const hosts = (hostData.hosts || [])
+          .filter((h) => `${h.name} ${h.os} ${(h.agents || []).map((a) => a.name).join(' ')}`.toLowerCase().includes(lower))
+          .slice(0, 6)
+          .map((h) => ({ label: h.name, hint: `${t('Host')} · ${h.status}`, icon: 'hosts', run: () => { location.hash = `#/hosts/${h.id}`; } }));
+        const projects = (projectData.projects || [])
+          .filter((p) => `${p.name} ${p.cwd} ${p.host_name} ${p.branch || ''}`.toLowerCase().includes(lower))
+          .slice(0, 6)
+          .map((p) => ({ label: p.name, hint: `${p.host_name} · ${p.cwd}`, icon: 'projects', run: () => { location.hash = `#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}`; } }));
+        const tasks = (taskData.tasks || []).slice(0, 6).map((task) => ({
+          label: task.title, hint: `${t('Task')} · ${t(task.status.replaceAll('_', ' '))}${task.host_name ? ` · ${task.host_name}` : ''}`, icon: 'task',
+          run: () => { location.hash = '#/tasks'; },
+        }));
+        const templates = (templateData.templates || [])
+          .filter((tpl) => `${tpl.name} ${tpl.body || ''}`.toLowerCase().includes(lower))
+          .slice(0, 4)
+          .map((tpl) => ({ label: tpl.name, hint: `${t('Template')} · ${t('Settings')}`, icon: 'file', run: () => { location.hash = '#/settings'; } }));
+        renderPaletteResults([...actions, ...hosts, ...projects, ...tasks, ...templates, ...(sessionData.sessions || []).map(paletteSession)]);
       } catch { /* keep previous results */ }
     }, 160);
   });
