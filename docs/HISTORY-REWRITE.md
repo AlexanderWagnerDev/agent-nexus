@@ -64,15 +64,37 @@ The exact values are intentionally **not** written down in this file.
 
 ## Follow-up audit (2026-11-12)
 
-A fresh check found that the reachable `main` history still contains commits
-authored or committed with the personal address and, on merge commits, the
-personal display name. Examples exist both before and after this pass. The
-rewrite described above therefore does not currently satisfy the publication
-checklist for the whole branch.
+A fresh check found that the reachable `main` history still contained commits
+with the personal display name (on three GitHub merge commits), an example
+path with a first name in an old `docs/WSL.md`, and a cloud-session link in a
+commit message.
 
-This was **not** rewritten again: a history rewrite requires explicit maintainer
-approval because it invalidates every clone, open pull request and commit link.
-Until then the repository must stay private. Before publication either request a
-GitHub Support purge plus PR-ref cleanup, or recreate the repository from a
-freshly rewritten history with approval. New commits use the approved no-reply
-identity locally.
+## Second rewrite (prepared 2026-11-12)
+
+The maintainer decided that the project contact address on the project's own
+domain may stay in commit metadata. A second `git filter-repo` pass over the
+complete `main` history (157 commits):
+
+1. Mapped every maintainer identity, including the GitHub no-reply identity,
+   to `AlexanderWagnerDev` with the project contact address.
+2. Replaced the personal display name in all text blobs with
+   `AlexanderWagnerDev`.
+3. Replaced the example home paths with the `demo` user.
+4. Removed `Claude-Session:` lines from commit messages.
+
+Verification on the rewritten history:
+
+- `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` lists only
+  `AlexanderWagnerDev`, `GitHub <noreply@github.com>`, `dependabot[bot]` and
+  `renovate[bot]`.
+- No blob in the history contains the personal display name, a consumer
+  e-mail address, a non-demo home path, a private key or a known token format.
+- The final tree is identical to the tree before the rewrite.
+
+### Before publication
+
+The rewritten history replaces `main` only after explicit maintainer approval.
+The old pull-request refs (`refs/pull/*/head`) on GitHub still point to
+pre-rewrite commits and cannot be removed by a push. Publish only after
+either recreating the repository from the rewritten history or a GitHub
+Support purge of those refs and cached objects.

@@ -12,13 +12,12 @@ personal data.
 | Repository | [AlexanderWagnerDev/agent-nexus](https://github.com/AlexanderWagnerDev/agent-nexus) |
 | Public author | `AlexanderWagnerDev` |
 | Copyright holder | `AlexanderWagnerDev` |
-| Commit identity | `AlexanderWagnerDev` (contact address configured locally, not published here) |
+| Commit identity | `AlexanderWagnerDev` with the project contact address on the project's own domain (visible in commit metadata, not repeated in files) |
 
 The project uses the GitHub account name and the approved pseudonymous commit
 identity for its development rounds. Do not add a legal name, a different
 private email address, a company name or an invented contact address to
-project files, package metadata, commits or releases. Older commits may retain
-historical no-reply identities; see the history notes below.
+project files, package metadata, commits or releases.
 
 ## Demo data rules
 
@@ -44,15 +43,13 @@ sessions.
 - New screenshots must be generated from the synthetic demo hub in
   `web/e2e/demo/`. Existing screenshots are being replaced as the demo fixture
   grows.
-- **Git history:** a rewrite was attempted on 2026-11-11, but a follow-up audit
-  on 2026-11-12 still found personal addresses and display names in reachable
-  commits, including merge commits. Do not make the repository public until
-  this is resolved with explicit maintainer approval; see
-  [HISTORY-REWRITE.md](HISTORY-REWRITE.md#follow-up-audit-2026-11-12).
-- **GitHub retention:** a force-push does not immediately erase server-side
-  objects. Old commits can still be fetched by SHA until GitHub Support purges
-  them, and merged pull-request refs still pin old commits. This must be
-  resolved before the repository becomes public.
+- **Git history:** a second rewrite of the complete `main` history maps every
+  maintainer commit to the approved identity and removes the personal display
+  name, example home paths with a real first name and session links; see
+  [HISTORY-REWRITE.md](HISTORY-REWRITE.md#second-rewrite-prepared-2026-11-12).
+- **GitHub retention:** a force-push does not erase old pull-request refs or
+  cached objects on GitHub. Before the repository becomes public, recreate it
+  from the rewritten history or have GitHub Support purge them.
 
 ## Pre-publication checklist
 
