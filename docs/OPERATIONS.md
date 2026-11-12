@@ -328,6 +328,22 @@ session count; `nexusd index rebuild` rebuilds it after changing
 the indexed transcript text and can be deleted at any time while the daemon is
 stopped.
 
+## Concurrency limits
+
+The hub can refuse new runs before they reach a host. All limits default to
+`0` (unlimited) and are evaluated per new run:
+
+| Flag | Environment | Scope |
+| --- | --- | --- |
+| `--max-runs-per-host` | `NEXUS_MAX_RUNS_PER_HOST` | live runs on one host |
+| `--max-runs-per-user` | `NEXUS_MAX_RUNS_PER_USER` | live runs started by one user |
+| `--max-runs-per-project` | `NEXUS_MAX_RUNS_PER_PROJECT` | live runs on one host/cwd pair |
+
+A rejected start returns HTTP 429 with `reason: run_limit`; no run row or host
+command is created. Existing runs are never stopped by a limit change. Prompt
+queues are additionally capped at 100 pending items per run
+(`reason: queue_limit`).
+
 ## Metrics
 
 `/metrics` is disabled by default. Enable it on the hub container and set a long
@@ -339,7 +355,6 @@ NEXUS_METRICS_TOKEN=replace-with-a-long-random-value
 ```
 
 Prometheus scrape configuration:
-
 ```yaml
 scrape_configs:
   - job_name: agentnexus

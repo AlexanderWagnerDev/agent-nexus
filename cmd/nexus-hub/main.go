@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -45,6 +46,9 @@ func main() {
 		hubName     = flag.String("name", envOr("NEXUS_HUB_NAME", "AgentNexus"), "hub display name")
 		metrics     = flag.Bool("metrics", envOr("NEXUS_METRICS", "") == "true", "expose /metrics")
 		metricsTok  = flag.String("metrics-token", envOr("NEXUS_METRICS_TOKEN", ""), "bearer token required by /metrics")
+		maxHost     = flag.Int("max-runs-per-host", envInt("NEXUS_MAX_RUNS_PER_HOST", 0), "concurrent run limit per host (0 = unlimited)")
+		maxUser     = flag.Int("max-runs-per-user", envInt("NEXUS_MAX_RUNS_PER_USER", 0), "concurrent run limit per user (0 = unlimited)")
+		maxProject  = flag.Int("max-runs-per-project", envInt("NEXUS_MAX_RUNS_PER_PROJECT", 0), "concurrent run limit per project (0 = unlimited)")
 		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
 		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
 		backup      = flag.String("backup", "", "write a consistent database snapshot to this file and exit")
@@ -100,14 +104,17 @@ func main() {
 	}
 
 	srv := hub.NewServer(hub.Config{
-		Addr:           *addr,
-		DataDir:        *dataDir,
-		PublicURL:      *publicURL,
-		TLSCert:        *tlsCert,
-		TLSKey:         *tlsKey,
-		HubName:        *hubName,
-		MetricsEnabled: *metrics,
-		MetricsToken:   *metricsTok,
+		Addr:              *addr,
+		DataDir:           *dataDir,
+		PublicURL:         *publicURL,
+		TLSCert:           *tlsCert,
+		TLSKey:            *tlsKey,
+		HubName:           *hubName,
+		MetricsEnabled:    *metrics,
+		MetricsToken:      *metricsTok,
+		MaxRunsPerHost:    *maxHost,
+		MaxRunsPerUser:    *maxUser,
+		MaxRunsPerProject: *maxProject,
 	}, store, logger)
 	srv.SetSigner(signer)
 	srv.SetAssets(web.Handler())
@@ -153,6 +160,18 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 func newLogger(level string) *slog.Logger {

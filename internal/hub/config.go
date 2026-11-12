@@ -12,6 +12,10 @@ type Config struct {
 	// token; an empty token disables the endpoint even when enabled is true.
 	MetricsEnabled bool
 	MetricsToken   string
+	// Concurrency limits for new runs. Zero disables the corresponding check.
+	MaxRunsPerHost    int
+	MaxRunsPerUser    int
+	MaxRunsPerProject int
 }
 
 type ctxKey int

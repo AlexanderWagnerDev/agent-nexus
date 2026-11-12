@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL DEFAULT '',
   host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+  cwd TEXT NOT NULL DEFAULT '',
   mode TEXT NOT NULL,
   state TEXT NOT NULL,
   started_by TEXT NOT NULL,
@@ -385,6 +386,7 @@ CREATE INDEX IF NOT EXISTS task_dependencies_dep_idx ON task_dependencies(depend
 	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN disabled_at INTEGER`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
+	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN parent_native_id TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN forked_from_native_id TEXT NOT NULL DEFAULT ''`)
 	return nil

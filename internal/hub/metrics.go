@@ -35,6 +35,8 @@ type metrics struct {
 	durationCount   map[string]int64
 	hostReconnects  uint64
 	pushFailures    uint64
+	protocolErrors  uint64
+	runLimitRejects uint64
 	approvalSeconds float64
 	approvals       int64
 	// approvalStart is keyed by run ID and approval ID: hosts may reuse an
@@ -76,6 +78,18 @@ func (m *metrics) hostReconnected() {
 func (m *metrics) pushFailed() {
 	m.mu.Lock()
 	m.pushFailures++
+	m.mu.Unlock()
+}
+
+func (m *metrics) protocolError() {
+	m.mu.Lock()
+	m.protocolErrors++
+	m.mu.Unlock()
+}
+
+func (m *metrics) runLimitRejected() {
+	m.mu.Lock()
+	m.runLimitRejects++
 	m.mu.Unlock()
 }
 
@@ -245,13 +259,21 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	clients := len(s.clients)
 	s.mu.RUnlock()
 	runs, _ := s.store.CountActiveRuns()
+	counts, _ := s.store.DiagnosticsCounts()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# HELP nexus_hosts_connected Hosts with a live outbound link.\n# TYPE nexus_hosts_connected gauge\nnexus_hosts_connected %d\n", hosts)
+	fmt.Fprintf(&b, "# HELP nexus_hosts_total Paired hosts that are not revoked.\n# TYPE nexus_hosts_total gauge\nnexus_hosts_total %d\n", counts.Hosts)
+	fmt.Fprintf(&b, "# HELP nexus_sessions_total Native sessions known to the hub.\n# TYPE nexus_sessions_total gauge\nnexus_sessions_total %d\n", counts.Sessions)
+	fmt.Fprintf(&b, "# HELP nexus_tasks_total Tasks stored on the hub.\n# TYPE nexus_tasks_total gauge\nnexus_tasks_total %d\n", counts.Tasks)
+	fmt.Fprintf(&b, "# HELP nexus_users_total Hub user accounts.\n# TYPE nexus_users_total gauge\nnexus_users_total %d\n", counts.Users)
+	fmt.Fprintf(&b, "# HELP nexus_queue_pending Queued prompts waiting for an idle run.\n# TYPE nexus_queue_pending gauge\nnexus_queue_pending %d\n", counts.QueuedPrompts)
 	fmt.Fprintf(&b, "# HELP nexus_active_runs Runs without an end timestamp.\n# TYPE nexus_active_runs gauge\nnexus_active_runs %d\n", runs)
 	fmt.Fprintf(&b, "# HELP nexus_browser_websockets Connected browser WebSockets.\n# TYPE nexus_browser_websockets gauge\nnexus_browser_websockets %d\n", clients)
 	s.metrics.mu.Lock()
 	fmt.Fprintf(&b, "# HELP nexus_host_reconnects_total Host links that replaced an older link.\n# TYPE nexus_host_reconnects_total counter\nnexus_host_reconnects_total %d\n", s.metrics.hostReconnects)
 	fmt.Fprintf(&b, "# HELP nexus_push_failures_total Web Push delivery failures.\n# TYPE nexus_push_failures_total counter\nnexus_push_failures_total %d\n", s.metrics.pushFailures)
+	fmt.Fprintf(&b, "# HELP nexus_agent_protocol_errors_total Structured-run errors reported by agents.\n# TYPE nexus_agent_protocol_errors_total counter\nnexus_agent_protocol_errors_total %d\n", s.metrics.protocolErrors)
+	fmt.Fprintf(&b, "# HELP nexus_run_limit_rejections_total Runs rejected by a configured concurrency limit.\n# TYPE nexus_run_limit_rejections_total counter\nnexus_run_limit_rejections_total %d\n", s.metrics.runLimitRejects)
 	fmt.Fprintf(&b, "# HELP nexus_approval_latency_seconds Time between approval request and decision.\n# TYPE nexus_approval_latency_seconds summary\n")
 	fmt.Fprintf(&b, "nexus_approval_latency_seconds_sum %g\nnexus_approval_latency_seconds_count %d\n", s.metrics.approvalSeconds, s.metrics.approvals)
 	fmt.Fprintf(&b, "# HELP nexus_approvals_pending Approvals waiting for a decision.\n# TYPE nexus_approvals_pending gauge\nnexus_approvals_pending %d\n", len(s.metrics.approvalStart))

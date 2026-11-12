@@ -129,6 +129,10 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if s.store.CountQueuedPrompts(run.ID) >= 100 {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue is full", "reason": "queue_limit"})
+		return
+	}
 	scheduled, msg := parseQueueSchedule(req.ScheduledAt)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)

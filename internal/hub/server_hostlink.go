@@ -323,6 +323,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 			go s.notifyRun(msg.RunID, "completed", "Agent run finished", "A run finished. Open AgentNexus for details.")
 		}
 	case "run.error":
+		s.metrics.protocolError()
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
 		s.audit("host:"+hc.id, "run.failed", map[string]string{"run_id": msg.RunID, "error": msg.Error})

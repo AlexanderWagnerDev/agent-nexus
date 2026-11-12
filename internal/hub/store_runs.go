@@ -8,8 +8,14 @@ import (
 )
 
 func (s *Store) CreateRun(id, sessionID, hostID, mode, userID, deviceID string) error {
-	_, err := s.db.Exec(`INSERT INTO runs(id,session_id,host_id,mode,state,started_by,lease_device_id,created_at) VALUES(?,?,?,?,?,?,?,?)`,
-		id, sessionID, hostID, mode, protocol.StateStarting, userID, deviceID, ms(time.Now()))
+	return s.CreateRunAt(id, sessionID, hostID, "", mode, userID, deviceID)
+}
+
+// CreateRunAt records the working directory so per-project concurrency limits
+// can be enforced without joining the session row.
+func (s *Store) CreateRunAt(id, sessionID, hostID, cwd, mode, userID, deviceID string) error {
+	_, err := s.db.Exec(`INSERT INTO runs(id,session_id,host_id,cwd,mode,state,started_by,lease_device_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		id, sessionID, hostID, cwd, mode, protocol.StateStarting, userID, deviceID, ms(time.Now()))
 	return err
 }
 

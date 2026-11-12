@@ -487,7 +487,7 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := s.startRun(u, deviceFrom(r), sess, action, req.Cwd, req.Mode, req.Cols, req.Rows, req.Force)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeRunStartError(w, err)
 		return
 	}
 	if req.Force {
@@ -540,7 +540,7 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := s.startRun(u, deviceFrom(r), protocol.SessionView{HostID: hostID, Agent: req.Agent}, protocol.ActionNew, req.Cwd, req.Mode, req.Cols, req.Rows, false)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeRunStartError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, run)
@@ -554,7 +554,10 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 	if cwd == "" && action != protocol.ActionNew {
 		return protocol.RunView{}, errors.New("session has no working directory")
 	}
-	if err := s.store.CreateRun(id, sess.ID, sess.HostID, mode, u.ID, d.ID); err != nil {
+	if err := s.checkRunLimits(u.ID, sess.HostID, cwd); err != nil {
+		return protocol.RunView{}, err
+	}
+	if err := s.store.CreateRunAt(id, sess.ID, sess.HostID, cwd, mode, u.ID, d.ID); err != nil {
 		return protocol.RunView{}, err
 	}
 	spec := protocol.RunSpec{

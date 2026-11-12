@@ -378,7 +378,7 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	sess := protocol.SessionView{HostID: hostID, Agent: agent, Cwd: cwd, NativeID: nativeID, ID: sessionID}
 	run, err := s.startRun(u, deviceFrom(r), sess, action, cwd, runMode, 120, 30, false)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeRunStartError(w, err)
 		return
 	}
 	if err := s.store.LinkTaskRun(task.ID, run.ID, sessionID); err != nil {

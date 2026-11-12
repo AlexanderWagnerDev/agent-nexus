@@ -251,6 +251,13 @@ func (s *Store) HasQueuedPrompts() (bool, error) {
 	return n > 0, nil
 }
 
+// CountQueuedPrompts bounds one run's queue before a new item is accepted.
+func (s *Store) CountQueuedPrompts(runID string) int {
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM prompt_queue WHERE run_id=? AND state IN ('queued','sending')`, runID).Scan(&n)
+	return n
+}
+
 // HasQueuedPromptsForRun avoids waking the queue worker on every idle event.
 func (s *Store) HasQueuedPromptsForRun(runID string) bool {
 	var n int
