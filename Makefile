@@ -3,6 +3,7 @@
 build:
 	CGO_ENABLED=0 go build -trimpath -o bin/nexus-hub ./cmd/nexus-hub
 	CGO_ENABLED=0 go build -trimpath -o bin/nexusd ./cmd/nexusd
+	CGO_ENABLED=0 go build -trimpath -o bin/nexus ./cmd/nexus
 
 # Synthetic host for screenshots and UI development. Never shipped in releases.
 demo:

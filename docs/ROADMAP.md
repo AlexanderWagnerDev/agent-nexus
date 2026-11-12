@@ -100,6 +100,15 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B9: terminal client (2026-11-12)
+
+`cmd/nexus` provides login (device pairing token or password/TOTP), session
+listing, WebSocket attach with controller lease and approval delivery. The
+device session is revocable and stored mode 0600. CI cross-compiles it for
+Windows, Linux and macOS. Login/sessions/logout were exercised against a real
+local hub; attach and approve share the browser protocol but were not exercised
+against a live host. Input is line-oriented, not a raw PTY.
+
 ### B8: read-only MCP endpoint (2026-11-12)
 
 `POST /mcp` implements stateless JSON-RPC MCP initialization, tool listing and
