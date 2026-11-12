@@ -24,7 +24,7 @@ var agentVersionMatrix = []AgentVersionRange{
 	{Agent: "claude", Min: "2.0.0", Max: "3.0.0", Structured: true},
 	{Agent: "codex", Min: "0.50.0", Max: "1.0.0", Structured: true},
 	{Agent: "opencode", Min: "1.0.0", Max: "2.0.0", Structured: true},
-	{Agent: "gemini", Min: "0.1.0", Max: "1.0.0", Structured: false},
+	{Agent: "gemini", Min: "0.1.0", Max: "1.0.0", Structured: true},
 }
 
 // AgentMatrix returns a copy of the tested version matrix.

@@ -44,6 +44,43 @@ func testDaemon(t *testing.T, allowed []string, adapters []Adapter, acpCommands 
 	return NewDaemonWithAdapters(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), adapters)
 }
 
+func TestStartGeminiStructuredUsesACPCommand(t *testing.T) {
+	t.Setenv("NEXUS_TEST_AGENT", "acp")
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	exe := testBinary(t)
+	command := exe + " acp"
+	d := testDaemon(t, []string{"gemini"}, nil, map[string]string{"gemini": command}, root)
+
+	spec := protocol.RunSpec{
+		RunID: "run-gemini", Agent: "gemini", Action: protocol.ActionNew,
+		Cwd: root, Mode: protocol.ModeStructured,
+	}
+	d.startStructuredRun(context.Background(), spec)
+
+	waitForHost(t, "gemini ACP run", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.acpRuns["run-gemini"] != nil
+	})
+	d.runMu.Lock()
+	run := d.acpRuns["run-gemini"]
+	d.runMu.Unlock()
+	if run.sessionID != "fake-acp-session" {
+		t.Fatalf("gemini ACP session: %q", run.sessionID)
+	}
+	if err := run.Prompt("hello", nil); err != nil {
+		t.Fatalf("gemini ACP prompt: %v", err)
+	}
+	run.Stop()
+	waitForHost(t, "gemini ACP cleanup", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.acpRuns["run-gemini"] == nil
+	})
+}
+
 func TestStartStructuredRunAgainstFakeOpenCode(t *testing.T) {
 	t.Setenv("NEXUS_TEST_AGENT", "opencode")
 	t.Setenv("APPDATA", t.TempDir())

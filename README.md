@@ -110,7 +110,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
 | Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>`; structured `thread/fork` |
 | OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
-| Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
+| Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ⚠️ ACP via `gemini --acp` (fake-tested, not real-tested) | ✅ | ❌ |
 
 A tested version band is recorded per agent in `internal/host/versions.go` and
 mirrored in [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md). A detected

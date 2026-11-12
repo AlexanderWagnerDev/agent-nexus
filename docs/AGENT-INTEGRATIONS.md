@@ -90,8 +90,8 @@ vendor documentation above:
   perform them.
 - **Gemini ACP:** the generic ACP driver works with
   `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
-  the installed Gemini version. Discovery remains best effort and the version
-  matrix does not claim a verified structured integration.
+  the installed Gemini version. The path is implemented and fake-tested, not
+  real-tested; see the status labels in §6.
 - **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
   concurrency guards have unit tests. Real Codex and OpenCode runs were
   exercised on Windows 11; real Claude and Gemini sessions were not available.
@@ -280,7 +280,9 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
 - Discovery: `gemini --list-sessions` lists only the **current project's** sessions ✅. Because `<project_hash>` cannot be mapped back to a path without additional data ❓, discovery runs `--list-sessions` in each project directory known to the host (from policy roots and from other agents' session `cwd`s), or reads a project path from the chat files if present ❓.
 - Resume ✅: `gemini --resume <UUID>` (also `--resume <index>`, `--resume` for latest), in the project directory. Delete: `--delete-session`.
 - Structured: ACP via `gemini --acp` ⚠️ (flag taken from the official ACP registry entry; older versions used `--experimental-acp`).
-- Planned for Phase 6 (WP-6.1).
+- Implementation status: **implemented through the generic ACP driver and fake-tested** with a scripted ACP agent (routing, session creation, prompt, streaming, approvals, interrupt and cleanup). Gemini CLI is not installed in the test environment, so the start flag, version detection and real session continuation are **not real-tested**. Configure it explicitly:
+  `nexusd acp --agent gemini --command "gemini --acp"`.
+- The version band stays `>= 0.1.0 < 1.0.0`; an outside-band version disables structured mode with the usual warning unless `allow_untested_agent_versions` is set.
 
 ## 7. Other agents and the generic ACP adapter
 
@@ -367,7 +369,7 @@ block with the code, so update both together.
 matrix: claude   >= 2.0.0 < 3.0.0   structured=yes
 matrix: codex    >= 0.50.0 < 1.0.0  structured=yes
 matrix: opencode >= 1.0.0 < 2.0.0   structured=yes
-matrix: gemini   >= 0.1.0 < 1.0.0   structured=no
+matrix: gemini   >= 0.1.0 < 1.0.0   structured=yes
 ```
 
 Outside the band the host removes the `structured` capability and reports a
