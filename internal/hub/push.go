@@ -129,6 +129,7 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 	} else if !prefs[kind] {
 		return
 	}
+	s.deliverNotificationChannels(ownerID, kind, title, body, link)
 	if s.vapidPrivate == "" || s.vapidPublic == "" {
 		return
 	}

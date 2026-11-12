@@ -2,7 +2,7 @@ import { enablePush, logout } from '../auth.js';
 import { api } from '../api.js';
 import { renderShell, saveTheme, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { badge, toast } from '../ui.js';
+import { badge, closeModal, modal, toast } from '../ui.js';
 import { getLang, setLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { esc } from '../ui-format.js';
@@ -10,13 +10,15 @@ import { esc } from '../ui-format.js';
 export async function pageSettings() {
   const pageGen = state.pageGen;
   renderShell('settings');
-  const [hostData, settings] = await Promise.all([
+  const [hostData, settings, channelData] = await Promise.all([
     api('/hosts').catch(() => ({ hosts: [] })),
     api('/me/settings').catch(() => null),
+    api('/me/notification-channels').catch(() => ({ channels: [] })),
   ]);
   if (pageGen !== state.pageGen) return;
   const hosts = hostData.hosts || [];
   const hostPrefs = settings?.notifications_by_host || {};
+  const channels = channelData?.channels || [];
   if (settings) state.settings = { ...state.settings, ...settings };
   const view = setPage(t('Settings'), t('Appearance, account, notifications and administration.'));
   const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
@@ -72,6 +74,15 @@ export async function pageSettings() {
         </div>` : ''}
       </section>
       <section class="card">
+        <h2 class="mt-0">${t('Notification channels')}</h2>
+        <p class="hint">${t('Optional ntfy, Gotify, Telegram, Discord, Slack or generic webhook delivery. Channel payloads contain no chat content and use the same event preferences as Web Push.')}</p>
+        <div class="setting-list" id="settings-channel-list">
+          ${channels.length ? channels.map((channel) => `<div class="setting-row"><div><strong>${esc(channel.name)}</strong><small>${esc(channel.kind)}</small></div><div class="split"><button class="btn ghost small" type="button" data-channel-test="${esc(channel.id)}">${t('Test')}</button><button class="btn ghost small" type="button" data-channel-delete="${esc(channel.id)}">${t('Delete')}</button></div></div>`).join('') : `<p class="muted">${t('No notification channels configured.')}</p>`}
+        </div>
+        <button class="btn small mt-2" id="settings-channel-add" type="button">${t('Add channel')}</button>
+        <p class="hint mt-1">${t('Private and loopback targets are rejected to prevent SSRF. Use a public hostname or a reverse proxy.')}</p>
+      </section>
+      <section class="card">
         <h2 class="mt-0">${isAdmin ? t('Administration') : t('About')}</h2>
         ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">${t('Users & roles')}</a><a class="btn small" href="#/audit">${t('Audit log')}</a><a class="btn small" href="#/devices">${t('All devices')}</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)} — ${t('version')} ${esc(state.version || t('unknown'))}. ${t('Sessions stay on your hosts; the hub stores metadata.')}</p>`}
       </section>
@@ -111,6 +122,55 @@ export async function pageSettings() {
     } catch (err) { toast(err.message, true); }
   });
 
+  document.getElementById('settings-channel-add').addEventListener('click', () => {
+    modal(`
+      <h2>${t('Add notification channel')}</h2>
+      <label class="label">${t('Kind')}<select class="select" id="channel-kind">
+        ${[['ntfy', 'ntfy'], ['gotify', 'Gotify'], ['telegram', 'Telegram'], ['discord', 'Discord'], ['slack', 'Slack'], ['webhook', t('Generic webhook')]].map(([value, label]) => `<option value="${value}">${esc(label)}</option>`).join('')}
+      </select></label>
+      <label class="label">${t('Name')}<input class="input" id="channel-name" maxlength="80"></label>
+      <label class="label" data-channel-url>${t('URL')}<input class="input" id="channel-url" placeholder="https://…"></label>
+      <label class="label" data-channel-token hidden>${t('Token')}<input class="input" id="channel-token" autocomplete="off"></label>
+      <label class="label" data-channel-chat hidden>${t('Chat ID')}<input class="input" id="channel-chat"></label>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="channel-save">${t('Save')}</button></div>`);
+    const kind = document.getElementById('channel-kind');
+    const sync = () => {
+      const value = kind.value;
+      document.querySelector('[data-channel-url]').hidden = value === 'telegram';
+      document.querySelector('[data-channel-token]').hidden = !['gotify', 'telegram'].includes(value);
+      document.querySelector('[data-channel-chat]').hidden = value !== 'telegram';
+    };
+    kind.addEventListener('change', sync);
+    sync();
+    document.getElementById('channel-save').addEventListener('click', async () => {
+      const config = {};
+      const url = document.getElementById('channel-url').value.trim();
+      const token = document.getElementById('channel-token').value.trim();
+      const chat = document.getElementById('channel-chat').value.trim();
+      if (url) config.url = url;
+      if (token) config.token = token;
+      if (chat) config.chat_id = chat;
+      try {
+        await api('/me/notification-channels', { method: 'POST', body: { kind: kind.value, name: document.getElementById('channel-name').value.trim(), config } });
+        closeModal();
+        toast(t('Notification channel saved'));
+        await pageSettings();
+      } catch (err) { toast(err.message, true); }
+    });
+  });
+  view.querySelectorAll('[data-channel-test]').forEach((button) => button.addEventListener('click', async () => {
+    try {
+      await api(`/me/notification-channels/${encodeURIComponent(button.dataset.channelTest)}/test`, { method: 'POST' });
+      toast(t('Test notification sent'));
+    } catch (err) { toast(err.message, true); }
+  }));
+  view.querySelectorAll('[data-channel-delete]').forEach((button) => button.addEventListener('click', async () => {
+    try {
+      await api(`/me/notification-channels/${encodeURIComponent(button.dataset.channelDelete)}`, { method: 'DELETE' });
+      toast(t('Notification channel deleted'));
+      await pageSettings();
+    } catch (err) { toast(err.message, true); }
+  }));
   const hostSelect = document.getElementById('settings-notify-host');
   if (hostSelect) {
     const hostCheckboxes = [...view.querySelectorAll('[data-host-notify-kind]')];

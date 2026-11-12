@@ -64,6 +64,8 @@ type Server struct {
 	queueKick  chan struct{}
 	queueMu    sync.Mutex
 	queueArmed map[string]bool
+
+	notificationAllowPrivate bool
 }
 
 type pendingRequest struct {
@@ -199,6 +201,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/templates", s.requireAuth(s.handleCreateTemplate))
 	mux.HandleFunc("PUT /api/v1/templates/{id}", s.requireAuth(s.handleUpdateTemplate))
 	mux.HandleFunc("DELETE /api/v1/templates/{id}", s.requireAuth(s.handleDeleteTemplate))
+	mux.HandleFunc("GET /api/v1/me/notification-channels", s.requireAuth(s.handleListNotificationChannels))
+	mux.HandleFunc("POST /api/v1/me/notification-channels", s.requireAuth(s.handleCreateNotificationChannel))
+	mux.HandleFunc("PUT /api/v1/me/notification-channels/{id}", s.requireAuth(s.handleUpdateNotificationChannel))
+	mux.HandleFunc("DELETE /api/v1/me/notification-channels/{id}", s.requireAuth(s.handleDeleteNotificationChannel))
+	mux.HandleFunc("POST /api/v1/me/notification-channels/{id}/test", s.requireAuth(s.handleTestNotificationChannel))
 
 	mux.HandleFunc("GET /api/v1/ws", s.requireAuth(s.handleClientWS))
 	mux.HandleFunc("GET /v1/host/connect", s.handleHostWS)

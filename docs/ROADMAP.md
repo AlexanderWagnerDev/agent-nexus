@@ -100,6 +100,20 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B6: external notification channels (2026-11-12)
+
+Web Push can be complemented by ntfy, Gotify, Telegram, Discord, Slack and
+generic webhook channels. Channel configuration is sealed with the hub secret
+box and never returned to the browser. Delivery uses the same user and host
+event preferences as push, contains only the generic title/body/link, has an
+eight-second timeout, one bounded retry for transient failures and a test
+action. URLs are validated at creation and every connection is checked at the
+socket layer; loopback, private, link-local and internal targets are blocked by
+default, which also means self-hosted ntfy/Gotify need a public hostname or a
+reverse proxy. Fake HTTP tests cover SSRF rejection, encryption at rest,
+redaction, delivery and the test action; real ntfy/Telegram/etc. services were
+not contacted.
+
 ### B5: prompt templates (2026-11-12)
 
 Prompt templates are stored in SQLite, scoped to the owner and optionally shared

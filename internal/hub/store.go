@@ -221,6 +221,17 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS prompt_templates_user_idx ON prompt_templates(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS notification_channels (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS notification_channels_user_idx ON notification_channels(user_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at INTEGER NOT NULL,
