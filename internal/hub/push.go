@@ -110,7 +110,7 @@ func (s *Server) handlePushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 // sends the same message as Web Push. It deliberately contains no transcript,
 // tool command, path or approval text.
 func (s *Server) notifyRun(runID, kind, title, body string) {
-	_, ownerID, err := s.store.RunByID(runID)
+	run, ownerID, err := s.store.RunByID(runID)
 	if err != nil {
 		return
 	}
@@ -123,11 +123,11 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 	if err := s.store.AddNotification(ownerID, kind, title, body, runID, link); err != nil {
 		s.log.Debug("notification history failed", "error", err)
 	}
-	prefs, err := s.store.NotificationPrefs(ownerID)
-	if err == nil {
-		if enabled, known := prefs[kind]; known && !enabled {
-			return
-		}
+	prefs, err := s.store.EffectiveNotificationPrefs(ownerID, run.HostID)
+	if err != nil {
+		s.log.Debug("notification preferences failed", "error", err)
+	} else if !prefs[kind] {
+		return
 	}
 	if s.vapidPrivate == "" || s.vapidPublic == "" {
 		return

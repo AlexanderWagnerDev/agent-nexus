@@ -155,6 +155,48 @@ async function run() {
     await conflict.click('[data-close]');
     await conflict.close();
 
+    // Per-host notification overrides: the settings page must persist the
+    // override and the reset must remove it.
+    const overridePage = await desktop.newPage();
+    let hostPut = null;
+    let hostDeleted = false;
+    await overridePage.route('**/api/v1/**', async (route) => {
+      const request = route.request();
+      const pathname = new URL(request.url()).pathname;
+      const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+      if (pathname === '/api/v1/hosts') {
+        return json(200, { hosts: [{ id: 'host-1', name: 'demo-host', status: 'online', agents: [] }] });
+      }
+      if (pathname === '/api/v1/me/settings' && request.method() === 'GET') {
+        return json(200, {
+          theme: 'dark',
+          notifications: { approval: true, completed: true, failed: true, disconnected: true },
+          notifications_by_host: {},
+        });
+      }
+      if (pathname === '/api/v1/me/settings/notifications/hosts/host-1' && request.method() === 'PUT') {
+        hostPut = JSON.parse(request.postData() || '{}');
+        return json(200, { host_id: 'host-1', notifications: hostPut.notifications });
+      }
+      if (pathname === '/api/v1/me/settings/notifications/hosts/host-1' && request.method() === 'DELETE') {
+        hostDeleted = true;
+        return json(200, { status: 'reset' });
+      }
+      return route.continue();
+    });
+    await login(overridePage);
+    await overridePage.goto(`${baseURL}/#/settings`, { waitUntil: 'domcontentloaded' });
+    await overridePage.waitForSelector('#settings-notify-host');
+    assert((await overridePage.locator('#settings-host-notify-state').innerText()).includes('Using global defaults'), 'host override state did not start at the global default');
+    await overridePage.uncheck('[data-host-notify-kind=failed]');
+    await overridePage.waitForTimeout(400);
+    assert(hostPut && hostPut.notifications.failed === false, 'host override was not persisted');
+    await overridePage.click('#settings-host-notify-reset');
+    await overridePage.waitForTimeout(400);
+    assert(hostDeleted, 'host override reset did not reach the API');
+    assert((await overridePage.locator('#settings-host-notify-state').innerText()).includes('Using global defaults'), 'reset did not restore the global state');
+    await overridePage.close();
+
     const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const phone = await mobile.newPage();
     await login(phone);

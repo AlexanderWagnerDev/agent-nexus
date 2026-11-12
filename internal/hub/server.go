@@ -118,6 +118,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/me", s.requireAuth(s.handleMe))
 	mux.HandleFunc("GET /api/v1/me/settings", s.requireAuth(s.handleGetSettings))
 	mux.HandleFunc("PUT /api/v1/me/settings", s.requireAuth(s.handlePutSettings))
+	mux.HandleFunc("PUT /api/v1/me/settings/notifications/hosts/{hostID}", s.requireAuth(s.handlePutHostNotificationPrefs))
+	mux.HandleFunc("DELETE /api/v1/me/settings/notifications/hosts/{hostID}", s.requireAuth(s.handleDeleteHostNotificationPrefs))
 	mux.HandleFunc("GET /api/v1/auth/step-up", s.requireAuth(s.handleStepUpStatus))
 	mux.HandleFunc("POST /api/v1/auth/step-up/begin", s.requireAuth(s.handleStepUpBegin))
 	mux.HandleFunc("POST /api/v1/auth/step-up/passkey", s.requireAuth(s.handleStepUpPasskeyFinish))

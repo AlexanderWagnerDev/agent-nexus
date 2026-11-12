@@ -141,7 +141,14 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
+	byHost, err := s.store.ListNotificationHostPrefs(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"theme": theme, "notifications": notificationDefaults(prefs), "notifications_by_host": byHost,
+	})
 }
 
 func notificationDefaults(prefs map[string]bool) map[string]bool {
@@ -154,6 +161,56 @@ func notificationDefaults(prefs map[string]bool) map[string]bool {
 		}
 	}
 	return out
+}
+
+func (s *Server) notificationHostAllowed(u User, hostID string) bool {
+	if hostID == "" {
+		return false
+	}
+	if _, err := s.store.HostByID(hostID); err != nil {
+		return false
+	}
+	return s.hostPermission(u, hostID, "view")
+}
+
+type hostNotificationRequest struct {
+	Notifications map[string]bool `json:"notifications"`
+}
+
+func (s *Server) handlePutHostNotificationPrefs(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("hostID")
+	if !s.notificationHostAllowed(u, hostID) {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	var req hostNotificationRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if err := s.store.SetNotificationHostPrefs(u.ID, hostID, req.Notifications); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "user.notification_host_updated", map[string]string{"host_id": hostID})
+	effective, _ := s.store.EffectiveNotificationPrefs(u.ID, hostID)
+	writeJSON(w, http.StatusOK, map[string]any{"host_id": hostID, "notifications": effective})
+}
+
+func (s *Server) handleDeleteHostNotificationPrefs(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("hostID")
+	if !s.notificationHostAllowed(u, hostID) {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	if err := s.store.DeleteNotificationHostPrefs(u.ID, hostID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "user.notification_host_reset", map[string]string{"host_id": hostID})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "reset"})
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
@@ -201,8 +258,15 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	byHost, err := s.store.ListNotificationHostPrefs(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.audit(u.Username, "user.settings_updated", map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
-	writeJSON(w, http.StatusOK, map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"theme": theme, "notifications": notificationDefaults(prefs), "notifications_by_host": byHost,
+	})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

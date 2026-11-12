@@ -305,7 +305,9 @@ that native session.
 - Web Push sends content-free notifications for approvals, run completion,
   failures and host disconnects. Requirements: HTTPS (localhost is treated as
   secure), browser notification permission and, on iOS, an installed PWA.
-  The payload contains only a generic title, body and run URL.
+  The payload contains only a generic title, body and run URL. Global push
+  categories fall back to per-host overrides; changing either never suppresses
+  the in-app inbox.
 
 ## Request tracing
 

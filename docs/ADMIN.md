@@ -115,6 +115,11 @@ disconnects. Requirements: HTTPS (localhost is allowed by browsers), notificatio
 permission and, on iOS, an installed PWA. The VAPID key lives in `hub.db`; keep
 it in backups or existing subscriptions become invalid.
 
+Under **Settings → Notifications**, global category switches apply to every
+host. A per-host override replaces the global value for that host only; the
+override is stored per user and host, and **Use global defaults** removes it.
+In-app notifications are always recorded regardless of push settings.
+
 ## Search and export
 
 Search queries online hosts in parallel; a host without `read_transcript` is

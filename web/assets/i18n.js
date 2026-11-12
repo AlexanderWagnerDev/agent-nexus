@@ -675,6 +675,12 @@ Object.assign(de, {
   'Index error': 'Indexfehler',
   'Building the search index on {host}: {n}%': 'Suchindex wird auf {host} aufgebaut: {n} %',
   'Using the slower adapter search until the index is ready.': 'Bis der Index bereit ist, wird die langsamere Adapter-Suche verwendet.',
+  'Per-host overrides': 'Überschreibungen pro Host',
+  'Host-specific settings replace the global default for that host.': 'Host-spezifische Einstellungen ersetzen den globalen Standard für diesen Host.',
+  'Use global defaults': 'Globale Standards verwenden',
+  'Host override active': 'Host-Überschreibung aktiv',
+  'Using global defaults': 'Globale Standards aktiv',
+  'Host override cleared': 'Host-Überschreibung entfernt',
 });
 
 Object.assign(de, {

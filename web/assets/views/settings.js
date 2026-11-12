@@ -1,4 +1,5 @@
 import { enablePush, logout } from '../auth.js';
+import { api } from '../api.js';
 import { renderShell, saveTheme, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { badge, toast } from '../ui.js';
@@ -7,9 +8,19 @@ import { svgIcon } from '../icons.js';
 import { esc } from '../ui-format.js';
 
 export async function pageSettings() {
+  const pageGen = state.pageGen;
   renderShell('settings');
+  const [hostData, settings] = await Promise.all([
+    api('/hosts').catch(() => ({ hosts: [] })),
+    api('/me/settings').catch(() => null),
+  ]);
+  if (pageGen !== state.pageGen) return;
+  const hosts = hostData.hosts || [];
+  const hostPrefs = settings?.notifications_by_host || {};
+  if (settings) state.settings = { ...state.settings, ...settings };
   const view = setPage(t('Settings'), t('Appearance, account, notifications and administration.'));
   const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
+  const notifyKinds = [['approval', t('Approval required')], ['completed', t('Run completed')], ['failed', t('Run failed')], ['disconnected', t('Host disconnected')]];
   view.innerHTML = `
     <div class="grid cols-2">
       <section class="card">
@@ -43,14 +54,26 @@ export async function pageSettings() {
         <p class="hint">${t('Content-free Web Push for approvals, completed runs, failures and host disconnects. The in-app inbox always keeps every event.')}</p>
         <div id="settings-push-area"><button class="btn" id="settings-push">${t('Enable on this device')}</button></div>
         <div class="setting-list mt-2">
-          ${[['approval', t('Approval required')], ['completed', t('Run completed')], ['failed', t('Run failed')], ['disconnected', t('Host disconnected')]].map(([kind, label]) => `
+          ${notifyKinds.map(([kind, label]) => `
             <label class="setting-row"><span>${label}</span><input type="checkbox" data-notify-kind="${kind}" ${state.settings.notifications?.[kind] !== false ? 'checked' : ''}></label>`).join('')}
         </div>
         <p class="hint mt-1">${t('Turning a category off only stops push delivery. Events still appear in the notification inbox.')}</p>
+        ${hosts.length ? `
+        <div class="aside-label mt-2">${t('Per-host overrides')}</div>
+        <p class="hint mt-1">${t('Host-specific settings replace the global default for that host.')}</p>
+        <label class="label">${t('Host')}<select class="select" id="settings-notify-host">${hosts.map((h) => `<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('')}</select></label>
+        <div class="setting-list" id="settings-host-notify">
+          ${notifyKinds.map(([kind, label]) => `
+            <label class="setting-row"><span>${label}</span><input type="checkbox" data-host-notify-kind="${kind}"></label>`).join('')}
+        </div>
+        <div class="split wrap mt-2">
+          <button class="btn small ghost" id="settings-host-notify-reset" type="button">${t('Use global defaults')}</button>
+          <span class="small muted" id="settings-host-notify-state"></span>
+        </div>` : ''}
       </section>
       <section class="card">
         <h2 class="mt-0">${isAdmin ? t('Administration') : t('About')}</h2>
-        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">${t('Users & roles')}</a><a class="btn small" href="#/audit">${t('Audit log')}</a><a class="btn small" href="#/devices">${t('All devices')}</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)} · ${t('version')} ${esc(state.version || t('unknown'))}. ${t('Sessions stay on your hosts; the hub stores metadata.')}</p>`}
+        ${isAdmin ? `<div class="split wrap"><a class="btn small" href="#/users">${t('Users & roles')}</a><a class="btn small" href="#/audit">${t('Audit log')}</a><a class="btn small" href="#/devices">${t('All devices')}</a></div>` : `<p class="hint">AgentNexus ${esc(state.hubName)} — ${t('version')} ${esc(state.version || t('unknown'))}. ${t('Sessions stay on your hosts; the hub stores metadata.')}</p>`}
       </section>
     </div>`;
   document.getElementById('settings-language').addEventListener('change', (event) => {
@@ -87,4 +110,47 @@ export async function pageSettings() {
       toast(t('Push notifications enabled'));
     } catch (err) { toast(err.message, true); }
   });
+
+  const hostSelect = document.getElementById('settings-notify-host');
+  if (hostSelect) {
+    const hostCheckboxes = [...view.querySelectorAll('[data-host-notify-kind]')];
+    const stateLabel = document.getElementById('settings-host-notify-state');
+    const renderHostPrefs = () => {
+      const hostID = hostSelect.value;
+      const override = hostPrefs[hostID];
+      const effective = { ...defaultNotificationPrefs(), ...(state.settings.notifications || {}), ...(override || {}) };
+      for (const box of hostCheckboxes) box.checked = effective[box.dataset.hostNotifyKind] !== false;
+      stateLabel.textContent = override ? t('Host override active') : t('Using global defaults');
+    };
+    const saveHostPrefs = async () => {
+      const hostID = hostSelect.value;
+      const notifications = {};
+      for (const box of hostCheckboxes) notifications[box.dataset.hostNotifyKind] = box.checked;
+      try {
+        await api(`/me/settings/notifications/hosts/${encodeURIComponent(hostID)}`, { method: 'PUT', body: { notifications } });
+        hostPrefs[hostID] = notifications;
+        stateLabel.textContent = t('Host override active');
+        toast(t('Notification preferences saved'));
+      } catch (err) {
+        renderHostPrefs();
+        toast(err.message, true);
+      }
+    };
+    hostSelect.addEventListener('change', renderHostPrefs);
+    for (const box of hostCheckboxes) box.addEventListener('change', () => saveHostPrefs().catch((err) => toast(err.message, true)));
+    document.getElementById('settings-host-notify-reset')?.addEventListener('click', async () => {
+      const hostID = hostSelect.value;
+      try {
+        await api(`/me/settings/notifications/hosts/${encodeURIComponent(hostID)}`, { method: 'DELETE' });
+        delete hostPrefs[hostID];
+        renderHostPrefs();
+        toast(t('Host override cleared'));
+      } catch (err) { toast(err.message, true); }
+    });
+    renderHostPrefs();
+  }
+}
+
+function defaultNotificationPrefs() {
+  return { approval: true, completed: true, failed: true, disconnected: true };
 }

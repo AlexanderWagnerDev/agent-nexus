@@ -250,6 +250,13 @@ CREATE TABLE IF NOT EXISTS session_overrides (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, session_id)
 );
+CREATE TABLE IF NOT EXISTS user_notification_hosts (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+  prefs TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, host_id)
+);
 CREATE TABLE IF NOT EXISTS session_tags (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
