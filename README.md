@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter with capability-driven controls, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing, signed host update staging, hub-visible update status, a host-local FTS5 search index, process-tree termination, a tested agent version matrix, pixel-diff visual regression for the demo views, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, load/soak tests, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter with capability-driven controls, projects, pinned sessions, a notification inbox, passkeys, Web Push with per-category preferences, transcript export, read-only Git review including live refresh during a run, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing, signed host update staging, hub-visible update status, a host-local FTS5 search index, process-tree termination without the Windows job-object race, discovery refreshes within five seconds, per-user session tags and local titles, session sorting/time filters, host rename/disable, optional Prometheus metrics, a tested agent version matrix, pixel-diff visual regression for the demo views, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, prompt queues, token/cost accounting, multi-agent fan-out, load/soak tests, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 **No releases or tags are published during alpha.** All earlier pre-release
 tags and GitHub releases were withdrawn before the first public version was
@@ -65,10 +65,10 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hub** (`nexus-hub`) | Go binary, SQLite metadata store, embedded web app, health endpoints, structured JSON logs |
 | **First-run setup** | Owner account, Argon2id password hashing, server-side sessions, optional TOTP enrollment |
 | **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, SAS confirmation, challenge-response over an outbound WebSocket |
-| **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, revoke |
-| **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
+| **Hosts** | Online/offline/disabled, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, rename, disable/enable, revoke |
+| **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active; mtime fingerprint of agent stores with a 500 ms debounce and a 15 s fallback (new sessions normally appear within 2-3 s) |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
-| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | No public release feed during alpha; a private test feed needs a read-only `NEXUS_GITHUB_TOKEN` |
+| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | No public release feed during alpha; CI development builds are installed through authenticated installer scripts |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -77,6 +77,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Home** | Workspace summary, open agent activity, projects, recent sessions and host status |
 | **Projects** | Sessions grouped by normalized working directory, with branch, agents and active counts; identical remotes are recognized across hosts and worktrees are counted |
 | **Favorites** | Per-user pinned sessions reflected in the sidebar and session/chat headers |
+| **Local metadata** | Per-user session tags and local titles, tag filter, inline title editor and command-palette display; native titles and transcripts are never changed |
 | **Themes** | Dark, light and system mode; stored per user on the hub, with an initial system-colored login screen |
 | **Languages** | English (default) and German interface; selectable on the login screen or under Settings, stored per browser, with `<html lang>` and date/number locale following the choice |
 | **Navigation** | Collapsible desktop sidebar, mobile bottom navigation, session tabs and a `Ctrl/Cmd+K` command palette |
@@ -87,14 +88,16 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Chat** | Streaming text, Markdown/GFM tables, footnotes, nested task lists, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
 | **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, a searchable model picker with favorites/recent models, live reasoning/agent selectors and bounded attachments gated by real capabilities; ACP agents expose only what they advertise |
 | **Search** | Federated transcript search across online hosts with a host-local FTS5 index (BM25 ranking, snippets), adapter fallback while indexing and agent/host filters; offline hosts are reported, not silently skipped |
-| **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js; stopping a run terminates the whole process tree (Unix process group, Windows Job Object) |
+| **Session browse** | Server-side sort (`updated`, `created`, `title`, `messages`), order, RFC 3339 `since`/`until`, 24 h/7 d/30 d/custom UI filters and a tag filter; filter state lives in the URL, and offscreen project groups use native browser virtualization |
+| **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js; stopping a run terminates the whole process tree (Unix process group, Windows Job Object with a suspended-start handshake); a bounded 1 MiB per-run ring buffer replays output after a hub outage |
 | **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
-| **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects |
+| **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects; each push category can be switched off per user without losing inbox events |
 | **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events |
-| **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host; opens a full-width changes page with unified and split layouts |
+| **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host; opens a full-width changes page with unified and split layouts; the chat details panel refreshes the working tree while a run is active |
+| **Observability** | Optional token-protected `/metrics` with host/browser/run gauges, per-route HTTP counters and duration summaries, reconnect/push-failure counters and approval latency; request IDs and route-only structured logs never include query strings or transcript content |
 | **PWA** | Manifest, service worker, maskable PNG icons, installable on desktop and mobile |
 | **Multi-user** | Owner/admin/member/viewer roles, per-host grants, user management, device revocation |
-| **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal |
+| **Concurrency guard** | One AgentNexus run per native session on a host; explicit controller lease for input; best-effort detection of sessions open in a native terminal with an Attach / read-only / Fork / forced-step-up conflict dialog and an audit entry for forced resumes |
 | **Host policy** | `allowed_roots`, `allowed_agents`, new/fork switches and forbidden permission-bypass flags, enforced on the host |
 | **Audit** | Append-only, hash-chained hub audit log with verification in the UI/API |
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
@@ -115,14 +118,27 @@ version outside the band disables structured mode with a visible warning while
 terminal mode keeps working; `allow_untested_agent_versions` overrides this and
 is audited. Unknown versions are warned about but not disabled.
 
-Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
+Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
 
-### Build from source
+### Install a host client (no Go toolchain)
 
-There are no downloadable release binaries during alpha. Build the hub and the
-host daemon from the current `main`:
+CI builds the daemon for Windows, Linux and macOS on every push to `main` and
+uploads it as an authenticated workflow artifact. Clone the private repository,
+then run the installer; it downloads, checksum-verifies and installs `nexusd`:
+
+```powershell
+# Windows, in an authenticated gh session
+powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
+```
+
+```bash
+# Linux / macOS
+./scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
+```
+
+A source build still works when Go 1.27.4+ is available:
 
 ```bash
 make build          # produces bin/nexus-hub and bin/nexusd
@@ -183,7 +199,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This alpha build has not received an external security audit. Hub-to-host commands are signed, but client/device-signed commands and PostgreSQL are not implemented; do not treat this as a 1.0 security posture.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This alpha build has not received an external security audit. Hub-to-host commands are signed, but client/device-signed commands and PostgreSQL are not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
@@ -259,10 +275,10 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 | --- | --- |
 | 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; SP-1 to SP-5 reports in `docs/spikes/` |
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
-| 2 — Discovery & transcripts | 🟡 core implemented; host-local FTS5 index with adapter fallback and progress in the UI; live native-process detection is best effort; browser soak pending |
-| 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; process-tree termination is tested on Linux, macOS and Windows; per-agent/OS end-to-end matrix and WSL still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes, generic ACP with capability-driven controls, approvals, Web Push, QR device pairing, host SAS confirmation, a tested agent version matrix and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
-| 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, hub command signing and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
+| 2 — Discovery & transcripts | 🟡 core implemented; host-local FTS5 index with adapter fallback and progress in the UI; mtime-based discovery with a five-second budget; live native-process detection is best effort; browser soak pending |
+| 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; process-tree termination is tested on Linux, macOS and Windows, including the suspended-start job handshake; per-agent/OS end-to-end matrix and WSL still open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes, generic ACP with capability-driven controls, approvals, Web Push with per-category opt-outs, QR device pairing, host SAS confirmation, a tested agent version matrix and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
+| 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, host rename/disable, hub command signing, optional Prometheus metrics and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 
 Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The status table reflects what the code does, not what the roadmap intends.

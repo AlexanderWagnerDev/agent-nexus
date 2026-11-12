@@ -313,6 +313,68 @@ session count; `nexusd index rebuild` rebuilds it after changing
 the indexed transcript text and can be deleted at any time while the daemon is
 stopped.
 
+## Metrics
+
+`/metrics` is disabled by default. Enable it on the hub container and set a long
+random bearer token:
+
+```dotenv
+NEXUS_METRICS=true
+NEXUS_METRICS_TOKEN=replace-with-a-long-random-value
+```
+
+Prometheus scrape configuration:
+
+```yaml
+scrape_configs:
+  - job_name: agentnexus
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: replace-with-a-long-random-value
+    static_configs:
+      - targets: ["nexus.example.com"]
+```
+
+The endpoint is served by the same hub process, so proxy it like the web app
+and do not expose it without the token. Metrics contain counts and route
+patterns only; no session ids, search terms or transcript text are exported.
+HTTP request logs use a request id and the matched route pattern, never the
+query string.
+
+## Session metadata and tags
+
+Local titles and tags are per-user hub metadata (`session_overrides`,
+`session_tags`). They never modify the agent's native store, and deleting a
+session removes its local metadata. Filtering by tag and sorting by title
+happen in SQLite; the UI keeps its filter state in the URL. The session list
+uses API paging plus native `content-visibility` for offscreen project groups,
+so a 10,000-session index remains responsive without rendering every row.
+
+## Disabled hosts and active-elsewhere conflicts
+
+Disabling a host is reversible and requires step-up confirmation. The hub asks
+the daemon to stop active runs, then closes the link; reconnect attempts are
+rejected until the host is enabled again. Renaming a host only changes the
+hub-side display name and survives reconnects.
+
+When a host reports that a native terminal has a session open, resuming returns
+HTTP 409 with `reason: active_elsewhere`. The UI offers attach (for an existing
+AgentNexus run), read-only transcript, fork where supported, or a forced resume
+that requires step-up and is written to the audit chain. Detection is a
+best-effort process scan, not a guarantee.
+
+## Dependency licenses
+
+CI runs `node scripts/check-licenses.mjs` against the Go module graph and the
+browser lockfile. Allowed licenses are MIT, BSD-2-Clause, BSD-3-Clause,
+Apache-2.0, ISC and 0BSD. MPL-2.0 is accepted only for packages listed with a
+written reason in `scripts/license-exceptions.json`; currently `axe-core`
+(development-only accessibility scanner) and `github.com/hashicorp/golang-lru/v2`
+(a transitive dependency of `modernc.org/libc`). Adding a dependency outside
+these rules fails CI.
+
 ## Troubleshooting
 
 | Symptom | Check |

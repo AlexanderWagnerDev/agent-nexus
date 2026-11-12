@@ -43,11 +43,11 @@ sessions.
 - New screenshots must be generated from the synthetic demo hub in
   `web/e2e/demo/`. Existing screenshots are being replaced as the demo fixture
   grows.
-- **Git history:** rewritten on 2026-11-11. Authors and committers are normalised
-  to `AlexanderWagnerDev` and the GitHub no-reply address. Old screenshots and
-  release-note blobs were removed from all commits; the synthetic screenshots
-  were re-added in one commit. No real name or personal email is reachable in
-  the published history.
+- **Git history:** a rewrite was attempted on 2026-11-11, but a follow-up audit
+  on 2026-11-12 still found personal addresses and display names in reachable
+  commits, including merge commits. Do not make the repository public until
+  this is resolved with explicit maintainer approval; see
+  [HISTORY-REWRITE.md](HISTORY-REWRITE.md#follow-up-audit-2026-11-12).
 - **GitHub retention:** a force-push does not immediately erase server-side
   objects. Old commits can still be fetched by SHA until GitHub Support purges
   them, and merged pull-request refs still pin old commits. This must be

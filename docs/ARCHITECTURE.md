@@ -199,12 +199,12 @@ flowchart TB
 | --- | --- |
 | Hub link client | Challenge–response authentication with the host key, heartbeat (default 20 s), reconnect with exponential backoff (1 s → 60 s, full jitter), channel multiplexing, flow control. |
 | Policy engine | Loads `nexusd.json` (see [SECURITY.md — Host policy](SECURITY.md#host-policy)); every incoming request is checked before execution. The hub only receives a read-only summary. |
-| Discovery & indexer | Runs adapter discovery on start, then a full rescan every 30 seconds; a SHA-256 hash of the normalized snapshot suppresses unchanged uploads. A parser failure reuses the last successful per-agent snapshot instead of deleting sessions. |
+| Discovery & indexer | Watches agent-store fingerprints with a 2 s mtime poll and a 500 ms debounce, rescans fully every 15 s as a fallback, and suppresses unchanged uploads with a per-session hash. A parser failure reuses the last successful per-agent snapshot instead of deleting sessions. |
 | Process inspector | Maps running agent processes to native sessions (agent-specific signals, see [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md#2-common-adapter-contract)) to set `active_elsewhere`. |
-| Run manager | Creates runs (terminal or structured), enforces one active run per native session across all four run maps, keeps a bounded output buffer for replay, and stops the child process on request. Full process-tree guarantees are still a roadmap item. |
+| Run manager | Creates runs (terminal or structured), enforces one active run per native session across all four run maps, keeps a bounded 1 MiB per-run output buffer for reconnect replay, and stops the child process tree on request. |
 | Approval broker | Receives approval requests from structured drivers, applies policy (auto-deny forbidden actions), forwards to hub, enforces timeouts (default 10 min → deny). |
-| Search service | Performs a tolerant linear scan over the agents' JSONL/SQLite stores and answers federated search queries. An FTS5 cache is a roadmap item. |
-| PTY layer | Cross-platform PTY with resize, UTF-8 handling, signal delivery and process-tree termination (process groups on Unix, Job Objects on Windows). |
+| Search service | Answers federated search queries from the host-local FTS5 index, with a tolerant linear adapter scan while the index is building. |
+| PTY layer | Cross-platform PTY with resize, UTF-8 handling, signal delivery and process-tree termination (process groups on Unix, Job Objects on Windows; the child starts suspended and is assigned before it can spawn descendants). |
 
 ### 4.1 Process model
 
@@ -625,4 +625,4 @@ flowchart LR
 
 - Structured JSON logs (`log/slog`), correlation IDs `request_id`, `host_id`, `run_id`; conversation content and secrets are never logged (NFR-13).
 - Health: `GET /healthz` (liveness), `GET /readyz` (DB reachable) on the hub; `nexusd status` locally.
-- Metrics (optional, `/metrics`, Prometheus format, disabled by default and bound to localhost or protected): connected hosts, active runs, relay throughput, discovery duration, adapter errors by agent and version.
+- Metrics (optional, `/metrics`, Prometheus text format): `NEXUS_METRICS=true` registers the endpoint and `NEXUS_METRICS_TOKEN` is required as an `Authorization: Bearer` token. It exposes connected hosts, active runs, browser WebSockets, per-route HTTP counters and duration summaries, host reconnects, Web Push failures and approval latency. Route patterns are used as labels; raw paths, query strings and transcript content never appear.

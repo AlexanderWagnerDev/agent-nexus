@@ -61,3 +61,18 @@ The exact values are intentionally **not** written down in this file.
   maintainer approval because it deletes PR and issue history.
 - The mirror backup must stay offline and private until the maintainer confirms
   the result, then be deleted.
+
+## Follow-up audit (2026-11-12)
+
+A fresh check found that the reachable `main` history still contains commits
+authored or committed with the personal address and, on merge commits, the
+personal display name. Examples exist both before and after this pass. The
+rewrite described above therefore does not currently satisfy the publication
+checklist for the whole branch.
+
+This was **not** rewritten again: a history rewrite requires explicit maintainer
+approval because it invalidates every clone, open pull request and commit link.
+Until then the repository must stay private. Before publication either request a
+GitHub Support purge plus PR-ref cleanup, or recreate the repository from a
+freshly rewritten history with approval. New commits use the approved no-reply
+identity locally.

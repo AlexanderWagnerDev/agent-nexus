@@ -1,0 +1,6 @@
+{
+  "MPL-2.0": [
+    "axe-core",
+    "github.com/hashicorp/golang-lru/v2"
+  ]
+}

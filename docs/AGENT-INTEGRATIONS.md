@@ -70,11 +70,29 @@ vendor documentation above:
   existing sessions when the agent advertises `loadSession`.
 - **Concurrency:** one shared guard rejects a second run for the same
   `agent:native_id` across terminal, OpenCode, Codex and ACP maps. Per-session
-  locks are therefore consistent across modes.
+  locks are therefore consistent across modes. `active_elsewhere` is enforced
+  by the host on resume; the hub returns a machine-readable 409 and only sends
+  `force: true` after a step-up-confirmed dialog.
+- **Discovery latency:** the daemon fingerprints the Claude, Codex, OpenCode
+  (including `-wal`/`-shm`) and Gemini store paths every 2 seconds, debounces
+  changes for 500 ms and keeps the 15-second full rescan as a fallback. A new
+  session normally reaches the hub in 2-3 seconds.
+- **Terminal replay:** each terminal run keeps a bounded 1 MiB ring buffer
+  (`run_buffer_bytes`, clamped to 64 KiB-16 MiB). Output produced during a hub
+  outage is replayed on reconnect and deduplicated by sequence number.
+- **Structured fork:** none of the current structured drivers exposes a
+  reliable non-interactive fork. The UI only offers fork for Codex and Claude
+  terminal mode (`codex fork`, `claude --resume --fork-session`); OpenCode has
+  no non-interactive fork in v2. Structured fork requests are rejected on the
+  host instead of pretending to work.
+- **Gemini ACP:** the generic ACP driver works with
+  `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
+  the installed Gemini version. Discovery remains best effort and the version
+  matrix does not claim a verified structured integration.
 - **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
   concurrency guards have unit tests. Real Codex and OpenCode runs were
-  exercised on Windows 11; real Claude sessions were not available. Linux and
-  macOS are covered by CI build/tests only.
+  exercised on Windows 11; real Claude and Gemini sessions were not available.
+  Linux and macOS are covered by CI build/tests only.
 
 
 ## 2. Common adapter contract

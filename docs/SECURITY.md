@@ -398,6 +398,15 @@ Goal: a compromised or malicious hub must not be able to forge control commands.
 
 **Limitation (documented, risk R-10):** in the web client the JavaScript is delivered by the hub. A compromised hub could serve modified JavaScript that uses the (non-extractable) key to sign malicious commands while the page is open. Full protection therefore requires a native client whose UI code is not loaded from the hub (ADR-013). Signed-command mode still protects against offline or stolen-database attacks and against a hub that is compromised while no browser session is open.
 
+**Status (alpha): not implemented.** The host enforces policy, run uniqueness,
+argument filters and hub-command signatures, but it cannot distinguish a command
+that a signed-in browser intended from one fabricated by a compromised hub. A
+browser-delivered client cannot close that gap because the hub also serves the
+JavaScript. A useful future implementation therefore needs either a native
+client/extension whose code is not loaded from the hub, or host-local device
+approval that shows the exact command before execution. Device keys alone add
+non-repudiation but not protection against a compromised hub.
+
 ## Web security controls
 
 - **CSP:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://<hub>; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`; Trusted Types where supported.
