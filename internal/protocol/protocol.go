@@ -288,9 +288,11 @@ type Envelope struct {
 	Error   string    `json:"error,omitempty"`
 	Run     *RunSpec  `json:"run,omitempty"`
 	Runs    []RunInfo `json:"runs,omitempty"`
-	// NativeID reports the native session a structured fork created. The hub
-	// adopts it as a new session and does not modify the source session.
+	// NativeID reports the native session a structured new-session or fork
+	// created. The hub adopts it as a new session and does not modify the
+	// source session.
 	NativeID   string         `json:"native_id,omitempty"`
+	Action     string         `json:"action,omitempty"`
 	Agent      string         `json:"agent,omitempty"`
 	Cwd        string         `json:"cwd,omitempty"`
 	Update     *UpdateStatus  `json:"update,omitempty"`

@@ -51,7 +51,7 @@ func TestOpenCodeV2(t *testing.T) {
 	}
 	_, err = db.Exec(`INSERT INTO session_message(id,session_id,type,seq,time_created,time_updated,data) VALUES(?,?,?,?,?,?,?)`,
 		"msg2", "ses_v2test", "assistant", 2, 2000, 2000,
-		`{"content":[{"type":"text","text":"hi"},{"type":"tool","name":"bash","state":{"input":{"command":"echo hi"},"content":[{"type":"text","text":"hi\n"}]}}]}`)
+		`{"content":[{"type":"reasoning","text":"we should reply"},{"type":"text","text":"hi"},{"type":"tool","name":"bash","state":{"input":{"command":"echo hi"},"content":[{"type":"text","text":"hi\n"}]}}]}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,13 +67,13 @@ func TestOpenCodeV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Total != 3 {
-		t.Fatalf("expected 3 transcript entries, got %d: %+v", tr.Total, tr.Messages)
+	if tr.Total != 4 {
+		t.Fatalf("expected 4 transcript entries, got %d: %+v", tr.Total, tr.Messages)
 	}
-	if tr.Messages[0].Text != "hello v2" || tr.Messages[1].Text != "hi" {
+	if tr.Messages[0].Text != "hello v2" || tr.Messages[1].Text != "we should reply" || tr.Messages[2].Text != "hi" {
 		t.Fatalf("unexpected transcript: %+v", tr.Messages)
 	}
-	if tr.Messages[2].ToolName != "bash" || tr.Messages[2].ToolOutput != "hi\n" {
-		t.Fatalf("tool message not parsed: %+v", tr.Messages[2])
+	if tr.Messages[3].ToolName != "bash" || tr.Messages[3].ToolOutput != "hi\n" {
+		t.Fatalf("tool message not parsed: %+v", tr.Messages[3])
 	}
 }

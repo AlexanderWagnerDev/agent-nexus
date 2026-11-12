@@ -23,7 +23,11 @@ type AgentVersionRange struct {
 var agentVersionMatrix = []AgentVersionRange{
 	{Agent: "claude", Min: "2.0.0", Max: "3.0.0", Structured: true},
 	{Agent: "codex", Min: "0.50.0", Max: "1.0.0", Structured: true},
-	{Agent: "opencode", Min: "1.0.0", Max: "2.0.0", Structured: true},
+	// OpenCode 2.2.x is the first line whose HTTP API matches the structured
+	// driver (session/prompt, SSE events, permissions, fork). The old 1.x
+	// endpoints are not exercised by this driver, so terminal mode is the
+	// fallback outside this band.
+	{Agent: "opencode", Min: "2.2.0", Max: "3.0.0", Structured: true},
 	{Agent: "gemini", Min: "0.1.0", Max: "1.0.0", Structured: true},
 }
 

@@ -3,6 +3,8 @@ package host
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,10 +43,13 @@ type StructuredRun struct {
 	mu        sync.Mutex
 	calls     map[string]string
 	approvals map[string]*time.Timer
-	closed    bool
-	readyOnce *sync.Once
-	state     string
-	usage     protocol.Usage
+	// reasoningStreamed records messages whose reasoning arrived as deltas so
+	// the final ended event does not duplicate the text in the UI.
+	reasoningStreamed map[string]bool
+	closed            bool
+	readyOnce         *sync.Once
+	state             string
+	usage             protocol.Usage
 }
 
 func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpec) {
@@ -66,10 +71,6 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	}
 	if spec.Agent != "opencode" {
 		fail("structured mode is available for OpenCode, Codex and configured ACP agents; use terminal mode")
-		return
-	}
-	if spec.Action == protocol.ActionFork {
-		fail("structured fork is not implemented; use terminal fork")
 		return
 	}
 	cwd := spec.Cwd
@@ -131,10 +132,14 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		return
 	}
 	path, args := commandFor(binPath, []string{"serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port)})
+	password := serverPassword()
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1")
+	// Set the password ourselves: OpenCode 2.x only prints a generated
+	// password when the variable is absent, so waiting for the line would hang
+	// when the daemon environment already defines it.
+	cmd.Env = withEnv(append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1"), "OPENCODE_SERVER_PASSWORD", password)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
@@ -160,10 +165,11 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	}
 	sr := &StructuredRun{
 		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
-		sessionKey: sessionKey, state: protocol.StateIdle,
+		sessionKey: sessionKey, state: protocol.StateIdle, password: password,
 		cmd: cmd, guard: guard, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
-		client:    &http.Client{Timeout: 30 * time.Second},
-		readyOnce: new(sync.Once),
+		reasoningStreamed: map[string]bool{},
+		client:            &http.Client{Timeout: 30 * time.Second},
+		readyOnce:         new(sync.Once),
 	}
 	ready := make(chan struct{})
 	go sr.scanServerOutput(stdout, ready)
@@ -180,13 +186,15 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		_ = cmd.Process.Kill()
 		return
 	}
-	if sr.baseURL == "" || sr.password == "" {
+	if sr.baseURL == "" {
 		cancel()
 		_ = cmd.Process.Kill()
-		fail("opencode server did not report its address and password")
+		fail("opencode server did not report its listening address")
 		return
 	}
-	if spec.Action == protocol.ActionNew {
+	reportedNativeID := ""
+	switch spec.Action {
+	case protocol.ActionNew:
 		sessionID, err := sr.createSession(cwd)
 		if err != nil {
 			sr.Stop()
@@ -194,7 +202,17 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 			return
 		}
 		sr.sessionID = sessionID
-	} else {
+		reportedNativeID = sessionID
+	case protocol.ActionFork:
+		sessionID, err := sr.forkSession(spec.NativeID)
+		if err != nil {
+			sr.Stop()
+			fail("cannot fork opencode session: " + err.Error())
+			return
+		}
+		sr.sessionID = sessionID
+		reportedNativeID = sessionID
+	default:
 		sr.sessionID = spec.NativeID
 	}
 	if sr.sessionID == "" {
@@ -202,15 +220,11 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("no native session id")
 		return
 	}
-	reportedNativeID := ""
-	if spec.Action == protocol.ActionNew {
-		reportedNativeID = sr.sessionID
-	}
 
 	d.runMu.Lock()
 	d.structured[spec.RunID] = sr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
 	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
@@ -257,6 +271,27 @@ func freeLoopbackPort() (int, error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+func serverPassword() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "nexus-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// withEnv replaces an existing environment entry instead of appending a
+// duplicate, so the child always sees the password the driver generated.
+func withEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
 }
 
 func (r *StructuredRun) scanServerOutput(reader io.Reader, ready chan<- struct{}) {
@@ -333,6 +368,31 @@ func (r *StructuredRun) createSession(cwd string) (string, error) {
 	}
 	if out.Data.ID == "" {
 		return "", errors.New("opencode returned an empty session id")
+	}
+	return out.Data.ID, nil
+}
+
+// forkSession creates a native OpenCode fork. The source session is not
+// modified; OpenCode returns the new session with its own id.
+func (r *StructuredRun) forkSession(sourceID string) (string, error) {
+	if strings.TrimSpace(sourceID) == "" {
+		return "", errors.New("source session id is required")
+	}
+	raw, _, err := r.request(context.Background(), http.MethodPost,
+		"/api/session/"+url.PathEscape(sourceID)+"/fork", map[string]any{})
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	if out.Data.ID == "" {
+		return "", errors.New("opencode returned an empty fork session id")
 	}
 	return out.Data.ID, nil
 }
@@ -479,7 +539,10 @@ func (r *StructuredRun) ReplyApproval(id, decision string) error {
 	}
 	r.mu.Unlock()
 	reply := "once"
-	if decision == "reject" {
+	switch decision {
+	case "always":
+		reply = "always"
+	case "reject", "deny":
 		reply = "reject"
 	}
 	_, _, err := r.request(context.Background(), http.MethodPost,
@@ -574,9 +637,22 @@ func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
 		send(protocol.RunEvent{Type: "message.delta", MessageID: str(data["assistantMessageID"]), Text: str(data["delta"])})
 	case "session.text.ended":
 		send(protocol.RunEvent{Type: "message.completed", MessageID: str(data["assistantMessageID"]), Text: str(data["text"])})
+	case "session.reasoning.delta":
+		messageID := str(data["assistantMessageID"])
+		if delta := str(data["delta"]); delta != "" {
+			r.mu.Lock()
+			r.reasoningStreamed[messageID] = true
+			r.mu.Unlock()
+			send(protocol.RunEvent{Type: "reasoning", MessageID: messageID, Text: delta})
+		}
 	case "session.reasoning.ended":
-		if text := str(data["text"]); text != "" {
-			send(protocol.RunEvent{Type: "reasoning", MessageID: str(data["assistantMessageID"]), Text: text})
+		messageID := str(data["assistantMessageID"])
+		r.mu.Lock()
+		streamed := r.reasoningStreamed[messageID]
+		delete(r.reasoningStreamed, messageID)
+		r.mu.Unlock()
+		if text := str(data["text"]); text != "" && !streamed {
+			send(protocol.RunEvent{Type: "reasoning", MessageID: messageID, Text: text})
 		}
 	case "session.tool.input.started":
 		callID := str(data["id"])

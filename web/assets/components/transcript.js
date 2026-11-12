@@ -40,6 +40,9 @@ export function renderTranscriptMessage(m, agent = 'agent') {
     const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '');
     return historyToolCard(described, m);
   }
+  if (m.kind === 'reasoning' && m.text) {
+    return `<article class="turn turn-assistant turn-reasoning">${reasoningHtml(m.text)}</article>`;
+  }
   if (m.role === 'user') {
     const body = renderUserText(m.text);
     if (!body) return '';

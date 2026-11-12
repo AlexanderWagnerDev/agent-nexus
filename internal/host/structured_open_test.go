@@ -26,6 +26,7 @@ func newStructuredTestRun(t *testing.T, handler http.HandlerFunc) (*StructuredRu
 		baseURL: server.URL, password: "secret", client: server.Client(),
 		daemon: &Daemon{log: logger},
 		calls:  map[string]string{}, approvals: map[string]*time.Timer{},
+		reasoningStreamed: map[string]bool{},
 	}
 	return run, server
 }
@@ -137,6 +138,50 @@ func TestStructuredRunRequestErrorAndCreateSession(t *testing.T) {
 	}
 }
 
+func TestStructuredRunForkSession(t *testing.T) {
+	var path, method string
+	run, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {
+		path, method = r.URL.EscapedPath(), r.Method
+		_, _ = w.Write([]byte(`{"data":{"id":"forked-1"}}`))
+	})
+	id, err := run.forkSession("source/one")
+	if err != nil || id != "forked-1" {
+		t.Fatalf("forkSession: %q %v", id, err)
+	}
+	if method != http.MethodPost || path != "/api/session/source%2Fone/fork" {
+		t.Fatalf("fork request: %s %s", method, path)
+	}
+	if _, err := run.forkSession("  "); err == nil {
+		t.Fatal("empty source id accepted")
+	}
+	empty, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":""}}`))
+	})
+	if _, err := empty.forkSession("source"); err == nil {
+		t.Fatal("empty fork id accepted")
+	}
+}
+
+func TestServerPasswordAndEnvReplacement(t *testing.T) {
+	first, second := serverPassword(), serverPassword()
+	if len(first) < 20 || first == second {
+		t.Fatalf("password not random: %q %q", first, second)
+	}
+	env := withEnv([]string{"A=1", "OPENCODE_SERVER_PASSWORD=old"}, "OPENCODE_SERVER_PASSWORD", "new")
+	seen := 0
+	for _, item := range env {
+		if item == "OPENCODE_SERVER_PASSWORD=new" {
+			seen++
+		}
+		if item == "OPENCODE_SERVER_PASSWORD=old" {
+			t.Fatal("old password survived")
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("expected one replacement, got %d: %v", seen, env)
+	}
+}
+
 func TestStructuredRunStopAndApproval(t *testing.T) {
 	t.Setenv("APPDATA", t.TempDir())
 	var replied string
@@ -212,12 +257,14 @@ func TestStructuredHandleEvent(t *testing.T) {
 	run := &StructuredRun{
 		id: "run-1", daemon: daemon, calls: map[string]string{},
 		approvals: map[string]*time.Timer{}, readyOnce: &sync.Once{},
+		reasoningStreamed: map[string]bool{},
 	}
 	run.cancel = func() {}
 
 	run.handleEvent("session.text.started", map[string]any{"assistantMessageID": "m1"})
 	run.handleEvent("session.text.delta", map[string]any{"assistantMessageID": "m1", "delta": "hello"})
 	run.handleEvent("session.text.ended", map[string]any{"assistantMessageID": "m1", "text": "hello"})
+	run.handleEvent("session.reasoning.delta", map[string]any{"assistantMessageID": "m1", "delta": "think"})
 	run.handleEvent("session.reasoning.ended", map[string]any{"assistantMessageID": "m1", "text": "thinking"})
 	run.handleEvent("session.tool.input.started", map[string]any{"id": "c1", "name": "shell"})
 	run.handleEvent("session.tool.input.ended", map[string]any{"id": "c1", "text": `{"command":"echo hi"}`})

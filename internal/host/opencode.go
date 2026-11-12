@@ -178,6 +178,7 @@ type opencodePart struct {
 		Title   string          `json:"title"`
 		Input   json.RawMessage `json:"input"`
 		Output  json.RawMessage `json:"output"`
+		Error   json.RawMessage `json:"error"`
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -194,8 +195,11 @@ type opencodePart struct {
 }
 
 type v2Message struct {
-	Text    string         `json:"text"`
-	Content []opencodePart `json:"content"`
+	Text     string         `json:"text"`
+	Content  []opencodePart `json:"content"`
+	Metadata struct {
+		DisplayText string `json:"displayText"`
+	} `json:"metadata"`
 }
 
 func (a *OpenCodeAdapter) Transcript(ctx context.Context, nativeID string, offset, limit int) (protocol.Transcript, error) {
@@ -235,8 +239,12 @@ func (a *OpenCodeAdapter) v2Transcript(ctx context.Context, db *sql.DB, nativeID
 		}
 		switch typ {
 		case "user":
-			if strings.TrimSpace(m.Text) != "" {
-				all = append(all, protocol.Message{Role: "user", Kind: "text", Text: m.Text, Timestamp: ts})
+			text := m.Text
+			if strings.TrimSpace(text) == "" {
+				text = m.Metadata.DisplayText
+			}
+			if strings.TrimSpace(text) != "" {
+				all = append(all, protocol.Message{Role: "user", Kind: "text", Text: text, Timestamp: ts})
 			}
 			for _, p := range m.Content {
 				if p.Type == "text" && strings.TrimSpace(p.Text) != "" {
@@ -249,6 +257,10 @@ func (a *OpenCodeAdapter) v2Transcript(ctx context.Context, db *sql.DB, nativeID
 				case "text":
 					if strings.TrimSpace(p.Text) != "" {
 						all = append(all, protocol.Message{Role: "assistant", Kind: "text", Text: p.Text, Timestamp: ts})
+					}
+				case "reasoning":
+					if strings.TrimSpace(p.Text) != "" {
+						all = append(all, protocol.Message{Role: "assistant", Kind: "reasoning", Text: p.Text, Timestamp: ts})
 					}
 				case "tool":
 					all = append(all, toolMessage(p, ts))
@@ -285,6 +297,9 @@ func toolMessage(p opencodePart, ts time.Time) protocol.Message {
 	if out.Len() == 0 {
 		out.WriteString(p.State.Metadata.Output)
 	}
+	if out.Len() == 0 && len(p.State.Error) > 0 {
+		out.WriteString(rawErrorText(p.State.Error))
+	}
 	name := p.Tool
 	if name == "" {
 		name = p.Name
@@ -293,6 +308,26 @@ func toolMessage(p opencodePart, ts time.Time) protocol.Message {
 		Role: "assistant", Kind: "tool_call", ToolName: name,
 		ToolInput: truncate(input, 8000), ToolOutput: truncate(out.String(), 8000), Timestamp: ts,
 	}
+}
+
+func rawErrorText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var obj struct {
+		Message string `json:"message"`
+		Name    string `json:"name"`
+	}
+	if json.Unmarshal(raw, &obj) == nil {
+		if obj.Message != "" {
+			return obj.Message
+		}
+		if obj.Name != "" {
+			return obj.Name
+		}
+	}
+	return string(raw)
 }
 
 func (a *OpenCodeAdapter) legacyTranscript(ctx context.Context, db *sql.DB, nativeID string, offset, limit int) (protocol.Transcript, error) {
@@ -427,13 +462,16 @@ func v2Snippet(data, query string) string {
 	}
 	text := m.Text
 	for _, p := range m.Content {
-		if p.Type == "text" {
+		if p.Type == "text" || p.Type == "reasoning" {
 			text += " " + p.Text
 		}
 		if p.Type == "tool" {
 			text += " " + string(p.State.Input)
 			for _, c := range p.State.Content {
 				text += " " + c.Text
+			}
+			if len(p.State.Error) > 0 {
+				text += " " + rawErrorText(p.State.Error)
 			}
 		}
 	}

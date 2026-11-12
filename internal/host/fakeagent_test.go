@@ -73,6 +73,10 @@ func runFakeOpenCode(args []string) int {
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/session/") {
+			if strings.HasSuffix(r.URL.Path, "/fork") {
+				writeFakeJSON(w, map[string]any{"data": map[string]any{"id": "fake-forked-session"}})
+				return
+			}
 			if strings.HasSuffix(r.URL.Path, "/interrupt") || strings.HasSuffix(r.URL.Path, "/prompt") ||
 				strings.HasSuffix(r.URL.Path, "/model") || strings.HasSuffix(r.URL.Path, "/agent") {
 				writeFakeJSON(w, map[string]any{"data": map[string]any{}})

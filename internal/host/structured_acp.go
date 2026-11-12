@@ -243,7 +243,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	d.runMu.Lock()
 	d.acpRuns[spec.RunID] = ar
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("ACP structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", ar.sessionID, "cwd", cwd)
 	hostAudit("acp.structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})

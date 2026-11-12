@@ -208,7 +208,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	d.runMu.Lock()
 	d.codexRuns[spec.RunID] = cr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("codex structured run started", "run_id", spec.RunID, "thread", cr.threadID, "cwd", cwd)
 	hostAudit("codex.structured.started", map[string]any{"run_id": spec.RunID, "cwd": cwd})

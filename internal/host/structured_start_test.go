@@ -124,6 +124,39 @@ func TestStartStructuredRunAgainstFakeOpenCode(t *testing.T) {
 	})
 }
 
+func TestStartStructuredForkAgainstFakeOpenCode(t *testing.T) {
+	t.Setenv("NEXUS_TEST_AGENT", "opencode")
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	exe := testBinary(t)
+	d := testDaemon(t, []string{"opencode"}, []Adapter{&OpenCodeAdapter{bin: exe}}, nil, root)
+
+	spec := protocol.RunSpec{
+		RunID: "run-open-fork", Agent: "opencode", Action: protocol.ActionFork,
+		NativeID: "source-session", Cwd: root, Mode: protocol.ModeStructured,
+	}
+	d.startStructuredRun(context.Background(), spec)
+
+	waitForHost(t, "structured fork run", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.structured["run-open-fork"] != nil
+	})
+	d.runMu.Lock()
+	run := d.structured["run-open-fork"]
+	d.runMu.Unlock()
+	if run.sessionID != "fake-forked-session" {
+		t.Fatalf("forked session: %q", run.sessionID)
+	}
+	run.Stop()
+	waitForHost(t, "structured fork cleanup", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.structured["run-open-fork"] == nil
+	})
+}
+
 func TestStartCodexStructuredAgainstFakeAppServer(t *testing.T) {
 	t.Setenv("NEXUS_TEST_AGENT", "codex")
 	t.Setenv("APPDATA", t.TempDir())

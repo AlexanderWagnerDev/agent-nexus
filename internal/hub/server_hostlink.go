@@ -287,7 +287,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 	case "run.started":
 		if msg.NativeID != "" {
-			s.adoptNativeSession(msg.RunID, msg.NativeID, msg.Agent, msg.Cwd)
+			s.adoptNativeSession(msg.RunID, msg.NativeID, msg.Agent, msg.Cwd, msg.Action)
 		}
 		s.setRunState(msg.RunID, protocol.StateRunning)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning, Epoch: s.epoch})
@@ -349,7 +349,7 @@ func validForkNativeID(id string) bool {
 
 // adoptNativeSession links a new or forked structured run to the native
 // session the host created. The source session row is never modified.
-func (s *Server) adoptNativeSession(runID, nativeID, reportedAgent, reportedCwd string) {
+func (s *Server) adoptNativeSession(runID, nativeID, reportedAgent, reportedCwd, action string) {
 	if !validForkNativeID(nativeID) {
 		s.log.Warn("host reported an invalid forked session id", "run_id", runID)
 		return
@@ -369,7 +369,14 @@ func (s *Server) adoptNativeSession(runID, nativeID, reportedAgent, reportedCwd 
 		return
 	}
 	title := "New session"
-	if run.SessionTitle != "" {
+	if action == protocol.ActionFork {
+		title = "Fork"
+		if run.SessionTitle != "" {
+			title = "Fork of " + run.SessionTitle
+		}
+	} else if run.SessionTitle != "" && action == "" {
+		// Older daemons did not report the action; preserve the historical
+		// label instead of guessing.
 		title = "Fork of " + run.SessionTitle
 	}
 	sessionID, err := s.store.EnsureForkedSession(run.HostID, agent, nativeID, title, cwd)

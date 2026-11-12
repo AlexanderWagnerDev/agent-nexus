@@ -15,8 +15,10 @@ func TestCheckAgentVersion(t *testing.T) {
 		agent, version string
 		tested, known  bool
 	}{
-		{"opencode", "1.4.2", true, true},
+		{"opencode", "2.2.7", true, true},
+		{"opencode", "1.4.2", false, true},
 		{"opencode", "2.0.0", false, true},
+		{"opencode", "3.0.0", false, true},
 		{"opencode", "0.9.9", false, true},
 		{"codex", "0.58.0", true, true},
 		{"codex", "codex-cli 1.2.3", false, true},
@@ -58,7 +60,7 @@ func TestApplyVersionPolicy(t *testing.T) {
 		t.Fatalf("override warning: %q", allowed.VersionWarning)
 	}
 
-	inside := protocol.AgentInfo{Name: "opencode", Version: "1.4.2", Capabilities: append([]string(nil), base...)}
+	inside := protocol.AgentInfo{Name: "opencode", Version: "2.2.7", Capabilities: append([]string(nil), base...)}
 	d.applyVersionPolicy(&inside)
 	if inside.Untested || inside.VersionWarning != "" || !sliceContains(inside.Capabilities, "structured") {
 		t.Fatalf("inside version changed: %+v", inside)

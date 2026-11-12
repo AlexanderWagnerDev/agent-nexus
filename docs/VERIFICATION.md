@@ -20,15 +20,19 @@ conservative.
 | Prompt queue | Store/API tests for order, schedule, pause, atomic claim, lease mismatch, crash recovery, duplicate prevention |
 | MCP | Auth, revocation, initialize, tools/list, tool calls and error results |
 | CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
+| OpenCode 2.2.7 protocol | Read-only SQLite schema and `/openapi.json` inspected on a local 2.2.7 install; native session create/interrupt and fork contract exercised without a paid model turn; daily driver tests use a fake HTTP server |
 
 ## Not verified here
 
 - Three real Windows hosts through Portainer, a real browser over the public
   internet, a real host disconnect and a real hub process restart.
 - Real Claude Code and Gemini CLI sessions. Neither CLI is installed.
-- Real OpenCode 2.2.7 structured mode: it is outside the tested band, so the
-  driver is disabled with a warning. Terminal `--session` was only checked in
-  `--help`.
+- Real OpenCode 2.2.7 structured prompt execution. The local 2.2.7 install was
+  inspected read-only (SQLite schema, `/openapi.json`, session create and
+  interrupt endpoints); a real model turn was not started because it would
+  incur provider cost. Structured fork is implemented and fake-server tested;
+  OpenCode rejects forks of empty sessions, so a fork requires a session with
+  at least one turn.
 - Real Codex 0.156.1 prompt execution through `app-server`; only the generated
   schema and a fake app-server are covered.
 - Real ntfy/Gotify/Telegram/Discord/Slack or generic webhook endpoints.
