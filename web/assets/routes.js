@@ -9,6 +9,7 @@ export function parseRoute(hash) {
   if (h.startsWith('#/sessions/')) return { page: 'session', id: h.split('/')[2] };
   if (h.startsWith('#/sessions')) return { page: 'sessions' };
   if (h.startsWith('#/usage')) return { page: 'usage' };
+  if (h.startsWith('#/fanout')) return { page: 'fanout' };
   if (h === '#/runs') return { page: 'runs' };
   if (h.startsWith('#/workspace')) return { page: 'workspace' };
   if (h.startsWith('#/runs/')) return { page: 'run', id: h.split('/')[2] };
@@ -26,6 +27,7 @@ export function activeFromHash() {
   if (h.startsWith('#/projects')) return 'projects';
   if (h.startsWith('#/sessions')) return 'sessions';
   if (h.startsWith('#/usage')) return 'usage';
+  if (h.startsWith('#/fanout')) return 'fanout';
   if (h.startsWith('#/runs') || h.startsWith('#/workspace')) return 'runs';
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/settings')) return 'settings';

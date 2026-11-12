@@ -192,6 +192,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/runs/{id}/queue/order", s.requireAuth(s.handleReorderPromptQueue))
 	mux.HandleFunc("POST /api/v1/runs/{id}/queue/pause", s.requireAuth(s.handlePausePromptQueue))
 	mux.HandleFunc("GET /api/v1/usage", s.requireAuth(s.handleUsage))
+	mux.HandleFunc("POST /api/v1/fanouts", s.requireAuth(s.handleCreateFanout))
+	mux.HandleFunc("GET /api/v1/fanouts", s.requireAuth(s.handleListFanouts))
+	mux.HandleFunc("GET /api/v1/fanouts/{id}", s.requireAuth(s.handleGetFanout))
 
 	mux.HandleFunc("GET /api/v1/ws", s.requireAuth(s.handleClientWS))
 	mux.HandleFunc("GET /v1/host/connect", s.handleHostWS)

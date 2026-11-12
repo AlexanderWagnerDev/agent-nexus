@@ -56,7 +56,7 @@ try {
   await login(page);
   const routes = [
     ['#/', 'home'], ['#/projects', 'projects'], ['#/sessions', 'sessions'],
-    ['#/usage', 'usage'], ['#/runs', 'runs'], ['#/hosts', 'hosts'], ['#/settings', 'settings'],
+    ['#/usage', 'usage'], ['#/fanout', 'fanout'], ['#/runs', 'runs'], ['#/hosts', 'hosts'], ['#/settings', 'settings'],
   ];
   if (runID) routes.push([`#/runs/${runID}`, 'chat']);
   for (const [route, label] of routes) {
@@ -70,7 +70,7 @@ try {
   const mobile = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const phone = await mobile.newPage();
   await login(phone);
-  for (const [route, label] of [['#/', 'home'], ['#/sessions', 'sessions'], ['#/usage', 'usage'], ['#/settings', 'settings']]) {
+  for (const [route, label] of [['#/', 'home'], ['#/sessions', 'sessions'], ['#/usage', 'usage'], ['#/fanout', 'fanout'], ['#/settings', 'settings']]) {
     await phone.goto(`${baseURL}/${route}`, { waitUntil: 'domcontentloaded' });
     await phone.waitForTimeout(800);
     const violations = await scan(phone, `mobile:${label}`);

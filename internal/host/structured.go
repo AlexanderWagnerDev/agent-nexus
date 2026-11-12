@@ -202,11 +202,15 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("no native session id")
 		return
 	}
+	reportedNativeID := ""
+	if spec.Action == protocol.ActionNew {
+		reportedNativeID = sr.sessionID
+	}
 
 	d.runMu.Lock()
 	d.structured[spec.RunID] = sr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured"})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
 	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{

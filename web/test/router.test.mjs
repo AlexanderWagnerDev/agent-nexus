@@ -8,6 +8,7 @@ test('routes the home and section pages', () => {
   assert.equal(parseRoute('#/projects').page, 'projects');
   assert.equal(parseRoute('#/sessions').page, 'sessions');
   assert.equal(parseRoute('#/usage').page, 'usage');
+  assert.equal(parseRoute('#/fanout').page, 'fanout');
   assert.equal(parseRoute('#/runs').page, 'runs');
   assert.equal(parseRoute('#/workspace').page, 'workspace');
   assert.equal(parseRoute('#/search').page, 'search');

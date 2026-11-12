@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -286,7 +287,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 	case "run.started":
 		if msg.NativeID != "" {
-			s.adoptForkedRun(msg.RunID, msg.NativeID)
+			s.adoptNativeSession(msg.RunID, msg.NativeID, msg.Agent, msg.Cwd)
 		}
 		s.setRunState(msg.RunID, protocol.StateRunning)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning, Epoch: s.epoch})
@@ -346,22 +347,32 @@ func validForkNativeID(id string) bool {
 	return true
 }
 
-// adoptForkedRun links a structured fork run to the new native session the
-// host created. The source session row is never modified.
-func (s *Server) adoptForkedRun(runID, nativeID string) {
+// adoptNativeSession links a new or forked structured run to the native
+// session the host created. The source session row is never modified.
+func (s *Server) adoptNativeSession(runID, nativeID, reportedAgent, reportedCwd string) {
 	if !validForkNativeID(nativeID) {
 		s.log.Warn("host reported an invalid forked session id", "run_id", runID)
 		return
 	}
 	run, _, err := s.store.RunByID(runID)
-	if err != nil || run.HostID == "" || run.Agent == "" {
+	if err != nil || run.HostID == "" {
 		return
 	}
-	title := "Forked session"
+	agent, cwd := run.Agent, run.Cwd
+	if agent == "" {
+		agent = strings.TrimSpace(reportedAgent)
+	}
+	if cwd == "" {
+		cwd = strings.TrimSpace(reportedCwd)
+	}
+	if agent == "" {
+		return
+	}
+	title := "New session"
 	if run.SessionTitle != "" {
 		title = "Fork of " + run.SessionTitle
 	}
-	sessionID, err := s.store.EnsureForkedSession(run.HostID, run.Agent, nativeID, title, run.Cwd)
+	sessionID, err := s.store.EnsureForkedSession(run.HostID, agent, nativeID, title, cwd)
 	if err != nil {
 		s.log.Warn("cannot record forked session", "run_id", runID, "error", err)
 		return

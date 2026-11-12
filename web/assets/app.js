@@ -14,6 +14,7 @@ import { pageHosts } from './views/hosts.js';
 import { pageProjects } from './views/projects.js';
 import { pageSessions } from './views/sessions.js';
 import { pageUsage } from './views/usage.js';
+import { pageFanout } from './views/fanout.js';
 import { pageSession, pageSessionChanges } from './views/session-detail.js';
 import { pageSearch } from './views/search.js';
 import { pageSettings } from './views/settings.js';
@@ -34,6 +35,7 @@ const pages = {
   projects: pageProjects,
   sessions: pageSessions,
   usage: pageUsage,
+  fanout: pageFanout,
   session: pageSession,
   sessionChanges: pageSessionChanges,
   search: pageSearch,

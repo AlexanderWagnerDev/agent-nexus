@@ -100,6 +100,18 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B1: multi-agent fan-out (2026-11-12)
+
+The Fan-out page starts one new structured native session per selected host and
+working directory and enqueues the same prompt for each run. Runs are created
+independently; a failure on one host is reported without stopping the others.
+Every target is checked for create permission, host state and duplicate
+host/worktree pairs before anything starts. Prompt delivery reuses the durable
+queue, so each run receives it only after an idle transition and no prompt is
+executed twice. The result grid links to each chat and changes view. Limit: eight
+targets per fan-out, structured mode only; a shared worktree on one host is
+rejected rather than coordinated.
+
 ### B3: usage metadata (2026-11-12)
 
 Structured runs report token usage to the hub when the agent runtime exposes

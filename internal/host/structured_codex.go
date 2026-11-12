@@ -178,7 +178,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail("codex app-server initialization failed: " + err.Error())
 		return
 	}
-	forkedNativeID := ""
+	reportedNativeID := ""
 	if spec.Action == protocol.ActionNew {
 		threadID, err := cr.startThread(cwd)
 		if err != nil {
@@ -187,6 +187,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 			return
 		}
 		cr.threadID = threadID
+		reportedNativeID = threadID
 	} else if spec.Action == protocol.ActionFork {
 		threadID, err := cr.forkThread(cwd, spec.NativeID)
 		if err != nil {
@@ -195,7 +196,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 			return
 		}
 		cr.threadID = threadID
-		forkedNativeID = threadID
+		reportedNativeID = threadID
 	} else {
 		cr.threadID = spec.NativeID
 		if err := cr.resumeThread(cwd); err != nil {
@@ -207,7 +208,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	d.runMu.Lock()
 	d.codexRuns[spec.RunID] = cr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: forkedNativeID})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("codex structured run started", "run_id", spec.RunID, "thread", cr.threadID, "cwd", cwd)
 	hostAudit("codex.structured.started", map[string]any{"run_id": spec.RunID, "cwd": cwd})

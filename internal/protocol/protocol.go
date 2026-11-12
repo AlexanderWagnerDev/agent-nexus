@@ -291,6 +291,8 @@ type Envelope struct {
 	// NativeID reports the native session a structured fork created. The hub
 	// adopts it as a new session and does not modify the source session.
 	NativeID   string         `json:"native_id,omitempty"`
+	Agent      string         `json:"agent,omitempty"`
+	Cwd        string         `json:"cwd,omitempty"`
 	Update     *UpdateStatus  `json:"update,omitempty"`
 	Index      *IndexStatus   `json:"index,omitempty"`
 	Event      *RunEvent      `json:"event,omitempty"`
