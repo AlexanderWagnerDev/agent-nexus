@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { agentGlyph, stateBadge, toast } from '../ui.js';
+import { agentGlyph, modal, stateBadge, toast } from '../ui.js';
 import { newSessionPicker } from '../components/new-session.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
@@ -69,7 +69,9 @@ export async function pageSessions() {
   if (pageGen !== state.pageGen) return;
   const hosts = hostData.hosts || [];
   const tags = tagData.tags || [];
-  const view = setPage(t('Sessions'), t('Discovered natively from each host; nothing is copied or rewritten.'), `<button class="btn primary small" id="sessions-new">${t('New session')}</button>`);
+  const activityProject = params.get('project') || '';
+  const activityHost = params.get('host') || '';
+  const view = setPage(t('Sessions'), t('Discovered natively from each host; nothing is copied or rewritten.'), `${activityProject ? `<button class="btn small" id="session-activity">${t('Activity')}</button>` : ''}<button class="btn primary small" id="sessions-new">${t('New session')}</button>`);
   const period = params.get('period') || 'any';
   view.innerHTML = `
     <div class="filterbar">
@@ -101,6 +103,32 @@ export async function pageSessions() {
       <div class="session-sentinel" id="session-sentinel"></div>
     </div>`;
   document.getElementById('sessions-new').addEventListener('click', newSessionPicker);
+  document.getElementById('session-activity')?.addEventListener('click', async () => {
+    try {
+      const data = await api(`/projects/activity?host=${encodeURIComponent(activityHost)}&project=${encodeURIComponent(activityProject)}`);
+      const max = Math.max(1, ...(data.days || []).map((day) => day.sessions + day.runs));
+      const pad = (n) => String(n).padStart(2, '0');
+      const localDate = (value) => `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+      modal(`
+        <div class="split"><h2>${t('Project activity')}</h2><span class="muted small">${t('{n} sessions · {runs} runs', { n: data.sessions || 0, runs: data.runs || 0 })}</span></div>
+        <p class="hint">${t('Click a day to open its sessions.')}</p>
+        <div class="activity-heatmap" role="group" aria-label="${t('90-day activity heatmap')}">
+          ${(data.days || []).map((day) => {
+            const total = day.sessions + day.runs;
+            const level = total === 0 ? 0 : Math.min(4, 1 + Math.floor((total / max) * 3));
+            return `<button class="activity-cell level-${level}" type="button" data-activity-date="${esc(day.date)}" title="${esc(day.date)} · ${t('{n} sessions', { n: day.sessions })} · ${t('{n} runs', { n: day.runs })}"></button>`;
+          }).join('')}
+        </div>
+        <div class="split activity-legend"><span class="muted small">${esc(data.days?.[0]?.date || '')}</span><span class="muted small">${esc(data.days?.[data.days.length - 1]?.date || '')}</span></div>
+        <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Close')}</button></div>`);
+      document.querySelectorAll('[data-activity-date]').forEach((button) => button.addEventListener('click', () => {
+        const start = new Date(button.dataset.activityDate + 'T00:00:00Z');
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        const query = new URLSearchParams({ project: activityProject, host: activityHost, period: 'custom', since_local: localDate(start), until_local: localDate(end) });
+        location.hash = '#/sessions?' + query.toString();
+      }));
+    } catch (err) { toast(err.message, true); }
+  });
 
   let sessions = [];
   let items = [];

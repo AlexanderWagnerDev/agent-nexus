@@ -100,6 +100,14 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B10: project activity (2026-11-12)
+
+The sessions page exposes a 90-day heatmap for the active project (or for a
+repository identity across hosts). A server-side query aggregates sessions,
+runs, agents and hosts by UTC day; clicking a cell opens the session list with
+the exact day range. No transcript content is involved. Verified by an API test
+with synthetic sessions and runs.
+
 ### B7: voice input (2026-11-12)
 
 The composer exposes a microphone button only when the browser implements the

@@ -164,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))
 
 	mux.HandleFunc("GET /api/v1/projects", s.requireAuth(s.handleProjects))
+	mux.HandleFunc("GET /api/v1/projects/activity", s.requireAuth(s.handleProjectActivity))
 	mux.HandleFunc("GET /api/v1/favorites", s.requireAuth(s.handleFavorites))
 	mux.HandleFunc("GET /api/v1/notifications", s.requireAuth(s.handleNotifications))
 	mux.HandleFunc("POST /api/v1/notifications/read", s.requireAuth(s.handleNotificationsRead))
