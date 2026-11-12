@@ -573,7 +573,7 @@ export async function pageStructuredRun(id, run) {
     card.innerHTML = `
       <div class="approval-head">${svgIcon('alert', 16)}<strong>${t('Approval required')}</strong><span class="badge waiting_for_input">${esc(event.action || 'permission')}</span></div>
       ${resources || event.text ? `<pre>${esc(resources || event.text)}</pre>` : ''}
-      <div class="approval-actions"><button class="btn small primary" data-approval="once">${t('Allow once')}</button><button class="btn small danger" data-approval="reject">${t('Deny')}</button></div>`;
+      <div class="approval-actions"><button class="btn small primary" data-approval="once">${t('Allow once')}</button><button class="btn small" data-approval="always">${t('Always allow')}</button><button class="btn small danger" data-approval="reject">${t('Deny')}</button></div>`;
     card.querySelectorAll('[data-approval]').forEach((button) => button.addEventListener('click', () => {
       wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision: button.dataset.approval });
       card.remove();

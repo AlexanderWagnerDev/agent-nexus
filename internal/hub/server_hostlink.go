@@ -530,6 +530,8 @@ type clientConn struct {
 
 	mu   sync.Mutex
 	subs map[string]bool
+
+	limiter *rateLimiter
 }
 
 func (s *Server) setHostIndex(hostID string, status *protocol.IndexStatus) {

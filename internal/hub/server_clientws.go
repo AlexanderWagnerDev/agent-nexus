@@ -73,7 +73,7 @@ func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 	c := &clientConn{
 		server: s, ws: ws, user: userFrom(r), device: deviceFrom(r),
 		send: make(chan protocol.ServerEnvelope, clientSendQueue), done: make(chan struct{}),
-		subs: map[string]bool{},
+		subs: map[string]bool{}, limiter: newRateLimiter(240, 10*time.Second),
 	}
 	s.mu.Lock()
 	s.clients[c] = struct{}{}
@@ -116,6 +116,11 @@ func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 		var msg protocol.ClientEnvelope
 		if err := json.Unmarshal(data, &msg); err != nil {
 			continue
+		}
+		if !c.limiter.allow("ws") {
+			c.push(protocol.ServerEnvelope{Type: "error", Error: "too many client messages"})
+			c.close()
+			return
 		}
 		s.handleClientMessage(ctx, c, msg)
 	}
@@ -214,7 +219,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
 			return
 		}
-		if msg.Decision != "once" && msg.Decision != "reject" {
+		if msg.Decision != "once" && msg.Decision != "always" && msg.Decision != "reject" {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "invalid approval decision"})
 			return
 		}
