@@ -243,14 +243,17 @@ type Envelope struct {
 	RequestID string         `json:"request_id,omitempty"`
 	// TraceID carries the hub HTTP request id across the host link. It is
 	// optional and never used as a metric label.
-	TraceID    string         `json:"trace_id,omitempty"`
-	Method     string         `json:"method,omitempty"`
-	Params     []byte         `json:"params,omitempty"`
-	Result     []byte         `json:"result,omitempty"`
-	OK         bool           `json:"ok,omitempty"`
-	Error      string         `json:"error,omitempty"`
-	Run        *RunSpec       `json:"run,omitempty"`
-	Runs       []RunInfo      `json:"runs,omitempty"`
+	TraceID string    `json:"trace_id,omitempty"`
+	Method  string    `json:"method,omitempty"`
+	Params  []byte    `json:"params,omitempty"`
+	Result  []byte    `json:"result,omitempty"`
+	OK      bool      `json:"ok,omitempty"`
+	Error   string    `json:"error,omitempty"`
+	Run     *RunSpec  `json:"run,omitempty"`
+	Runs    []RunInfo `json:"runs,omitempty"`
+	// NativeID reports the native session a structured fork created. The hub
+	// adopts it as a new session and does not modify the source session.
+	NativeID   string         `json:"native_id,omitempty"`
 	Update     *UpdateStatus  `json:"update,omitempty"`
 	Index      *IndexStatus   `json:"index,omitempty"`
 	Event      *RunEvent      `json:"event,omitempty"`

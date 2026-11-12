@@ -98,6 +98,17 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### A11: structured fork (2026-11-12)
+
+Codex `app-server` `thread/fork` is implemented and tested against a scripted
+app-server and the generated 0.156.1 schema. The hub creates a separate session
+row for the returned thread, rebinds the run to it and leaves the source
+session untouched. ACP fork is gated on the unstable `session/fork`
+capability; the fake adapter test covers it. OpenCode's tested v2 API has no
+documented non-interactive fork, so structured fork is not offered for OpenCode.
+The UI exposes a structured fork button for Codex. Real Codex fork was not run
+against a live account in this environment; terminal fork remains available.
+
 ### Earlier UI and workflow pass
 
 - Chat now renders Markdown/GFM, highlighted code, tables, collapsible tool

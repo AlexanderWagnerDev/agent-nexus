@@ -135,6 +135,7 @@ const de = {
   Actions: 'Aktionen',
   'Review changes': 'Änderungen prüfen',
   'Fork session': 'Session forken',
+  'Fork in structured mode': 'Im Structured-Modus forken',
   'Export Markdown': 'Markdown exportieren',
   'Export JSON': 'JSON exportieren',
   'Native continuity': 'Native Kontinuität',

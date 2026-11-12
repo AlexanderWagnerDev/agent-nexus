@@ -100,6 +100,7 @@ export async function pageSession(id) {
           <div class="aside-actions">
             <a class="btn small" id="git-session" href="#/sessions/${s.id}/changes">${svgIcon('git')} ${t('Review changes')}</a>
             ${s.agent === 'codex' || s.agent === 'claude' ? `<button class="btn small" id="fork-session">${t('Fork session')}</button>` : ''}
+            ${s.agent === 'codex' ? `<button class="btn small" id="fork-session-structured">${t('Fork in structured mode')}</button>` : ''}
             <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=markdown">${svgIcon('file')} ${t('Export Markdown')}</a>
             <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=json">${t('Export JSON')}</a>
           </div>
@@ -111,6 +112,7 @@ export async function pageSession(id) {
       </aside>
     </div>`;
   document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
+  document.getElementById('fork-session-structured')?.addEventListener('click', () => startRun(s, true, 'structured'));
   const renderTagList = () => {
     const box = document.getElementById('tag-list');
     if (!box) return;

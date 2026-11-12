@@ -80,11 +80,14 @@ vendor documentation above:
 - **Terminal replay:** each terminal run keeps a bounded 1 MiB ring buffer
   (`run_buffer_bytes`, clamped to 64 KiB-16 MiB). Output produced during a hub
   outage is replayed on reconnect and deduplicated by sequence number.
-- **Structured fork:** none of the current structured drivers exposes a
-  reliable non-interactive fork. The UI only offers fork for Codex and Claude
-  terminal mode (`codex fork`, `claude --resume --fork-session`); OpenCode has
-  no non-interactive fork in v2. Structured fork requests are rejected on the
-  host instead of pretending to work.
+- **Structured fork:** Codex app-server exposes `thread/fork`; AgentNexus
+  uses it in structured mode and links the run to the new native thread. The
+  source thread is not modified. ACP fork is capability-gated on the unstable
+  `session/fork` advertisement and is fake-agent tested only. OpenCode's tested
+  v2 CLI has no documented non-interactive fork, so only Codex and Claude
+  terminal mode (`codex fork`, `claude --resume --fork-session`) are offered.
+  Structured fork requests are rejected when the driver or adapter cannot
+  perform them.
 - **Gemini ACP:** the generic ACP driver works with
   `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
   the installed Gemini version. Discovery remains best effort and the version
@@ -224,7 +227,11 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
 - Transport: **stdio only** (`--listen stdio://`, default). The WebSocket listener is "experimental and unsupported" and allows unauthenticated non-loopback connections by default → never used.
 - Flow: `thread/resume {threadId}` → `turn/start {threadId, input:[{type:"text", text}]}` → notifications `turn/started`, `item/started`, `item/agentMessage/delta`, `item/commandExecution/outputDelta`, `turn/diff/updated`, `turn/plan/updated`, `item/completed`, `turn/completed`, `thread/tokenUsage/updated`.
 - Approvals (server → client requests): `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`, `mcpServer/elicitation/request`, user-input requests; resolution confirmed by `serverRequest/resolved`.
-- Control: `turn/interrupt {threadId, turnId}`, `turn/steer` (add input to an active turn), `thread/fork`.
+- Control: `turn/interrupt {threadId, turnId}`, `turn/steer` (add input to an active turn), `thread/fork {threadId, cwd, excludeTurns:true}`.
+- Fork: the response's `thread.id` becomes the run's thread; the hub creates
+  and adopts a new session row and leaves the source session untouched. This
+  was verified against the generated Codex 0.156.1 schema and fake app-server;
+  it requires a Codex version whose schema includes `ThreadForkParams`.
 - Many fields require `capabilities.experimentalApi = true`; AgentNexus avoids experimental-only methods unless needed and records the dependency per method.
 - Authentication: app-server uses the user's existing Codex login on the host. AgentNexus never calls `account/login/*` remotely and never forwards tokens (constraint C2, risk R-08). The vendor documentation contains restrictions on certain authentication setups for commercial or hosted services; AgentNexus' model (user's own machine, user's own login) must be re-checked against current terms before 1.0.
 - Multiple subscribers: subscriptions are per connection and a thread unloads after its last subscriber leaves, implying several connections can follow one loaded thread ⚠️ — only relevant within one app-server process; a TUI started separately by the user is a different process and cannot be attached through it ❓.
@@ -262,7 +269,8 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
 ### 5.4 Structured mode — `opencode serve` ✅
 
 - `nexusd` starts `opencode serve --hostname 127.0.0.1 --port <random>` with a random `OPENCODE_SERVER_PASSWORD` (HTTP basic auth, username `opencode`) per run or per project, and stops it when idle.
-- Send prompt: `POST /session/:id/prompt_async` (returns 204); events: `GET /event` (SSE; first event `server.connected`); abort: `POST /session/:id/abort`; diffs: `GET /session/:id/diff`; permissions: `POST /session/:id/permissions/:permissionID`; fork: session fork route.
+- Send prompt: `POST /session/:id/prompt_async` (returns 204); events: `GET /event` (SSE; first event `server.connected`); abort: `POST /session/:id/abort`; diffs: `GET /session/:id/diff`; permissions: `POST /session/:id/permissions/:permissionID`; the inspected 2.2.7 schema also has `POST /api/session/{sessionID}/fork`.
+- The structured driver still targets the tested 1.x band. OpenCode 2.2.7 is outside that band, so structured mode (and therefore structured fork) stays disabled with a version warning until the band and fixtures are updated and verified. Terminal mode has no documented non-interactive fork.
 - Alternative: `opencode acp` (ACP over stdio) through the generic ACP driver — evaluated in SP-3 against the native API.
 - mDNS (`--mdns`) and `--cors` are never enabled by AgentNexus.
 

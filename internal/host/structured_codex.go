@@ -58,10 +58,6 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail(err.Error())
 		return
 	}
-	if spec.Action == protocol.ActionFork {
-		fail("structured fork is not implemented for Codex; use terminal fork")
-		return
-	}
 	if spec.Action == protocol.ActionNew && !d.policy.AllowNew {
 		fail("host policy does not allow new sessions")
 		return
@@ -98,6 +94,11 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	sessionKey := "codex:" + spec.NativeID
 	if spec.Action == protocol.ActionNew {
 		sessionKey = "codex:new:" + randomRunKey()
+	}
+	if spec.Action == protocol.ActionFork {
+		// A fork creates an independent thread; it must not contend with a
+		// concurrent run on the source thread.
+		sessionKey = "codex:fork:" + randomRunKey()
 	}
 	d.runMu.Lock()
 	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
@@ -177,6 +178,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail("codex app-server initialization failed: " + err.Error())
 		return
 	}
+	forkedNativeID := ""
 	if spec.Action == protocol.ActionNew {
 		threadID, err := cr.startThread(cwd)
 		if err != nil {
@@ -185,6 +187,15 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 			return
 		}
 		cr.threadID = threadID
+	} else if spec.Action == protocol.ActionFork {
+		threadID, err := cr.forkThread(cwd, spec.NativeID)
+		if err != nil {
+			cr.Stop()
+			fail("cannot fork codex thread: " + err.Error())
+			return
+		}
+		cr.threadID = threadID
+		forkedNativeID = threadID
 	} else {
 		cr.threadID = spec.NativeID
 		if err := cr.resumeThread(cwd); err != nil {
@@ -196,7 +207,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	d.runMu.Lock()
 	d.codexRuns[spec.RunID] = cr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured"})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: forkedNativeID})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("codex structured run started", "run_id", spec.RunID, "thread", cr.threadID, "cwd", cwd)
 	hostAudit("codex.structured.started", map[string]any{"run_id": spec.RunID, "cwd": cwd})
@@ -313,6 +324,29 @@ func (r *CodexRun) resumeThread(cwd string) error {
 		"threadId": r.threadID, "cwd": cwd, "excludeTurns": true,
 	}, 30*time.Second)
 	return err
+}
+
+// forkThread creates an independent thread from the source thread. Codex
+// returns the new thread id; the source thread is not modified.
+func (r *CodexRun) forkThread(cwd, sourceThreadID string) (string, error) {
+	raw, err := r.request("thread/fork", map[string]any{
+		"threadId": sourceThreadID, "cwd": cwd, "excludeTurns": true,
+	}, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Thread struct {
+			ID string `json:"id"`
+		} `json:"thread"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", err
+	}
+	if out.Thread.ID == "" {
+		return "", errors.New("codex returned an empty forked thread id")
+	}
+	return out.Thread.ID, nil
 }
 
 func (r *CodexRun) Prompt(text string, options *protocol.PromptOptions) error {

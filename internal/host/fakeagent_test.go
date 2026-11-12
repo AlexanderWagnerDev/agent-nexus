@@ -120,6 +120,8 @@ func runFakeCodex(args []string) int {
 			result = map[string]any{"thread": map[string]any{"id": "fake-thread"}}
 		case "thread/resume":
 			result = map[string]any{"thread": map[string]any{"id": "fake-thread"}}
+		case "thread/fork":
+			result = map[string]any{"thread": map[string]any{"id": "fake-forked-thread"}}
 		case "turn/start":
 			result = map[string]any{"turn": map[string]any{"id": "fake-turn"}}
 		case "model/list":
@@ -170,8 +172,18 @@ func (a *fakeACPAgent) Initialize(context.Context, acp.InitializeRequest) (acp.I
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		AgentCapabilities: acp.AgentCapabilities{
 			PromptCapabilities: acp.PromptCapabilities{Image: true},
+			SessionCapabilities: acp.SessionCapabilities{
+				Fork: &acp.SessionForkCapabilities{},
+			},
 		},
 	}, nil
+}
+
+func (a *fakeACPAgent) UnstableForkSession(_ context.Context, params acp.UnstableForkSessionRequest) (acp.UnstableForkSessionResponse, error) {
+	if string(params.SessionId) != "fake-acp-session" {
+		return acp.UnstableForkSessionResponse{}, fmt.Errorf("unexpected fork source %q", params.SessionId)
+	}
+	return acp.UnstableForkSessionResponse{SessionId: "fake-forked-acp-session"}, nil
 }
 
 func (a *fakeACPAgent) SetSessionConfigOption(_ context.Context, params acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {

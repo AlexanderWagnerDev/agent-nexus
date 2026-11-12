@@ -127,6 +127,73 @@ func TestStartCodexStructuredAgainstFakeAppServer(t *testing.T) {
 	})
 }
 
+func TestStartCodexForkAgainstFakeAppServer(t *testing.T) {
+	t.Setenv("NEXUS_TEST_AGENT", "codex")
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	exe := testBinary(t)
+	d := testDaemon(t, []string{"codex"}, []Adapter{&CodexAdapter{bin: exe}}, nil, root)
+
+	spec := protocol.RunSpec{
+		RunID: "run-codex-fork", Agent: "codex", Action: protocol.ActionFork,
+		NativeID: "source-thread", Cwd: root, Mode: protocol.ModeStructured,
+	}
+	d.startCodexStructured(context.Background(), spec)
+
+	waitForHost(t, "codex fork", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.codexRuns["run-codex-fork"] != nil
+	})
+	d.runMu.Lock()
+	run := d.codexRuns["run-codex-fork"]
+	d.runMu.Unlock()
+	if run.threadID != "fake-forked-thread" {
+		t.Fatalf("forked thread: %q", run.threadID)
+	}
+	run.Stop()
+	waitForHost(t, "codex fork cleanup", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.codexRuns["run-codex-fork"] == nil
+	})
+}
+
+func TestStartACPForkAgainstFakeAgent(t *testing.T) {
+	t.Setenv("NEXUS_TEST_AGENT", "acp")
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	exe := testBinary(t)
+	command := exe + " acp"
+	d := testDaemon(t, []string{"fake-acp"}, nil, map[string]string{"fake-acp": command}, root)
+
+	spec := protocol.RunSpec{
+		RunID: "run-acp-fork", Agent: "fake-acp", Action: protocol.ActionFork,
+		NativeID: "fake-acp-session", Cwd: root, Mode: protocol.ModeStructured,
+	}
+	d.startACPStructured(context.Background(), spec, command)
+
+	waitForHost(t, "acp fork", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.acpRuns["run-acp-fork"] != nil
+	})
+	d.runMu.Lock()
+	run := d.acpRuns["run-acp-fork"]
+	d.runMu.Unlock()
+	if run.sessionID != "fake-forked-acp-session" {
+		t.Fatalf("forked session: %q", run.sessionID)
+	}
+	run.Stop()
+	waitForHost(t, "acp fork cleanup", func() bool {
+		d.runMu.Lock()
+		defer d.runMu.Unlock()
+		return d.acpRuns["run-acp-fork"] == nil
+	})
+}
+
 func TestStartACPStructuredAgainstFakeAgent(t *testing.T) {
 	t.Setenv("NEXUS_TEST_AGENT", "acp")
 	t.Setenv("APPDATA", t.TempDir())

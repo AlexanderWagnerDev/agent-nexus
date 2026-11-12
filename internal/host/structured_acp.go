@@ -66,10 +66,6 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail("host policy does not allow new sessions")
 		return
 	}
-	if spec.Action == protocol.ActionFork {
-		fail("structured fork is not implemented; use terminal fork")
-		return
-	}
 	if spec.Action != protocol.ActionNew && !validNativeID(spec.NativeID) {
 		fail("invalid native session id")
 		return
@@ -102,6 +98,9 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	sessionKey := spec.Agent + ":" + spec.NativeID
 	if spec.Action == protocol.ActionNew {
 		sessionKey = spec.Agent + ":new:" + randomRunKey()
+	}
+	if spec.Action == protocol.ActionFork {
+		sessionKey = spec.Agent + ":fork:" + randomRunKey()
 	}
 	d.runMu.Lock()
 	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
@@ -187,6 +186,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail("ACP initialization failed: " + err.Error())
 		return
 	}
+	forkedNativeID := ""
 	if spec.Action == protocol.ActionNew {
 		resp, err := ar.conn.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}})
 		if err != nil {
@@ -196,6 +196,30 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		}
 		ar.sessionID = resp.SessionId
 		ar.applySessionState(init, resp.Modes, resp.ConfigOptions)
+	} else if spec.Action == protocol.ActionFork {
+		if init.AgentCapabilities.SessionCapabilities.Fork == nil {
+			ar.Stop()
+			fail("ACP adapter does not advertise the unstable session/fork capability")
+			return
+		}
+		forked, err := ar.conn.UnstableForkSession(ctx, acp.UnstableForkSessionRequest{
+			Cwd: cwd, McpServers: []acp.UnstableMcpServer{}, SessionId: acp.SessionId(spec.NativeID),
+		})
+		if err != nil {
+			ar.Stop()
+			fail("cannot fork ACP session: " + err.Error())
+			return
+		}
+		if forked.SessionId == "" {
+			ar.Stop()
+			fail("ACP adapter returned an empty forked session id")
+			return
+		}
+		ar.sessionID = forked.SessionId
+		forkedNativeID = string(forked.SessionId)
+		// The unstable fork response uses its own config-option type. Mode
+		// state is compatible; the normal option endpoints remain available.
+		ar.applySessionState(init, forked.Modes, nil)
 	} else {
 		if !init.AgentCapabilities.LoadSession {
 			ar.Stop()
@@ -217,7 +241,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	d.runMu.Lock()
 	d.acpRuns[spec.RunID] = ar
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured"})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", NativeID: forkedNativeID})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("ACP structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", ar.sessionID, "cwd", cwd)
 	hostAudit("acp.structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})

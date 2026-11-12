@@ -320,6 +320,28 @@ func (s *Store) SessionIDForNative(hostID, agent, nativeID string) (string, erro
 	return id, err
 }
 
+// EnsureForkedSession creates the row for a native session that a structured
+// fork just produced and returns its hub ID. An existing row (for example
+// from the next discovery snapshot) is left untouched.
+func (s *Store) EnsureForkedSession(hostID, agent, nativeID, title, cwd string) (string, error) {
+	id := sessionID(hostID, agent, nativeID)
+	now := ms(time.Now())
+	if len(title) > 200 {
+		title = title[:200]
+	}
+	_, err := s.db.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,created_at,updated_at,state)
+		VALUES(?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(host_id,agent,native_id) DO NOTHING`,
+		id, hostID, agent, nativeID, title, cwd, now, now, protocol.StateIdle)
+	return id, err
+}
+
+// RebindRunSession points a run at the session a structured fork created.
+func (s *Store) RebindRunSession(runID, sessionID string) error {
+	_, err := s.db.Exec(`UPDATE runs SET session_id=? WHERE id=?`, sessionID, runID)
+	return err
+}
+
 // SessionByID returns one session and its per-user local metadata.
 func (s *Store) SessionByID(userID, id string, all bool) (protocol.SessionView, error) {
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,

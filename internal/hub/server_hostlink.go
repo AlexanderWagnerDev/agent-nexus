@@ -285,6 +285,9 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 			}
 		}
 	case "run.started":
+		if msg.NativeID != "" {
+			s.adoptForkedRun(msg.RunID, msg.NativeID)
+		}
 		s.setRunState(msg.RunID, protocol.StateRunning)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning, Epoch: s.epoch})
 	case "run.output":
@@ -318,6 +321,48 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 	default:
 		s.log.Debug("unknown host message", "type", msg.Type, "host_id", hc.id)
 	}
+}
+
+// validForkNativeID bounds a host-reported native session id. It accepts the
+// printable subset that Codex and ACP session ids use.
+func validForkNativeID(id string) bool {
+	if id == "" || len(id) > 200 {
+		return false
+	}
+	for _, r := range id {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// adoptForkedRun links a structured fork run to the new native session the
+// host created. The source session row is never modified.
+func (s *Server) adoptForkedRun(runID, nativeID string) {
+	if !validForkNativeID(nativeID) {
+		s.log.Warn("host reported an invalid forked session id", "run_id", runID)
+		return
+	}
+	run, _, err := s.store.RunByID(runID)
+	if err != nil || run.HostID == "" || run.Agent == "" {
+		return
+	}
+	title := "Forked session"
+	if run.SessionTitle != "" {
+		title = "Fork of " + run.SessionTitle
+	}
+	sessionID, err := s.store.EnsureForkedSession(run.HostID, run.Agent, nativeID, title, run.Cwd)
+	if err != nil {
+		s.log.Warn("cannot record forked session", "run_id", runID, "error", err)
+		return
+	}
+	if err := s.store.RebindRunSession(runID, sessionID); err != nil {
+		s.log.Warn("cannot bind run to forked session", "run_id", runID, "error", err)
+		return
+	}
+	s.broadcast(protocol.ServerEnvelope{Type: "sessions.changed", Message: run.HostID})
+	s.log.Info("run adopted its forked session", "run_id", runID, "session_id", sessionID, "host_id", run.HostID)
 }
 
 func (s *Server) registerHost(hc *hostConn) {

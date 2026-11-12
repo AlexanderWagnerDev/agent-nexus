@@ -108,7 +108,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
-| Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>` |
+| Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>`; structured `thread/fork` |
 | OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ❌ | ✅ | ❌ |
 
