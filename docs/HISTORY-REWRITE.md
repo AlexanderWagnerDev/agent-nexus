@@ -69,7 +69,7 @@ with the personal display name (on three GitHub merge commits), an example
 path with a first name in an old `docs/WSL.md`, and a cloud-session link in a
 commit message.
 
-## Second rewrite (prepared 2026-11-12)
+## Second rewrite (executed 2026-11-12)
 
 The maintainer decided that the project contact address on the project's own
 domain may stay in commit metadata. A second `git filter-repo` pass over the
@@ -91,10 +91,14 @@ Verification on the rewritten history:
   e-mail address, a non-demo home path, a private key or a known token format.
 - The final tree is identical to the tree before the rewrite.
 
-### Before publication
+### Status
 
-The rewritten history replaces `main` only after explicit maintainer approval.
-The old pull-request refs (`refs/pull/*/head`) on GitHub still point to
-pre-rewrite commits and cannot be removed by a push. Publish only after
-either recreating the repository from the rewritten history or a GitHub
-Support purge of those refs and cached objects.
+The rewritten history was force-pushed to `main` with `--force-with-lease`
+after an offline backup of the previous state. A fresh clone of the GitHub
+repository passes all checks above.
+
+The old pull-request refs (`refs/pull/*/head` of pull requests 1-5 and 7-15)
+still point to pre-rewrite commits and cannot be removed by a push. A GitHub
+Support request to delete those pull requests and purge the orphaned commits
+and cached views is required. The repository stays private until GitHub
+Support confirms the purge.

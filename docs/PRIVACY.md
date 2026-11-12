@@ -43,13 +43,14 @@ sessions.
 - New screenshots must be generated from the synthetic demo hub in
   `web/e2e/demo/`. Existing screenshots are being replaced as the demo fixture
   grows.
-- **Git history:** a second rewrite of the complete `main` history maps every
+- **Git history:** a second rewrite of the complete `main` history, force-pushed
+  on 2026-11-12, maps every
   maintainer commit to the approved identity and removes the personal display
   name, example home paths with a real first name and session links; see
   [HISTORY-REWRITE.md](HISTORY-REWRITE.md#second-rewrite-prepared-2026-11-12).
 - **GitHub retention:** a force-push does not erase old pull-request refs or
-  cached objects on GitHub. Before the repository becomes public, recreate it
-  from the rewritten history or have GitHub Support purge them.
+  cached objects on GitHub. The repository stays private until GitHub Support
+  has deleted the old pull requests and purged the orphaned commits.
 
 ## Pre-publication checklist
 
