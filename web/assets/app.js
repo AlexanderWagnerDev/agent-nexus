@@ -11,6 +11,7 @@ import { installGlobalUi, loadUserTheme, renderShell } from './shell.js';
 import { renderAuth, renderDevicePair, ensureStepUp } from './auth.js';
 import { pageOverview } from './views/overview.js';
 import { pageHosts } from './views/hosts.js';
+import { pageHostDetail } from './views/host-detail.js';
 import { pageProjects } from './views/projects.js';
 import { pageSessions } from './views/sessions.js';
 import { pageUsage } from './views/usage.js';
@@ -32,6 +33,7 @@ setStepUpHook(() => ensureStepUp());
 const pages = {
   overview: pageOverview,
   hosts: pageHosts,
+  host: pageHostDetail,
   projects: pageProjects,
   sessions: pageSessions,
   usage: pageUsage,

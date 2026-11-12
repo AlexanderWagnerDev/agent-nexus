@@ -345,6 +345,22 @@ type ServerEnvelope struct {
 	Message  string        `json:"message,omitempty"`
 }
 
+// HostHealth is a derived, explainable view of a paired host. Reasons are
+// generated from observed inventory, index, update and connection state; the
+// hub never invents probe results.
+type HostHealth struct {
+	State     string             `json:"state"` // healthy, degraded, offline, pending, disabled
+	Reasons   []HostHealthReason `json:"reasons"`
+	CheckedAt time.Time          `json:"checked_at"`
+}
+
+// HostHealthReason is one machine-readable cause for a host's health state.
+type HostHealthReason struct {
+	Code     string `json:"code"`
+	Severity string `json:"severity"` // info, warning, error
+	Message  string `json:"message"`
+}
+
 // HostView is the hub-side projection of a paired host.
 type HostView struct {
 	ID       string         `json:"id"`
@@ -358,6 +374,7 @@ type HostView struct {
 	Agents   []AgentInfo    `json:"agents"`
 	Policy   *PolicySummary `json:"policy,omitempty"`
 	Index    *IndexStatus   `json:"index,omitempty"`
+	Health   *HostHealth    `json:"health,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`
 	SAS      string         `json:"sas,omitempty"`
 	Disabled bool           `json:"disabled,omitempty"`

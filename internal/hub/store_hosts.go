@@ -286,4 +286,15 @@ func (s *Store) SetHostDisabled(hostID string, disabled bool) error {
 	return err
 }
 
+// HostStats returns metadata counts for the host detail view. It uses one
+// query so the single SQLite connection is not held by a nested cursor.
+func (s *Store) HostStats(hostID string) (sessions, projects, activeRuns int, err error) {
+	err = s.db.QueryRow(`SELECT
+		(SELECT COUNT(*) FROM sessions WHERE host_id=?),
+		(SELECT COUNT(DISTINCT cwd) FROM sessions WHERE host_id=? AND cwd<>''),
+		(SELECT COUNT(*) FROM runs WHERE host_id=? AND state IN ('starting','running','waiting_for_input','stopping'))`,
+		hostID, hostID, hostID).Scan(&sessions, &projects, &activeRuns)
+	return sessions, projects, activeRuns, err
+}
+
 // ---- sessions ----

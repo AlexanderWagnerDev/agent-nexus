@@ -1,3 +1,4 @@
+import { state } from '../state.js';
 import { api } from '../api.js';
 import { renderShell, setPage } from '../shell.js';
 import { agentGlyph } from '../ui.js';

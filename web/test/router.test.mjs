@@ -5,6 +5,7 @@ import { parseRoute } from '../assets/routes.js';
 test('routes the home and section pages', () => {
   assert.equal(parseRoute('#/').page, 'overview');
   assert.equal(parseRoute('#/hosts').page, 'hosts');
+  assert.deepEqual(parseRoute('#/hosts/host-1'), { page: 'host', id: 'host-1' });
   assert.equal(parseRoute('#/projects').page, 'projects');
   assert.equal(parseRoute('#/sessions').page, 'sessions');
   assert.equal(parseRoute('#/usage').page, 'usage');

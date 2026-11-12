@@ -903,6 +903,46 @@ Object.assign(de, {
 });
 
 
+Object.assign(de, {
+  // host detail
+  Host: 'Host',
+  'Back to hosts': 'Zurück zu Hosts',
+  'Host not found': 'Host nicht gefunden',
+  Health: 'Zustand',
+  healthy: 'Gesund',
+  degraded: 'Beeinträchtigt',
+  offline: 'Offline',
+  pending: 'Ausstehend',
+  disabled: 'Deaktiviert',
+  'No problems detected': 'Keine Probleme erkannt',
+  'Coding agents': 'Coding-Agenten',
+  Version: 'Version',
+  Status: 'Status',
+  Capabilities: 'Fähigkeiten',
+  Path: 'Pfad',
+  supported: 'Unterstützt',
+  unsupported: 'Nicht unterstützt',
+  untested: 'Ungetestet',
+  'No coding agent detected on this host.': 'Auf diesem Host wurde kein Coding-Agent erkannt.',
+  'Active runs': 'Aktive Runs',
+  'No active runs on this host.': 'Keine aktiven Runs auf diesem Host.',
+  'Recent sessions': 'Letzte Sessions',
+  'All sessions': 'Alle Sessions',
+  'No sessions discovered on this host yet.': 'Auf diesem Host wurden noch keine Sessions erkannt.',
+  'Host events': 'Host-Ereignisse',
+  'No audited host events yet.': 'Noch keine auditierten Host-Ereignisse.',
+  Connection: 'Verbindung',
+  'Last contact': 'Letzter Kontakt',
+  Workspace: 'Arbeitsbereich',
+  Index: 'Index',
+  Policy: 'Richtlinie',
+  Updates: 'Updates',
+  'New session': 'Neue Session',
+  'Check for updates': 'Nach Updates suchen',
+  'Checking...': 'Wird geprüft…',
+  '{n} msgs': '{n} Nachrichten',
+});
+
 const supported = ['en', 'de'];
 let lang = 'en';
 

@@ -55,6 +55,31 @@ func (s *Store) ListAudit(limit int) ([]AuditEvent, error) {
 	return out, rows.Err()
 }
 
+// AuditForHost returns recent audit entries whose details mention the host.
+// Host ids are random hex, so a LIKE pattern cannot be widened by caller input.
+func (s *Store) AuditForHost(hostID string, limit int) ([]AuditEvent, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := s.db.Query(`SELECT seq,at,actor,action,details,prev_hash,hash FROM audit
+		WHERE details LIKE ? ORDER BY seq DESC LIMIT ?`, "%"+hostID+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AuditEvent
+	for rows.Next() {
+		var e AuditEvent
+		var at int64
+		if err := rows.Scan(&e.Seq, &at, &e.Actor, &e.Action, &e.Details, &e.PrevHash, &e.Hash); err != nil {
+			return nil, err
+		}
+		e.At = fromMS(at)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // VerifyAudit recomputes the hash chain. It returns the first broken sequence
 // number, or 0 if the chain is intact.
 func (s *Store) VerifyAudit() (int64, error) {

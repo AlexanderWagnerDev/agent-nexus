@@ -158,6 +158,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}/grants/{userID}", s.requireAuth(s.requireStepUp(s.handleDeleteHostGrant)))
 
 	mux.HandleFunc("GET /api/v1/hosts", s.requireAuth(s.handleHosts))
+	mux.HandleFunc("GET /api/v1/hosts/{id}", s.requireAuth(s.handleHostDetail))
 	mux.HandleFunc("PATCH /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleHostUpdateSettings)))
 	mux.HandleFunc("POST /api/v1/hosts/pairing-codes", s.requireAuth(s.requireStepUp(s.handlePairingCode)))
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeHost)))

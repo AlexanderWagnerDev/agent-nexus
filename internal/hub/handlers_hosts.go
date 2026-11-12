@@ -30,8 +30,58 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		s.updateMu.Unlock()
 		hosts[i].Index = s.hostIndexStatus(hosts[i].ID)
+		health := buildHostHealth(hosts[i], s.hostOnline(hosts[i].ID))
+		hosts[i].Health = &health
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+// handleHostDetail returns one host with explainable health, recent sessions,
+// active runs and (for managers) recent host audit events. It never includes
+// transcript content or secrets.
+func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	id := r.PathValue("id")
+	if !s.hostPermission(u, id, "view") {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	host, err := s.store.HostByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	hv := host.HostView
+	online := s.hostOnline(id)
+	if hv.Disabled {
+		hv.Status = "disabled"
+	} else if online {
+		hv.Status = "online"
+	}
+	s.updateMu.Lock()
+	if status, ok := s.hostUpdates[id]; ok {
+		copyStatus := status
+		hv.Update = &copyStatus
+	}
+	s.updateMu.Unlock()
+	hv.Index = s.hostIndexStatus(id)
+	hv.Agents, _ = s.store.HostAgents(id)
+	health := buildHostHealth(hv, online)
+	hv.Health = &health
+
+	sessions, projects, activeCount, _ := s.store.HostStats(id)
+	recent, _ := s.store.ListSessionsFiltered(u.ID, SessionFilter{HostID: id, Limit: 20}, isAdminRole(u.Role))
+	runs, _ := s.store.ActiveRuns(id)
+	payload := map[string]any{
+		"host": hv, "sessions": sessions, "projects": projects,
+		"active_runs": activeCount, "runs": runs, "recent_sessions": recent,
+		"can_manage": s.hostPermission(u, id, "manage"),
+	}
+	if s.hostPermission(u, id, "manage") {
+		events, _ := s.store.AuditForHost(id, 30)
+		payload["events"] = events
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handlePairingCode(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +249,9 @@ func (s *Server) handleHostUpdateSettings(w http.ResponseWriter, r *http.Request
 	} else if s.hostOnline(id) {
 		hv.Status = "online"
 	}
+	hv.Agents, _ = s.store.HostAgents(id)
+	health := buildHostHealth(hv, s.hostOnline(id))
+	hv.Health = &health
 	writeJSON(w, http.StatusOK, map[string]any{"host": hv})
 }
 
