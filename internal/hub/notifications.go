@@ -181,7 +181,9 @@ func (s *Server) deliverNotificationChannel(channel NotificationChannel, title, 
 				return lastErr
 			}
 		} else {
-			lastErr = err
+			// Do not return the transport error: it can contain a webhook URL
+			// or Telegram bot token.
+			lastErr = errors.New("notification request failed")
 		}
 		if attempt == 0 {
 			time.Sleep(250 * time.Millisecond)
