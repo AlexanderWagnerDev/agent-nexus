@@ -36,15 +36,17 @@ official version and no published release. The acceptance criteria below remain
 the definition of done; this table records what is actually implemented and
 tested versus what is still open.
 
-### Alpha verification (2026-11-11)
+### Alpha verification (2026-11-12)
 
-- Go unit and integration tests pass; `go vet`, `gofmt` and staticcheck are
+- Go unit and integration tests pass on Linux, macOS and Windows in CI,
+  including `go test -race` on Linux; `go vet`, `gofmt` and staticcheck are
   clean. Statement coverage is 68.8% in `internal/hub` and 66.7% in
   `internal/host`. Coverage includes HTTP/WebSocket/RBAC/grant tests, a scripted
   fake host that answers transcript, search, git, export and run requests, a
   fake-hub host link with terminal runs, a re-executed fake OpenCode server,
   Codex app-server and ACP agent for structured starts, policy rejection, Codex
-  JSON-RPC and Gemini search.
+  JSON-RPC, Gemini search, a grandchild process-tree test and ACP session
+  controls.
 - 34 JavaScript unit tests pass; the browser smoke test and the axe-core scan
   pass on desktop and mobile in English and German. A pinned-clock pixel diff
   covers six stable demo views; the manual/nightly job runs on a Windows
@@ -223,7 +225,7 @@ External dependencies: availability and stability of the agents' interfaces list
 - [ ] Two browsers can watch one run; only the lease holder can type; lease transfer works; a disconnected client can reconnect within 60 s and sees replayed output.
 - [ ] Resuming a session that is already active in another AgentNexus run or (detected) in a native terminal triggers the conflict dialog (attach / read-only / fork); no test produces interleaved transcripts.
 - [ ] Host policy enforcement: actions outside `allowed_roots`, disallowed agents and permission-bypass flags are rejected on the host even if the hub requests them (tested with a manipulated hub).
-- [ ] Stopping a run terminates the full process tree on all OSes (no orphaned processes in tests).
+- [x] Stopping a run terminates the full process tree on all OSes (no orphaned processes in tests). Verified by `internal/host/process_tree_test.go` on the Linux, macOS and Windows CI runners.
 - [ ] Audit log records all run, lease and input-session events; hash chain verifies.
 - [ ] Docker image and compose example with Caddy published; backup and restore procedure tested; WSL host documented and tested once.
 

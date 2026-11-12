@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing and signed host update staging, hub-visible update status, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
+> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter with capability-driven controls, projects, pinned sessions, a notification inbox, passkeys, Web Push, transcript export, read-only Git review, multi-user grants, a true two-pane split workspace, live model/reasoning/agent selection, bounded attachments, review-grade diffs, replay-protected hub command signing, signed host update staging, hub-visible update status, a host-local FTS5 search index, process-tree termination, a tested agent version matrix, pixel-diff visual regression for the demo views, a full-width changes view and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, load/soak tests, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open. See [What works today](#what-works-today) and [Roadmap status](#roadmap-status).
 
 **No releases or tags are published during alpha.** All earlier pre-release
 tags and GitHub releases were withdrawn before the first public version was
@@ -65,7 +65,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hub** (`nexus-hub`) | Go binary, SQLite metadata store, embedded web app, health endpoints, structured JSON logs |
 | **First-run setup** | Owner account, Argon2id password hashing, server-side sessions, optional TOTP enrollment |
 | **Host pairing** | One-time code (10 min, single use), Ed25519 host identity, SAS confirmation, challenge-response over an outbound WebSocket |
-| **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions, revoke |
+| **Hosts** | Online/offline, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
 | **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | No public release feed during alpha; a private test feed needs a read-only `NEXUS_GITHUB_TOKEN` |
@@ -87,7 +87,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Chat** | Streaming text, Markdown/GFM tables, footnotes, nested task lists, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
 | **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, a searchable model picker with favorites/recent models, live reasoning/agent selectors and bounded attachments gated by real capabilities; ACP agents expose only what they advertise |
 | **Search** | Federated transcript search across online hosts with a host-local FTS5 index (BM25 ranking, snippets), adapter fallback while indexing and agent/host filters; offline hosts are reported, not silently skipped |
-| **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js |
+| **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js; stopping a run terminates the whole process tree (Unix process group, Windows Job Object) |
 | **Structured mode** | OpenCode and Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
 | **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects |
 | **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events |
@@ -257,11 +257,11 @@ docs/                 requirements, architecture, roadmap, security, agent integ
 
 | Phase | Status |
 | --- | --- |
-| 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; spike reports are not yet written |
+| 0 — Foundations & spikes | ✅ scaffolding, CI, PTY and protocol prototypes; SP-1 to SP-5 reports in `docs/spikes/` |
 | 1 — Hub, daemon, pairing | 🟡 core implemented; passkeys, host SAS confirmation and five-minute step-up confirmation available |
-| 2 — Discovery & transcripts | 🟡 core implemented; live native-process detection and an FTS index pending; 10k-session store benchmarks recorded, browser soak pending |
-| 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; per-agent/OS end-to-end matrix, WSL and full process-tree guarantees still open |
-| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes and generic ACP (Claude adapter), approvals, Web Push, QR device pairing, host SAS confirmation and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
+| 2 — Discovery & transcripts | 🟡 core implemented; host-local FTS5 index with adapter fallback and progress in the UI; live native-process detection is best effort; browser soak pending |
+| 3 — Terminal resume (MVP) | 🟡 implemented and manually exercised; process-tree termination is tested on Linux, macOS and Windows; per-agent/OS end-to-end matrix and WSL still open |
+| 4 — Structured mode, approvals, push | 🟡 OpenCode/Codex structured modes, generic ACP with capability-driven controls, approvals, Web Push, QR device pairing, host SAS confirmation, a tested agent version matrix and a 360 px mobile layout review implemented; automated axe-core WCAG scan clean, manual audit open |
 | 5 — Hardening, multi-user, 1.0 | 🟡 roles, per-host grants, hub command signing and the signed GoReleaser/SBOM pipeline implemented; client-signed commands, PostgreSQL and external pentest open |
 | 6 — Additional agents & native apps | 🟡 Gemini discovery is best effort; read-only git status/diff and generic ACP agent support implemented; native apps not implemented |
 
