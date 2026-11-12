@@ -26,6 +26,11 @@
 
 .PARAMETER NoService
   Only install the binary; do not install the per-user scheduled task.
+
+.PARAMETER Force
+  Allow replacing the daemon while coding-agent runs are active. The script
+  still asks for an explicit FORCE confirmation; without this switch it
+  refuses to interrupt active runs.
 #>
 [CmdletBinding()]
 param(
@@ -34,7 +39,8 @@ param(
   [string]$Name = $env:COMPUTERNAME,
   [string]$Repo = "AlexanderWagnerDev/agent-nexus",
   [string]$Ref = "main",
-  [switch]$NoService
+  [switch]$NoService,
+  [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -76,16 +82,32 @@ try {
   if (-not $exe) { Fail "The artifact did not contain nexusd.exe." }
 
   $checksum = Get-ChildItem -Path $temp -Recurse -Filter "*.sha256" | Select-Object -First 1
-  if ($checksum) {
-    $expected = (Get-Content $checksum.FullName -Raw).Split(" ")[0].Trim().ToLowerInvariant()
-    $actual = (Get-FileHash -Algorithm SHA256 -Path $exe.FullName).Hash.ToLowerInvariant()
-    if ($expected -ne $actual) { Fail "SHA-256 mismatch for the downloaded daemon." }
-    Write-Host "Checksum verified."
+  if (-not $checksum) { Fail "The artifact did not contain a SHA-256 checksum; refusing to install." }
+  $expected = (Get-Content $checksum.FullName -Raw).Split(" ")[0].Trim().ToLowerInvariant()
+  $actual = (Get-FileHash -Algorithm SHA256 -Path $exe.FullName).Hash.ToLowerInvariant()
+  if ($expected -ne $actual) { Fail "SHA-256 mismatch for the downloaded daemon." }
+  if ($exe.Length -lt 1MB) { Fail "The downloaded daemon is unexpectedly small." }
+  $versionOutput = & $exe.FullName version 2>&1
+  if ($LASTEXITCODE -ne 0 -or "$versionOutput" -notmatch "^nexusd ") {
+    Fail "The downloaded daemon did not pass its version check."
   }
+  Write-Host "Checksum and executable verified."
 
   $dir = Join-Path $env:LOCALAPPDATA "AgentNexus"
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   $dest = Join-Path $dir "nexusd.exe"
+  $activeRuns = 0
+  $statusJson = & $exe.FullName status --json 2>$null
+  if ($LASTEXITCODE -eq 0 -and $statusJson) {
+    try { $activeRuns = [int](($statusJson | ConvertFrom-Json).active_runs) } catch { $activeRuns = 0 }
+  }
+  if ($activeRuns -gt 0 -and -not $Force) {
+    Fail "Refusing to replace the daemon: $activeRuns active agent run(s). Wait until idle, or pass -Force after checking the runs."
+  }
+  if ($activeRuns -gt 0) {
+    $answer = Read-Host "Type FORCE to interrupt $activeRuns active agent run(s)"
+    if ($answer -cne "FORCE") { Fail "Update cancelled; no active run was interrupted." }
+  }
   if (Test-Path $dest) {
     Copy-Item $dest "$dest.previous" -Force
   }
@@ -108,7 +130,14 @@ try {
 
   if (-not $NoService) {
     & $dest service install
-    if ($LASTEXITCODE -ne 0) { Fail "Service installation failed." }
+    if ($LASTEXITCODE -ne 0) {
+      if (Test-Path "$dest.previous") {
+        Copy-Item "$dest.previous" $dest -Force
+        & $dest service install | Out-Null
+        Fail "Service installation failed; the previous daemon was restored."
+      }
+      Fail "Service installation failed and no rollback binary was available."
+    }
     & $dest service status
     & $dest doctor
   }

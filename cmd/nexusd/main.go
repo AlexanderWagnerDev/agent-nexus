@@ -33,7 +33,7 @@ func main() {
 	case "acp":
 		acpCmd(os.Args[2:])
 	case "status":
-		statusCmd()
+		statusCmd(os.Args[2:])
 	case "index":
 		indexCmd(os.Args[2:])
 	case "update":
@@ -186,14 +186,30 @@ func discoverCmd(args []string) {
 	fmt.Printf("total     %d\n", total)
 }
 
-func statusCmd() {
+func statusCmd(args []string) {
+	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "print machine-readable status")
+	_ = fs.Parse(args)
 	cfg, err := host.LoadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("host:   %s\nid:     %s\nhub:    %s\npolicy: roots=%v agents=%v new=%v fork=%v\n",
-		cfg.HostName, cfg.HostID, cfg.HubURL, cfg.Policy.AllowedRoots, cfg.Policy.AllowedAgents, cfg.Policy.AllowNew, cfg.Policy.AllowFork)
+	runtime, fresh := host.ReadRuntimeStatus()
+	active := 0
+	if fresh {
+		active = runtime.ActiveRuns
+	}
+	if *jsonOut {
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"host": cfg.HostName, "id": cfg.HostID, "hub": cfg.HubURL,
+			"active_runs": active, "runtime_fresh": fresh,
+			"version": host.Version,
+		})
+		return
+	}
+	fmt.Printf("host:   %s\nid:     %s\nhub:    %s\npolicy: roots=%v agents=%v new=%v fork=%v\nactive runs: %d (runtime status fresh=%v)\n",
+		cfg.HostName, cfg.HostID, cfg.HubURL, cfg.Policy.AllowedRoots, cfg.Policy.AllowedAgents, cfg.Policy.AllowNew, cfg.Policy.AllowFork, active, fresh)
 }
 
 func indexCmd(args []string) {

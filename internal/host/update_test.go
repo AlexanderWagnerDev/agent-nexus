@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestCompareVersions(t *testing.T) {
@@ -98,5 +100,46 @@ func TestCheckForUpdateNoRelease(t *testing.T) {
 	}
 	if info.Latest != "" || info.Available {
 		t.Fatalf("unexpected update info for an empty feed: %+v", info)
+	}
+}
+
+func TestUpdateRefusesActiveRuns(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	cfgDir, err := ConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	status := runtimeStatus{PID: os.Getpid(), Version: "test", ActiveRuns: 2, UpdatedAt: time.Now().UTC()}
+	raw, _ := json.Marshal(status)
+	if err := os.WriteFile(filepath.Join(cfgDir, "runtime.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(t.TempDir(), "nexusd")
+	if err := os.WriteFile(staged, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err = InstallStagedUpdate(staged, false)
+	if err == nil || !strings.Contains(err.Error(), "active agent run") {
+		t.Fatalf("active-run update was not refused: %v", err)
+	}
+	err = RollbackUpdate(false)
+	if err == nil || !strings.Contains(err.Error(), "active agent run") {
+		t.Fatalf("active-run rollback was not refused: %v", err)
+	}
+
+	// A stale snapshot must not block recovery after a crash.
+	status.UpdatedAt = time.Now().Add(-5 * time.Minute)
+	raw, _ = json.Marshal(status)
+	if err := os.WriteFile(filepath.Join(cfgDir, "runtime.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, fresh := ReadRuntimeStatus(); fresh {
+		t.Fatal("stale runtime status reported as fresh")
 	}
 }

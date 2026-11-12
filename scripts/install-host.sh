@@ -12,6 +12,7 @@ HUB=""
 CODE=""
 NAME="$(hostname 2>/dev/null || echo host)"
 NO_SERVICE=0
+FORCE=0
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,7 @@ Usage: install-host.sh --hub URL [--code CODE] [--name NAME] [options]
   --repo OWNER/REPO
   --ref BRANCH     Branch whose newest development build is used (default: main)
   --no-service     Install only the binary; do not install the user service
+  --force          Allow replacing the daemon while runs are active (asks for FORCE)
   -h, --help       Show this help
 EOF
 }
@@ -35,6 +37,7 @@ while [ $# -gt 0 ]; do
     --repo) REPO="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
     --no-service) NO_SERVICE=1; shift ;;
+    --force) FORCE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage; exit 2 ;;
   esac
@@ -82,24 +85,47 @@ gh run download "$run_id" --repo "$REPO" --name "$artifact" --dir "$tmp"
 bin="$(find "$tmp" -type f -name 'nexusd*' ! -name '*.sha256' | head -n 1)"
 checksum="$(find "$tmp" -type f -name '*.sha256' | head -n 1)"
 [ -n "$bin" ] || { echo "artifact did not contain nexusd" >&2; exit 1; }
-if [ -n "$checksum" ]; then
-  if command -v sha256sum >/dev/null 2>&1; then
-    expected="$(cut -d' ' -f1 "$checksum")"
-    actual="$(sha256sum "$bin" | cut -d' ' -f1)"
-  else
-    expected="$(cut -d' ' -f1 "$checksum")"
-    actual="$(shasum -a 256 "$bin" | cut -d' ' -f1)"
-  fi
-  if [ "$expected" != "$actual" ]; then
-    echo "SHA-256 mismatch for the downloaded daemon." >&2
-    exit 1
-  fi
-  echo "Checksum verified."
+[ -n "$checksum" ] || { echo "artifact did not contain a SHA-256 checksum; refusing to install" >&2; exit 1; }
+if command -v sha256sum >/dev/null 2>&1; then
+  expected="$(cut -d' ' -f1 "$checksum")"
+  actual="$(sha256sum "$bin" | cut -d' ' -f1)"
+else
+  expected="$(cut -d' ' -f1 "$checksum")"
+  actual="$(shasum -a 256 "$bin" | cut -d' ' -f1)"
 fi
+if [ "$expected" != "$actual" ]; then
+  echo "SHA-256 mismatch for the downloaded daemon." >&2
+  exit 1
+fi
+version_output="$("$bin" version 2>/dev/null || true)"
+case "$version_output" in
+  nexusd\ *) ;;
+  *) echo "downloaded daemon failed its version check" >&2; exit 1 ;;
+esac
+echo "Checksum and executable verified."
 
 dest_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
 mkdir -p "$dest_dir"
 dest="$dest_dir/nexusd"
+active_runs=0
+status_json="$("$bin" status --json 2>/dev/null || true)"
+if [ -n "$status_json" ]; then
+  active_runs="$(printf '%s' "$status_json" | sed -n 's/.*"active_runs":\([0-9][0-9]*\).*/\1/p')"
+  active_runs="${active_runs:-0}"
+fi
+if [ "$active_runs" -gt 0 ] && [ "$FORCE" -eq 0 ]; then
+  echo "Refusing to replace the daemon: $active_runs active agent run(s)." >&2
+  echo "Wait until idle, or pass --force after checking the runs." >&2
+  exit 2
+fi
+if [ "$active_runs" -gt 0 ]; then
+  printf 'Type FORCE to interrupt %s active agent run(s): ' "$active_runs" >&2
+  read -r answer
+  if [ "$answer" != "FORCE" ]; then
+    echo "Update cancelled; no active run was interrupted." >&2
+    exit 2
+  fi
+fi
 if [ -f "$dest" ]; then
   cp "$dest" "$dest.previous"
 fi
@@ -112,7 +138,16 @@ if [ -n "$CODE" ]; then
 fi
 
 if [ "$NO_SERVICE" -eq 0 ]; then
-  "$dest" service install
+  if ! "$dest" service install; then
+    if [ -f "$dest.previous" ]; then
+      install -m 0755 "$dest.previous" "$dest"
+      "$dest" service install >/dev/null 2>&1 || true
+      echo "Service installation failed; the previous daemon was restored." >&2
+    else
+      echo "Service installation failed and no rollback binary was available." >&2
+    fi
+    exit 1
+  fi
   "$dest" service status
   "$dest" doctor
 fi

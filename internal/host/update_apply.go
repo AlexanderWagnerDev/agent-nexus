@@ -96,6 +96,16 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return os.Rename(tmp, dst)
 }
 
+// RuntimeStatus is the last published active-run snapshot. A status older
+// than two minutes is treated as stale by ReadRuntimeStatus.
+type RuntimeStatus = runtimeStatus
+
+// ReadRuntimeStatus exposes the running daemon's runtime snapshot to the
+// installer and status command. It never blocks on the daemon.
+func ReadRuntimeStatus() (RuntimeStatus, bool) {
+	return readRuntimeStatus()
+}
+
 func readRuntimeStatus() (runtimeStatus, bool) {
 	dir, err := ConfigDir()
 	if err != nil {

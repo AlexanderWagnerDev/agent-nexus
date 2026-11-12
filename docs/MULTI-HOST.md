@@ -46,6 +46,8 @@ and MCP config are available.
 
 ```powershell
 # 1. Install or update the daemon from an authenticated development build.
+#    The installer verifies the artifact checksum and executable, refuses while
+#    runs are active, and only interrupts them after -Force plus typing FORCE.
 #    No Go toolchain and no release archive are required.
 gh repo clone AlexanderWagnerDev/agent-nexus C:\AgentNexus
 powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `

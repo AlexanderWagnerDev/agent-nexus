@@ -248,9 +248,11 @@ WebSocket path through the proxy.
 1. Back up `hub.db` (see [OPERATIONS.md](OPERATIONS.md)).
 2. Change `NEXUS_TAG` to the new image tag and run `docker compose up -d`.
 3. Update `nexusd` on each host with the installer again
-   (`install-host.ps1` or `install-host.sh`). It keeps `nexusd.previous` for a
-   manual rollback and refuses nothing by itself: the updater in step 3a
-   coordinates with active runs.
+   (`install-host.ps1` or `install-host.sh`). The installer requires the
+   artifact SHA-256, runs the downloaded binary's version check, and refuses to
+   replace a daemon that reports active agent runs. `-Force` (PowerShell) or
+   `--force` (shell) still asks for an explicit `FORCE` confirmation. It keeps
+   `nexusd.previous` and restores it if service installation fails.
 4. Check `nexusd doctor`, `/healthz` and `/readyz`.
 
 For a release-independent update on a host, the same installer can be re-run
