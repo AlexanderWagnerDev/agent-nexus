@@ -2,7 +2,7 @@ import { enablePush, logout } from '../auth.js';
 import { api } from '../api.js';
 import { renderShell, saveTheme, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { badge, closeModal, modal, toast } from '../ui.js';
+import { badge, closeModal, copyText, modal, toast } from '../ui.js';
 import { getLang, setLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { esc } from '../ui-format.js';
@@ -10,15 +10,17 @@ import { esc } from '../ui-format.js';
 export async function pageSettings() {
   const pageGen = state.pageGen;
   renderShell('settings');
-  const [hostData, settings, channelData] = await Promise.all([
+  const [hostData, settings, channelData, tokenData] = await Promise.all([
     api('/hosts').catch(() => ({ hosts: [] })),
     api('/me/settings').catch(() => null),
     api('/me/notification-channels').catch(() => ({ channels: [] })),
+    api('/me/api-tokens').catch(() => ({ tokens: [] })),
   ]);
   if (pageGen !== state.pageGen) return;
   const hosts = hostData.hosts || [];
   const hostPrefs = settings?.notifications_by_host || {};
   const channels = channelData?.channels || [];
+  const tokens = tokenData?.tokens || [];
   if (settings) state.settings = { ...state.settings, ...settings };
   const view = setPage(t('Settings'), t('Appearance, account, notifications and administration.'));
   const isAdmin = state.me.role === 'admin' || state.me.role === 'owner';
@@ -81,6 +83,15 @@ export async function pageSettings() {
         </div>
         <button class="btn small mt-2" id="settings-channel-add" type="button">${t('Add channel')}</button>
         <p class="hint mt-1">${t('Private and loopback targets are rejected to prevent SSRF. Use a public hostname or a reverse proxy.')}</p>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${t('Read-only API tokens')}</h2>
+        <p class="hint">${t('Scoped read-only tokens for the MCP endpoint and other read clients. Tokens are shown once, stored hashed and can be revoked at any time.')}</p>
+        <div class="setting-list" id="settings-token-list">
+          ${tokens.length ? tokens.map((token) => `<div class="setting-row"><div><strong>${esc(token.name)}</strong><small>${esc((token.scopes || []).join(', '))} · ${token.last_used ? esc(fmtStamp(token.last_used)) : t('never used')}</small></div><button class="btn ghost small" type="button" data-token-revoke="${esc(token.id)}">${t('Revoke')}</button></div>`).join('') : `<p class="muted">${t('No API tokens.')}</p>`}
+        </div>
+        <button class="btn small mt-2" id="settings-token-add" type="button">${t('Create token')}</button>
+        <p class="hint mt-1">${t('MCP endpoint:')} <code>/mcp</code> · ${t('Authorization: Bearer <token>')}</p>
       </section>
       <section class="card">
         <h2 class="mt-0">${isAdmin ? t('Administration') : t('About')}</h2>
@@ -168,6 +179,32 @@ export async function pageSettings() {
     try {
       await api(`/me/notification-channels/${encodeURIComponent(button.dataset.channelDelete)}`, { method: 'DELETE' });
       toast(t('Notification channel deleted'));
+      await pageSettings();
+    } catch (err) { toast(err.message, true); }
+  }));
+  document.getElementById('settings-token-add').addEventListener('click', () => {
+    modal(`<h2>${t('Create read-only token')}</h2>
+      <label class="label">${t('Name')}<input class="input" id="token-name" maxlength="80" placeholder="${t('e.g. Claude Desktop')}"></label>
+      <p class="hint">${t('The token grants read-only access to hosts, sessions, transcripts and Git status that your user may already view.')}</p>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="token-create">${t('Create token')}</button></div>`);
+    document.getElementById('token-create').addEventListener('click', async () => {
+      const name = document.getElementById('token-name').value.trim();
+      if (!name) { toast(t('Name is required'), true); return; }
+      try {
+        const result = await api('/me/api-tokens', { method: 'POST', body: { name } });
+        modal(`<h2>${t('Token created')}</h2>
+          <p class="hint">${t('Copy this token now. It cannot be shown again.')}</p>
+          <div class="copy-line"><code id="token-secret">${esc(result.secret)}</code><button class="icon-btn" type="button" id="token-copy" title="${t('Copy')}">${svgIcon('copy', 14)}</button></div>
+          <div class="modal-actions"><button class="btn primary" type="button" data-close>${t('Done')}</button></div>`);
+        document.getElementById('token-copy').addEventListener('click', () => copyText(result.secret));
+        document.querySelector('[data-close]')?.addEventListener('click', () => pageSettings().catch(() => {}));
+      } catch (err) { toast(err.message, true); }
+    });
+  });
+  view.querySelectorAll('[data-token-revoke]').forEach((button) => button.addEventListener('click', async () => {
+    try {
+      await api(`/me/api-tokens/${encodeURIComponent(button.dataset.tokenRevoke)}`, { method: 'DELETE' });
+      toast(t('Token revoked'));
       await pageSettings();
     } catch (err) { toast(err.message, true); }
   }));

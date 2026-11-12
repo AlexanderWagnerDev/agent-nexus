@@ -232,6 +232,16 @@ CREATE TABLE IF NOT EXISTS notification_channels (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS notification_channels_user_idx ON notification_channels(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL DEFAULT 'read',
+  created_at INTEGER NOT NULL,
+  last_used INTEGER,
+  revoked_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at INTEGER NOT NULL,

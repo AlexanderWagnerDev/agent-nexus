@@ -100,6 +100,17 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B8: read-only MCP endpoint (2026-11-12)
+
+`POST /mcp` implements stateless JSON-RPC MCP initialization, tool listing and
+tool calls with scoped read-only bearer tokens. Tools cover hosts, sessions,
+federated transcript search, bounded transcript pages and Git status. Tokens
+are created only after step-up, stored as SHA-256 hashes, shown once, revocable
+and rate-limited to 120 requests/minute. Every call is audited. There is no
+start/stop/prompt/approval/write tool and per-host grants are enforced as the
+token owner. API tests cover auth, revocation, initialization, tools and error
+results; a real third-party MCP client was not available.
+
 ### B11: keyboard shortcuts (2026-11-12)
 
 A `?` dialog lists every implemented shortcut, grouped by navigation, tabs,

@@ -66,6 +66,7 @@ type Server struct {
 	queueArmed map[string]bool
 
 	notificationAllowPrivate bool
+	mcpLimiter               *rateLimiter
 }
 
 type pendingRequest struct {
@@ -98,6 +99,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		metrics:            newMetrics(),
 		queueKick:          make(chan struct{}, 1),
 		queueArmed:         map[string]bool{},
+		mcpLimiter:         newRateLimiter(120, time.Minute),
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
@@ -195,6 +197,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/runs/{id}/queue/order", s.requireAuth(s.handleReorderPromptQueue))
 	mux.HandleFunc("POST /api/v1/runs/{id}/queue/pause", s.requireAuth(s.handlePausePromptQueue))
 	mux.HandleFunc("GET /api/v1/usage", s.requireAuth(s.handleUsage))
+	mux.HandleFunc("GET /api/v1/me/api-tokens", s.requireAuth(s.handleListAPITokens))
+	mux.HandleFunc("POST /api/v1/me/api-tokens", s.requireAuth(s.requireStepUp(s.handleCreateAPIToken)))
+	mux.HandleFunc("DELETE /api/v1/me/api-tokens/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeAPIToken)))
+	mux.HandleFunc("/mcp", s.handleMCP)
 	mux.HandleFunc("POST /api/v1/fanouts", s.requireAuth(s.handleCreateFanout))
 	mux.HandleFunc("GET /api/v1/fanouts", s.requireAuth(s.handleListFanouts))
 	mux.HandleFunc("GET /api/v1/fanouts/{id}", s.requireAuth(s.handleGetFanout))
