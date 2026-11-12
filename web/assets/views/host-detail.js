@@ -42,6 +42,7 @@ export async function pageHostDetail(id) {
   const noRelease = update?.error === 'no published release';
   setPage(h.name, `${h.os}/${h.arch} · nexusd ${h.version || 'unknown'} · ${h.id}`, `
     <a class="btn small ghost" href="#/hosts">${t('Back to hosts')}</a>
+    <button class="btn small ghost" id="host-favorite" type="button">${svgIcon('star')} ${h.favorite ? t('Unpin host') : t('Pin host')}</button>
     <button class="btn small" id="host-new-session" ${h.status !== 'online' || h.disabled ? 'disabled' : ''}>${t('New session')}</button>
     <button class="btn small" id="host-share">${t('Share')}</button>
     <button class="btn small" id="host-update-check">${t('Check for updates')}</button>`);
@@ -165,6 +166,13 @@ export async function pageHostDetail(id) {
     </div>`;
 
   document.getElementById('host-new-session')?.addEventListener('click', () => newSessionDialog(h));
+  document.getElementById('host-favorite')?.addEventListener('click', async () => {
+    try {
+      await api(`/hosts/${encodeURIComponent(h.id)}/favorite`, { method: h.favorite ? 'DELETE' : 'PUT' });
+      toast(h.favorite ? t('Host unpinned') : t('Host pinned'));
+      pageHostDetail(h.id);
+    } catch (err) { toast(err.message, true); }
+  });
   document.getElementById('host-share')?.addEventListener('click', () => shareHostDialog(h));
   document.getElementById('host-update-check')?.addEventListener('click', async (event) => {
     const box = document.getElementById('host-update-result');

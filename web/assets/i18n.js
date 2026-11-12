@@ -1045,6 +1045,10 @@ Object.assign(de, {
   Repositories: 'Repositories',
   'No repositories match': 'Keine passenden Repositories',
   '{n} repositories': '{n} Repositories',
+  'Pin host': 'Host anheften',
+  'Unpin host': 'Host lösen',
+  'Host pinned': 'Host angeheftet',
+  'Host unpinned': 'Host gelöst',
 });
 
 const supported = ['en', 'de'];

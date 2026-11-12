@@ -286,6 +286,34 @@ func (s *Store) SetHostDisabled(hostID string, disabled bool) error {
 	return err
 }
 
+// ---- host favorites ----
+
+func (s *Store) SetHostFavorite(userID, hostID string, favorite bool) error {
+	if !favorite {
+		_, err := s.db.Exec(`DELETE FROM host_favorites WHERE user_id=? AND host_id=?`, userID, hostID)
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO host_favorites(user_id,host_id,created_at) VALUES(?,?,?)
+		ON CONFLICT(user_id,host_id) DO NOTHING`, userID, hostID, ms(time.Now()))
+	return err
+}
+
+func (s *Store) FavoriteHostIDs(userID string) (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT host_id FROM host_favorites WHERE user_id=?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			out[id] = true
+		}
+	}
+	return out, rows.Err()
+}
+
 // HostStats returns metadata counts for the host detail view. It uses one
 // query so the single SQLite connection is not held by a nested cursor.
 func (s *Store) HostStats(hostID string) (sessions, projects, activeRuns int, err error) {

@@ -381,6 +381,7 @@ type HostView struct {
 	Policy   *PolicySummary `json:"policy,omitempty"`
 	Index    *IndexStatus   `json:"index,omitempty"`
 	Health   *HostHealth    `json:"health,omitempty"`
+	Favorite bool           `json:"favorite,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`
 	SAS      string         `json:"sas,omitempty"`
 	Disabled bool           `json:"disabled,omitempty"`

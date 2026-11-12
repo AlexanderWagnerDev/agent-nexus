@@ -376,6 +376,13 @@ CREATE TABLE IF NOT EXISTS task_dependencies (
   PRIMARY KEY (task_id, depends_on)
 );
 CREATE INDEX IF NOT EXISTS task_dependencies_dep_idx ON task_dependencies(depends_on);
+CREATE TABLE IF NOT EXISTS host_favorites (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, host_id)
+);
+CREATE INDEX IF NOT EXISTS host_favorites_user_idx ON host_favorites(user_id, created_at);
 `)
 	if err != nil {
 		return err

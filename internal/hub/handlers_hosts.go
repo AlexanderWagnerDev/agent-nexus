@@ -17,7 +17,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	favorites, _ := s.store.FavoriteHostIDs(u.ID)
 	for i := range hosts {
+		hosts[i].Favorite = favorites[hosts[i].ID]
 		if hosts[i].Disabled {
 			hosts[i].Status = "disabled"
 		} else if s.hostOnline(hosts[i].ID) {
@@ -66,6 +68,9 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 	s.updateMu.Unlock()
 	hv.Index = s.hostIndexStatus(id)
 	hv.Agents, _ = s.store.HostAgents(id)
+	if favorites, err := s.store.FavoriteHostIDs(u.ID); err == nil {
+		hv.Favorite = favorites[id]
+	}
 	health := buildHostHealth(hv, online)
 	hv.Health = &health
 
@@ -82,6 +87,20 @@ func (s *Server) handleHostDetail(w http.ResponseWriter, r *http.Request) {
 		payload["events"] = events
 	}
 	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) handleSetHostFavorite(w http.ResponseWriter, r *http.Request, favorite bool) {
+	u := userFrom(r)
+	id := r.PathValue("id")
+	if !s.hostPermission(u, id, "view") {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	if err := s.store.SetHostFavorite(u.ID, id, favorite); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"favorite": favorite})
 }
 
 func (s *Server) handlePairingCode(w http.ResponseWriter, r *http.Request) {

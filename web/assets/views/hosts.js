@@ -6,6 +6,7 @@ import { badge, confirmDanger, copyText, modal, toast } from '../ui.js';
 import { shareHostDialog } from '../components/host-share.js';
 import { newSessionDialog } from '../components/new-session.js';
 import { t } from '../i18n.js';
+import { svgIcon } from '../icons.js';
 import { agentVersion, esc, fmtRelative } from '../ui-format.js';
 
 function indexLabel(index) {
@@ -25,6 +26,7 @@ export async function pageHosts() {
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const [{ hosts }] = await Promise.all([api('/hosts')]);
   if (pageGen !== state.pageGen) return;
+  hosts.sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name));
   document.getElementById('pair-host').addEventListener('click', pairHostDialog);
   state.wsHandlers.add((msg) => {
     if (msg.type === 'host.updated') pageHosts().catch(() => {});
@@ -42,6 +44,7 @@ export async function pageHosts() {
       </div>
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip ${a.untested ? 'warn' : ''}" ${a.version_warning ? `title="${esc(a.version_warning)}"` : ''}><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}${a.untested ? ' ?' : ''}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}<span class="chip ${h.index?.state === 'building' ? 'active' : ''}">${indexLabel(h.index)}</span></div>
       <div class="host-actions">
+        <button class="icon-btn ${h.favorite ? 'active' : ''}" data-fav-host="${esc(h.id)}" type="button" title="${h.favorite ? t('Unpin host') : t('Pin host')}" aria-label="${h.favorite ? t('Unpin host') : t('Pin host')}">${svgIcon('star', 14)}</button>
         <a class="btn small ghost" href="#/hosts/${encodeURIComponent(h.id)}">${t('Details')}</a>
         <button class="btn small" data-rename-host="${esc(h.id)}">${t('Rename host')}</button>
         <button class="btn small ${h.disabled ? '' : 'danger'}" data-toggle-host="${esc(h.id)}">${h.disabled ? t('Enable host') : t('Disable host')}</button>
@@ -94,6 +97,14 @@ export async function pageHosts() {
     confirmDanger(t('Disabled hosts accept no new runs. Active runs are stopped when a host is disabled.'), apply);
   }));
   view.querySelectorAll('[data-share-host]').forEach((b) => b.addEventListener('click', () => shareHostDialog(hosts.find((h) => h.id === b.dataset.shareHost))));
+  view.querySelectorAll('[data-fav-host]').forEach((b) => b.addEventListener('click', async () => {
+    const host = hosts.find((h) => h.id === b.dataset.favHost);
+    if (!host) return;
+    try {
+      await api(`/hosts/${encodeURIComponent(host.id)}/favorite`, { method: host.favorite ? 'DELETE' : 'PUT' });
+      pageHosts();
+    } catch (err) { toast(err.message, true); }
+  }));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {
     confirmDanger('Revoking this host closes its connection and fails active runs. The daemon must be paired again.', async () => {
       await api(`/hosts/${b.dataset.revokeHost}`, { method: 'DELETE' });

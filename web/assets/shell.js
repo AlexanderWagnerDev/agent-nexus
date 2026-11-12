@@ -165,7 +165,7 @@ export async function loadSidebar() {
         <a class="side-more" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">${t('All')} ${countLabel(p.sessions, 'session', 'sessions')}</a>
       </details>`;
     }).join('');
-    const hostRows = hosts.slice(0, 5).map((h) => `<a class="side-row" href="#/hosts" title="${esc(h.name)}"><span class="side-state ${h.status === 'online' ? 'online' : ''}"></span><span class="truncate">${esc(h.name)}</span><span class="side-meta">${(h.agents || []).length}</span></a>`).join('');
+    const hostRows = [...hosts].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name)).slice(0, 5).map((h) => `<a class="side-row" href="#/hosts/${encodeURIComponent(h.id)}" title="${esc(h.name)}"><span class="side-state ${h.status === 'online' ? 'online' : ''}"></span><span class="truncate">${h.favorite ? '★ ' : ''}${esc(h.name)}</span><span class="side-meta">${(h.agents || []).length}</span></a>`).join('');
     box.innerHTML = `
       ${active.length ? `<div class="side-section"><div class="side-head"><span>${t('Active now')}</span><span class="side-count">${active.length}</span></div>${active.map(sidebarSession).join('')}</div>` : ''}
       ${pinned.length ? `<div class="side-section"><div class="side-head"><span>${t('Pinned')}</span></div>${pinned.slice(0, 5).map(sidebarSession).join('')}</div>` : ''}

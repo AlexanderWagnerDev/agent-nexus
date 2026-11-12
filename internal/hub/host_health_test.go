@@ -42,6 +42,12 @@ func TestAPIHostDetail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if status, body := hub.do(nil, http.MethodPut, "/api/v1/hosts/"+hostID+"/favorite", nil, nil); status != http.StatusOK {
+		t.Fatalf("favorite host: %d %s", status, body)
+	}
+	if favorites, _ := hub.store.FavoriteHostIDs(owner.ID); !favorites[hostID] {
+		t.Fatal("host favorite not stored")
+	}
 	agents := []protocol.AgentInfo{{Name: "opencode", Version: "2.2.7", Path: "opencode", Supported: true, Capabilities: []string{"terminal", "structured"}}}
 	policy := &protocol.PolicySummary{AllowedRoots: []string{"C:/work"}, AllowedAgents: []string{"opencode"}, AllowNew: true}
 	if err := hub.store.SetHostInventory(hostID, "alpha", agents, policy); err != nil {
