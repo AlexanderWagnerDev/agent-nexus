@@ -17,13 +17,13 @@ func TestNotificationChannelSSRFValidation(t *testing.T) {
 		"http://192.168.1.4/hook",
 		"http://169.254.169.254/latest/meta-data",
 		"file:///etc/passwd",
-		"https://user:pass@example.com/hook",
+		"https://user:pass@93.184.216.34/hook",
 	} {
 		if err := validateNotificationURL(target, false); err == nil {
 			t.Errorf("unsafe target accepted: %s", target)
 		}
 	}
-	if err := validateNotificationURL("https://example.com/hook", false); err != nil {
+	if err := validateNotificationURL("https://93.184.216.34/hook", false); err != nil {
 		t.Fatalf("public target rejected: %v", err)
 	}
 	if err := validateNotificationURL("http://127.0.0.1:8080/hook", true); err != nil {
