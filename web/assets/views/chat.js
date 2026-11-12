@@ -764,6 +764,26 @@ export async function pageStructuredRun(id, run) {
     noteText(t('Interrupt requested'));
   });
 
+  const shortcutHandler = (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === 'a' || key === 'd') {
+      const button = approval.querySelector(`[data-approval="${key === 'a' ? 'once' : 'reject'}"]`);
+      if (button) {
+        event.preventDefault();
+        button.click();
+      }
+      return;
+    }
+    if (key === 'x' && !stopButton.hidden) {
+      event.preventDefault();
+      stopButton.click();
+    }
+  };
+  document.addEventListener('keydown', shortcutHandler);
+
   // Optional Web Speech API input. The transcript is inserted into the
   // composer and is never sent automatically.
   const voiceButton = document.getElementById('voice-button');
@@ -1154,6 +1174,7 @@ export async function pageStructuredRun(id, run) {
     clearInterval(timer);
     clearInterval(gitTimer);
     gitRefreshHook = null;
+    document.removeEventListener('keydown', shortcutHandler);
     state.wsHandlers.delete(handler);
   };
   textarea.focus();

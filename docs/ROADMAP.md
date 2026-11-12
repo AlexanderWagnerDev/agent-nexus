@@ -100,6 +100,15 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B11: keyboard shortcuts (2026-11-12)
+
+A `?` dialog lists every implemented shortcut, grouped by navigation, tabs,
+composer, approvals and panels. `g` sequences navigate to the main sections,
+`Alt+1…9` switches tabs, `Alt+W` closes the active tab, `Ctrl/⌘+I` toggles the
+details panel, `a`/`d` answer a visible approval, `x` interrupts and Escape
+closes dialogs/panels. The dialog is focus-managed by the shared modal and is
+translated in English and German. No separate backend state is involved.
+
 ### B10: project activity (2026-11-12)
 
 The sessions page exposes a 90-day heatmap for the active project (or for a

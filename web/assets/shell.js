@@ -3,8 +3,8 @@ import { logout } from './auth.js';
 import { loadNotifications, toggleNotifications } from './notifications.js';
 import { closePalette, openPalette } from './palette.js';
 import { state, storeGet, storeSet } from './state.js';
-import { loadTabs, renderTabs } from './tabs.js';
-import { agentGlyph, app, badge, closeModal, copyText, modalRoot, toast } from './ui.js';
+import { closeTab, loadTabs, renderTabs } from './tabs.js';
+import { agentGlyph, app, badge, closeModal, copyText, modal, modalRoot, toast } from './ui.js';
 import { connectWS } from './ws.js';
 import { applyDiffMode } from './components/transcript.js';
 import { t } from './i18n.js';
@@ -201,6 +201,38 @@ export function setPage(title, sub = '', actions = '') {
   return document.getElementById('view');
 }
 
+let goPending = false;
+let goTimer = null;
+
+function openShortcutHelp() {
+  const rows = [
+    [t('Command palette'), 'Ctrl / ⌘ + K'],
+    [t('This help'), '?'],
+    [t('Go home'), 'g h'],
+    [t('Go to projects'), 'g p'],
+    [t('Go to sessions'), 'g s'],
+    [t('Go to active runs'), 'g a'],
+    [t('Go to usage'), 'g u'],
+    [t('Go to fan-out'), 'g f'],
+    [t('Go to hosts'), 'g o'],
+    [t('Go to settings'), 'g ,'],
+    [t('Switch tab'), 'Alt + 1…9'],
+    [t('Close active tab'), 'Alt + W'],
+    [t('Toggle details panel'), 'Ctrl / ⌘ + I'],
+    [t('Send prompt'), 'Enter'],
+    [t('New line in prompt'), 'Shift + Enter'],
+    [t('Send without newline'), 'Ctrl / ⌘ + Enter'],
+    [t('Allow approval'), 'a'],
+    [t('Deny approval'), 'd'],
+    [t('Interrupt current turn'), 'x'],
+    [t('Close dialog or panel'), 'Escape'],
+    [t('Resize split workspace'), t('Arrow keys on the divider')],
+  ];
+  modal(`<div class="split"><h2>${t('Keyboard shortcuts')}</h2><span class="muted small">${t('Press ? anywhere outside an input')}</span></div>
+    <div class="shortcut-list">${rows.map(([label, key]) => `<div class="shortcut-row"><span>${esc(label)}</span><kbd>${esc(key)}</kbd></div>`).join('')}</div>
+    <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Close')}</button></div>`);
+}
+
 export function installGlobalUi() {
   if (state.uiInstalled) return;
   state.uiInstalled = true;
@@ -218,6 +250,8 @@ export function installGlobalUi() {
       event.preventDefault();
       if (state.palette) closePalette(); else openPalette();
     }
+    const target = event.target;
+    const typing = target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]'));
     if (event.key === 'Escape') {
       if (state.palette) closePalette();
       if (modalRoot.firstElementChild) { closeModal(); return; }
@@ -228,6 +262,53 @@ export function installGlobalUi() {
       if (chatPage?.classList.contains('context-open')) {
         chatPage.classList.remove('context-open');
         storeSet('nexus-context-open', false);
+      }
+    }
+    if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === '?') {
+      event.preventDefault();
+      openShortcutHelp();
+    }
+    if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'i') {
+      const chatPage = document.getElementById('chat-page');
+      if (chatPage) {
+        event.preventDefault();
+        chatPage.classList.toggle('context-open');
+        storeSet('nexus-context-open', chatPage.classList.contains('context-open'));
+      }
+    }
+    if (!typing && event.altKey && /^[1-9]$/.test(event.key)) {
+      const tab = state.openTabs[Number(event.key) - 1];
+      if (tab) {
+        event.preventDefault();
+        location.hash = tab.href || (tab.kind === 'session' ? `#/sessions/${tab.id}` : `#/runs/${tab.id}`);
+      }
+    }
+    if (!typing && event.altKey && event.key.toLowerCase() === 'w') {
+      const active = state.openTabs.find((tab) => (tab.href || (tab.kind === 'session' ? `#/sessions/${tab.id}` : `#/runs/${tab.id}`)) === location.hash);
+      if (active) {
+        event.preventDefault();
+        closeTab(active.key || active.id);
+      }
+    }
+    if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key.toLowerCase() === 'g') {
+        goPending = true;
+        clearTimeout(goTimer);
+        goTimer = setTimeout(() => { goPending = false; }, 1200);
+        return;
+      }
+      if (goPending) {
+        const routes = {
+          h: '#/', p: '#/projects', s: '#/sessions', a: '#/runs', u: '#/usage',
+          f: '#/fanout', o: '#/hosts', ',': '#/settings',
+        };
+        const href = routes[event.key.toLowerCase()];
+        goPending = false;
+        clearTimeout(goTimer);
+        if (href) {
+          event.preventDefault();
+          location.hash = href;
+        }
       }
     }
   });
