@@ -40,8 +40,13 @@ export async function pageSettings() {
       </section>
       <section class="card">
         <h2 class="mt-0">${t('Notifications')}</h2>
-        <p class="hint">${t('Content-free Web Push for approvals, completed runs, failures and host disconnects.')}</p>
+        <p class="hint">${t('Content-free Web Push for approvals, completed runs, failures and host disconnects. The in-app inbox always keeps every event.')}</p>
         <div id="settings-push-area"><button class="btn" id="settings-push">${t('Enable on this device')}</button></div>
+        <div class="setting-list mt-2">
+          ${[['approval', t('Approval required')], ['completed', t('Run completed')], ['failed', t('Run failed')], ['disconnected', t('Host disconnected')]].map(([kind, label]) => `
+            <label class="setting-row"><span>${label}</span><input type="checkbox" data-notify-kind="${kind}" ${state.settings.notifications?.[kind] !== false ? 'checked' : ''}></label>`).join('')}
+        </div>
+        <p class="hint mt-1">${t('Turning a category off only stops push delivery. Events still appear in the notification inbox.')}</p>
       </section>
       <section class="card">
         <h2 class="mt-0">${isAdmin ? t('Administration') : t('About')}</h2>
@@ -63,6 +68,18 @@ export async function pageSettings() {
     } catch (err) { toast(err.message, true); }
   }));
   document.getElementById('settings-signout').addEventListener('click', logout);
+  view.querySelectorAll('[data-notify-kind]').forEach((checkbox) => checkbox.addEventListener('change', async () => {
+    const notifications = {};
+    view.querySelectorAll('[data-notify-kind]').forEach((box) => { notifications[box.dataset.notifyKind] = box.checked; });
+    try {
+      const saved = await api('/me/settings', { method: 'PUT', body: { notifications } });
+      state.settings = { ...state.settings, ...saved };
+      toast(t('Notification preferences saved'));
+    } catch (err) {
+      checkbox.checked = !checkbox.checked;
+      toast(err.message, true);
+    }
+  }));
   document.getElementById('settings-push')?.addEventListener('click', async () => {
     try {
       await enablePush();

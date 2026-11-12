@@ -35,16 +35,19 @@ export async function pageHosts() {
   view.innerHTML = `<div class="list">${hosts.map((h) => `
     <div class="host-row">
       <div class="host-id">
-        <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(t(h.pending ? 'pending' : (h.status === 'online' ? 'online' : 'offline')), h.pending ? 'waiting_for_input' : h.status)}${h.update?.available ? `<span class="badge waiting_for_input" title="${t('nexusd update available')}">${t('update')} ${esc(h.update.latest || '')}</span>` : ''}</div>
+        <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span>${esc(h.name)}${badge(t(h.pending ? 'pending' : (h.disabled ? 'disabled' : (h.status === 'online' ? 'online' : 'offline'))), h.pending ? 'waiting_for_input' : (h.disabled ? 'failed' : h.status))}${h.update?.available ? `<span class="badge waiting_for_input" title="${t('nexusd update available')}">${t('update')} ${esc(h.update.latest || '')}</span>` : ''}</div>
         <div class="sub">${esc(h.os)}/${esc(h.arch)} · nexusd ${esc(h.version || 'unknown')} · ${t('seen')} ${esc(fmtRelative(h.last_seen))}</div>
       </div>
       <div class="agent-chips">${(h.agents || []).map((a) => `<span class="chip ${a.untested ? 'warn' : ''}" ${a.version_warning ? `title="${esc(a.version_warning)}"` : ''}><b>${esc(a.name)}</b> ${esc(agentVersion(a.name, a.version))}${a.untested ? ' ?' : ''}</span>`).join('') || `<span class="chip">${t('no agents')}</span>`}<span class="chip ${h.index?.state === 'building' ? 'active' : ''}">${indexLabel(h.index)}</span></div>
       <div class="host-actions">
         <button class="btn small ghost" data-host-details="${esc(h.id)}">${t('Details')}</button>
-        <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' ? 'disabled' : ''}>${t('New session')}</button>
+        <button class="btn small" data-rename-host="${esc(h.id)}">${t('Rename host')}</button>
+        <button class="btn small ${h.disabled ? '' : 'danger'}" data-toggle-host="${esc(h.id)}">${h.disabled ? t('Enable host') : t('Disable host')}</button>
+        <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' || h.disabled ? 'disabled' : ''}>${t('New session')}</button>
         <button class="btn small" data-share-host="${esc(h.id)}">${t('Share')}</button>
         <button class="btn small danger" data-revoke-host="${esc(h.id)}">${t('Revoke')}</button>
       </div>
+      ${h.disabled ? `<div class="notice info small mt-1">${t('A host must be enabled before it can run agents again.')}</div>` : ''}
       ${h.pending ? `<div class="host-pending"><span>${t('Compare SAS with the daemon.')}</span><span class="secret">${esc(h.sas)}</span><button class="btn primary small" data-confirm-host="${esc(h.id)}">${t('Confirm host')}</button></div>` : ''}
     </div>`).join('')}</div>`;
   view.querySelectorAll('[data-new-session]').forEach((b) => b.addEventListener('click', () => newSessionDialog(hosts.find((h) => h.id === b.dataset.newSession))));
@@ -56,6 +59,37 @@ export async function pageHosts() {
     } catch (err) {
       toast(err.message, true);
     }
+  }));
+  view.querySelectorAll('[data-rename-host]').forEach((b) => b.addEventListener('click', () => {
+    const h = hosts.find((host) => host.id === b.dataset.renameHost);
+    if (!h) return;
+    modal(`
+      <h2>${t('Rename host')}</h2>
+      <label class="label">${t('Host name')}<input class="input" id="rename-host-name" maxlength="80" value="${esc(h.name)}"></label>
+      <p class="hint">${t('The name is stored on the hub and is not reverted by host reconnects.')}</p>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="rename-host-save">${t('Save')}</button></div>`);
+    document.getElementById('rename-host-save').addEventListener('click', async () => {
+      try {
+        await ensureStepUp();
+        await api(`/hosts/${encodeURIComponent(h.id)}`, { method: 'PATCH', body: { name: document.getElementById('rename-host-name').value.trim() } });
+        toast(t('Host renamed'));
+        pageHosts();
+      } catch (err) { toast(err.message, true); }
+    });
+  }));
+  view.querySelectorAll('[data-toggle-host]').forEach((b) => b.addEventListener('click', () => {
+    const h = hosts.find((host) => host.id === b.dataset.toggleHost);
+    if (!h) return;
+    const apply = async () => {
+      try {
+        await ensureStepUp();
+        await api(`/hosts/${encodeURIComponent(h.id)}`, { method: 'PATCH', body: { disabled: !h.disabled } });
+        toast(h.disabled ? t('Host enabled') : t('Host disabled'));
+        pageHosts();
+      } catch (err) { toast(err.message, true); }
+    };
+    if (h.disabled) { apply(); return; }
+    confirmDanger(t('Disabled hosts accept no new runs. Active runs are stopped when a host is disabled.'), apply);
   }));
   view.querySelectorAll('[data-host-details]').forEach((b) => b.addEventListener('click', () => {
     const h = hosts.find((host) => host.id === b.dataset.hostDetails);

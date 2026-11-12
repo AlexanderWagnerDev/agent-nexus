@@ -32,6 +32,9 @@ export async function api(path, options = {}) {
     }
     const err = new Error(data.error || `${res.status} ${res.statusText}`);
     err.status = res.status;
+    err.data = data;
+    err.reason = data.reason || '';
+    err.runId = data.run_id || '';
     if (res.status === 401 && !allow401) {
       state.me = null;
       disconnectWS();

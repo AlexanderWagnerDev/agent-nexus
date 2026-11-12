@@ -675,6 +675,74 @@ Object.assign(de, {
   'Using the slower adapter search until the index is ready.': 'Bis der Index bereit ist, wird die langsamere Adapter-Suche verwendet.',
 });
 
+Object.assign(de, {
+  'Open in native terminal': 'Im nativen Terminal geöffnet',
+  'Best-effort detection: an agent process appears to have this session open. Confirm in the native terminal before resuming.':
+    'Heuristische Erkennung: Ein Agent-Prozess scheint diese Session geöffnet zu haben. Prüfe das native Terminal, bevor du fortsetzt.',
+  'An agent process appears to have this session open in a native terminal. Opening the chat can conflict with that writer; the hub asks before forcing a resume.':
+    'Ein Agent-Prozess scheint diese Session in einem nativen Terminal geöffnet zu haben. Der Chat kann mit diesem Schreiber kollidieren; der Hub fragt vor einem erzwungenen Fortsetzen nach.',
+  'Session is already active': 'Session ist bereits aktiv',
+  'Another AgentNexus run already controls this native session. Attach to it instead of opening a second writer.':
+    'Ein anderer AgentNexus-Run steuert diese native Session bereits. Hänge dich an ihn an, statt einen zweiten Schreiber zu öffnen.',
+  'A native terminal appears to have this session open. Starting here could make two writers corrupt the same conversation.':
+    'Ein natives Terminal scheint diese Session geöffnet zu haben. Ein Start von hier könnte zwei Schreiber auf dieselbe Unterhaltung bringen.',
+  'Native detection is best effort. The original CLI remains the source of truth.':
+    'Die native Erkennung ist heuristisch. Die ursprüngliche CLI bleibt die Quelle der Wahrheit.',
+  'Attach to the existing run': 'An bestehenden Run anhängen',
+  'Open read-only transcript': 'Transkript schreibgeschützt öffnen',
+  'Fork the session instead': 'Stattdessen Session forken',
+  'Resume anyway (step-up required)': 'Trotzdem fortsetzen (Step-up erforderlich)',
+  'Rename host': 'Host umbenennen',
+  'Disable host': 'Host deaktivieren',
+  'Enable host': 'Host aktivieren',
+  'Host disabled': 'Host deaktiviert',
+  'Disabled hosts accept no new runs. Active runs are stopped when a host is disabled.':
+    'Deaktivierte Hosts erhalten keine neuen Runs. Beim Deaktivieren werden aktive Runs gestoppt.',
+  'Host name': 'Host-Name',
+  'Save': 'Speichern',
+  'A host must be enabled before it can run agents again.': 'Ein Host muss aktiviert sein, bevor er wieder Agenten ausführen kann.',
+  'Local title': 'Lokaler Titel',
+  'Tags': 'Tags',
+  'Add tag': 'Tag hinzufügen',
+  'Filter by tag': 'Nach Tag filtern',
+  'All tags': 'Alle Tags',
+  'No tags yet': 'Noch keine Tags',
+  'Remove tag': 'Tag entfernen',
+  'Local metadata only. Native titles and transcripts are never changed.': 'Nur lokale Metadaten. Native Titel und Transkripte werden nie verändert.',
+  'Last 24 hours': 'Letzte 24 Stunden',
+  'Last 7 days': 'Letzte 7 Tage',
+  'Last 30 days': 'Letzte 30 Tage',
+  'Custom range': 'Eigener Zeitraum',
+  'From': 'Von',
+  'To': 'Bis',
+  'Sort by': 'Sortieren nach',
+  'Newest first': 'Neueste zuerst',
+  'Oldest first': 'Älteste zuerst',
+  'updated': 'aktualisiert',
+  'created': 'erstellt',
+  'title': 'Titel',
+  'messages': 'Nachrichten',
+  'Any time': 'Jeder Zeitraum',
+  'Order': 'Reihenfolge',
+  'Host renamed': 'Host umbenannt',
+  'Host enabled': 'Host aktiviert',
+  'Tag removed': 'Tag entfernt',
+  'Tag added': 'Tag hinzugefügt',
+  'Local title saved': 'Lokaler Titel gespeichert',
+  'Local metadata': 'Lokale Metadaten',
+  'Push notifications enabled': 'Push-Benachrichtigungen aktiviert',
+  'Approval required': 'Genehmigung erforderlich',
+  'Run completed': 'Run abgeschlossen',
+  'Run failed': 'Run fehlgeschlagen',
+  'Host disconnected': 'Host getrennt',
+  'Content-free Web Push for approvals, completed runs, failures and host disconnects. The in-app inbox always keeps every event.':
+    'Inhaltsfreie Web-Push-Nachrichten für Genehmigungen, abgeschlossene Runs, Fehler und getrennte Hosts. Die In-App-Inbox speichert weiterhin jedes Ereignis.',
+  'Turning a category off only stops push delivery. Events still appear in the notification inbox.':
+    'Eine Kategorie auszuschalten stoppt nur die Push-Zustellung. Ereignisse erscheinen weiterhin in der Benachrichtigungs-Inbox.',
+  'Notification preferences saved': 'Benachrichtigungseinstellungen gespeichert',
+});
+
+
 const supported = ['en', 'de'];
 let lang = 'en';
 

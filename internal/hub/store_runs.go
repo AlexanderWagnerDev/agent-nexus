@@ -44,6 +44,14 @@ func (s *Store) ActiveRunForSession(sessionID string) (string, bool) {
 	return id, true
 }
 
+// CountActiveRuns is used by the metrics endpoint only; it never returns
+// transcript or session metadata.
+func (s *Store) CountActiveRuns() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM runs WHERE ended_at IS NULL`).Scan(&n)
+	return n, err
+}
+
 func (s *Store) UpdateRunState(id, state string) {
 	if state == protocol.StateExited || state == protocol.StateFailed || state == protocol.StateCompleted {
 		s.db.Exec(`UPDATE runs SET state=?, ended_at=? WHERE id=?`, state, ms(time.Now()), id)

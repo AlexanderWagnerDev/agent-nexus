@@ -58,6 +58,7 @@ type Server struct {
 	hostIndex map[string]protocol.IndexStatus
 
 	passkeySessions passkeySessionStore
+	metrics         *metrics
 }
 
 type pendingRequest struct {
@@ -85,6 +86,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		lastUpdateNotified: map[string]string{},
 		hostIndex:          map[string]protocol.IndexStatus{},
 		epoch:              newID(),
+		metrics:            newMetrics(),
 	}
 	s.ensureVAPID()
 	return s
@@ -98,6 +100,9 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /readyz", s.handleReady)
+	if s.cfg.MetricsEnabled {
+		mux.HandleFunc("GET /metrics", s.handleMetrics)
+	}
 	mux.HandleFunc("GET /api/v1/setup/status", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
@@ -134,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}/grants/{userID}", s.requireAuth(s.requireStepUp(s.handleDeleteHostGrant)))
 
 	mux.HandleFunc("GET /api/v1/hosts", s.requireAuth(s.handleHosts))
+	mux.HandleFunc("PATCH /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleHostUpdateSettings)))
 	mux.HandleFunc("POST /api/v1/hosts/pairing-codes", s.requireAuth(s.requireStepUp(s.handlePairingCode)))
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeHost)))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
@@ -145,7 +151,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/notifications", s.requireAuth(s.handleNotifications))
 	mux.HandleFunc("POST /api/v1/notifications/read", s.requireAuth(s.handleNotificationsRead))
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
+	mux.HandleFunc("GET /api/v1/sessions/tags", s.requireAuth(s.handleSessionTags))
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.requireAuth(s.handleSession))
+	mux.HandleFunc("PATCH /api/v1/sessions/{id}", s.requireAuth(s.handleSessionMetadata))
+	mux.HandleFunc("POST /api/v1/sessions/{id}/tags", s.requireAuth(s.handleAddSessionTag))
+	mux.HandleFunc("DELETE /api/v1/sessions/{id}/tags/{tag}", s.requireAuth(s.handleDeleteSessionTag))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/transcript", s.requireAuth(s.handleTranscript))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/export", s.requireAuth(s.handleExport))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/git", s.requireAuth(s.handleSessionGit))
@@ -170,7 +180,7 @@ func (s *Server) Handler() http.Handler {
 	if s.assets != nil {
 		mux.Handle("/", s.assets)
 	}
-	return s.securityHeaders(bodyLimit(s.csrfGuard(mux)))
+	return s.observeHTTP(s.securityHeaders(bodyLimit(s.csrfGuard(mux))))
 }
 
 // ---- host connections ----

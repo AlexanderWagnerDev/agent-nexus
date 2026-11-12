@@ -136,30 +136,73 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"theme": theme})
+	prefs, err := s.store.NotificationPrefs(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
+}
+
+func notificationDefaults(prefs map[string]bool) map[string]bool {
+	out := map[string]bool{
+		"approval": true, "completed": true, "failed": true, "disconnected": true,
+	}
+	for kind, enabled := range prefs {
+		if _, known := out[kind]; known {
+			out[kind] = enabled
+		}
+	}
+	return out
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	var req struct {
-		Theme string `json:"theme"`
+		Theme         *string          `json:"theme"`
+		Notifications *map[string]bool `json:"notifications"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	switch req.Theme {
-	case "system", "dark", "light":
-	default:
-		writeError(w, http.StatusBadRequest, "theme must be system, dark or light")
-		return
+	if req.Theme != nil {
+		switch *req.Theme {
+		case "system", "dark", "light":
+		default:
+			writeError(w, http.StatusBadRequest, "theme must be system, dark or light")
+			return
+		}
+		if err := s.store.SetUserTheme(u.ID, *req.Theme); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
-	if err := s.store.SetUserTheme(u.ID, req.Theme); err != nil {
+	if req.Notifications != nil {
+		prefs := map[string]bool{}
+		for kind, enabled := range *req.Notifications {
+			switch kind {
+			case "approval", "completed", "failed", "disconnected":
+				prefs[kind] = enabled
+			}
+		}
+		if err := s.store.SetNotificationPrefs(u.ID, prefs); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	theme, err := s.store.UserTheme(u.ID)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.audit(u.Username, "user.settings_updated", map[string]string{"theme": req.Theme})
-	writeJSON(w, http.StatusOK, map[string]string{"theme": req.Theme})
+	prefs, err := s.store.NotificationPrefs(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "user.settings_updated", map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
+	writeJSON(w, http.StatusOK, map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

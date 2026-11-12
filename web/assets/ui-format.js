@@ -87,6 +87,15 @@ export function cwdKey(cwd) {
   return String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
 }
 
+// The host detects a native terminal session by scanning running process
+// command lines. That scan is best effort, so the badge explains the
+// uncertainty instead of presenting it as hard proof.
+export function nativeActivityBadge(active, compact = false) {
+  if (!active) return '';
+  const hint = t('Best-effort detection: an agent process appears to have this session open. Confirm in the native terminal before resuming.');
+  return `<span class="badge active_elsewhere${compact ? ' compact' : ''}" title="${esc(hint)}">${t('Open in native terminal')}</span>`;
+}
+
 export function repoLink(url, label = '') {
   const value = String(url || '');
   if (!/^https?:\/\//i.test(value)) return '';

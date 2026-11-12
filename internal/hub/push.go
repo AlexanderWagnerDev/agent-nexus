@@ -123,6 +123,12 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 	if err := s.store.AddNotification(ownerID, kind, title, body, runID, link); err != nil {
 		s.log.Debug("notification history failed", "error", err)
 	}
+	prefs, err := s.store.NotificationPrefs(ownerID)
+	if err == nil {
+		if enabled, known := prefs[kind]; known && !enabled {
+			return
+		}
+	}
 	if s.vapidPrivate == "" || s.vapidPublic == "" {
 		return
 	}
@@ -147,6 +153,7 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 			Urgency:         webpush.UrgencyNormal,
 		})
 		if err != nil {
+			s.metrics.pushFailed()
 			s.log.Debug("push delivery failed", "error", err)
 			continue
 		}

@@ -38,6 +38,8 @@ services:
       NEXUS_DATA_DIR: "/data"
       NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN:?set HUB_DOMAIN to the external HTTPS hostname}"
       NEXUS_HUB_NAME: "${HUB_NAME:-AgentNexus}"
+      NEXUS_METRICS: "${NEXUS_METRICS:-false}"
+      NEXUS_METRICS_TOKEN: "${NEXUS_METRICS_TOKEN:-}"
       TZ: "${TZ:-UTC}"
     volumes:
       - nexus-data:/data
@@ -71,3 +73,4 @@ networks:
       config:
         - subnet: ${NEXUS_IPV4_SUBNET:-172.30.0.0/24}
         - subnet: ${NEXUS_IPV6_SUBNET:-fd42:6e78:6578::/64}
+

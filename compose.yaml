@@ -13,6 +13,8 @@ services:
       NEXUS_DATA_DIR: "/data"
       NEXUS_PUBLIC_URL: "https://${HUB_DOMAIN:-localhost}"
       NEXUS_HUB_NAME: "${HUB_NAME:-AgentNexus}"
+      NEXUS_METRICS: "${NEXUS_METRICS:-false}"
+      NEXUS_METRICS_TOKEN: "${NEXUS_METRICS_TOKEN:-}"
     volumes:
       - nexus-data:/data
     expose:
@@ -44,3 +46,4 @@ volumes:
   nexus-data:
   caddy-data:
   caddy-config:
+

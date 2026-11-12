@@ -11,7 +11,7 @@ import { describeTool } from '../chat-format.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
-import { agentMeta, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, projectName, repoLink } from '../ui-format.js';
+import { agentMeta, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
 
 export async function pageStructuredRun(id, run) {
   let session = null;
@@ -48,6 +48,7 @@ export async function pageStructuredRun(id, run) {
           <span class="chat-agent">${agentGlyph(run.agent || session?.agent)}${esc(agent.label)}</span>
           <span class="chat-sep">·</span>
           <span class="chat-host">${esc(host)}</span>
+          ${nativeActivityBadge(session?.active_elsewhere, true)}
           ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
           <button class="icon-btn chat-inline-context" id="chat-inline-context" type="button" title="${t('Toggle session details')}" aria-label="${t('Toggle session details')}">${svgIcon('panelRight')}</button>
           <span class="chat-connection" id="run-note"><span class="connection-dot"></span>Connecting…</span>
@@ -803,7 +804,7 @@ export async function pageStructuredRun(id, run) {
     try {
       const g = await api(`/sessions/${session.id}/git`);
       box.innerHTML = `
-        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
+        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtTime(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
         ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
         <pre class="git-status">${esc(g.status?.trim() || 'Clean working tree')}</pre>
         ${g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : ''}
@@ -815,6 +816,20 @@ export async function pageStructuredRun(id, run) {
   document.getElementById('context-git').addEventListener('click', (event) => {
     if (event.target.closest('#context-git-load') || event.target.closest('#git-refresh')) loadGit();
   });
+  // Live diff while a run is active: the host re-reads the working tree; the
+  // hub never stores the diff. Refresh only when the details panel is open.
+  let gitTimer = null;
+  const scheduleGitRefresh = () => {
+    clearInterval(gitTimer);
+    if (!session) return;
+    gitTimer = setInterval(() => {
+      if (!document.getElementById('context-git')) return;
+      if (!chatPage.classList.contains('context-open')) return;
+      if (currentState !== 'running' && currentState !== 'waiting_for_input' && currentState !== 'starting') return;
+      loadGit().catch(() => {});
+    }, 8000);
+  };
+  scheduleGitRefresh();
 
   sendSubscribe();
   await loadHistory().catch(() => {});
@@ -831,6 +846,7 @@ export async function pageStructuredRun(id, run) {
 
   state.pageCleanup = () => {
     clearInterval(timer);
+    clearInterval(gitTimer);
     state.wsHandlers.delete(handler);
   };
   textarea.focus();

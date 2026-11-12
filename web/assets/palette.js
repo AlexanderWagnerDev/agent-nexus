@@ -28,8 +28,8 @@ export function paletteActions() {
 
 export function paletteSession(s) {
   return {
-    label: s.title || t('Untitled session'),
-    hint: `${agentMeta(s.agent).label} · ${s.host_name} · ${projectName(s.cwd)}`,
+    label: s.local_title || s.title || t('Untitled session'),
+    hint: `${agentMeta(s.agent).label} · ${s.host_name} · ${projectName(s.cwd)}${(s.tags || []).length ? ` · ${s.tags.join(', ')}` : ''}`,
     icon: 'sessions',
     run: () => { location.hash = `#/sessions/${s.id}`; },
   };

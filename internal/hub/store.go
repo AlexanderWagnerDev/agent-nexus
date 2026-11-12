@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -125,7 +126,8 @@ CREATE TABLE IF NOT EXISTS hosts (
   policy TEXT NOT NULL DEFAULT '{}',
   created_at INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
-  revoked_at INTEGER
+  revoked_at INTEGER,
+  disabled_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS host_agents (
   host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
@@ -206,6 +208,7 @@ CREATE TABLE IF NOT EXISTS device_pairings (
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   theme TEXT NOT NULL DEFAULT 'system',
+  notify_prefs TEXT NOT NULL DEFAULT '{}',
   updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS host_confirmations (
@@ -240,6 +243,24 @@ CREATE TABLE IF NOT EXISTS notifications (
   read_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, created_at);
+CREATE TABLE IF NOT EXISTS session_overrides (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, session_id)
+);
+CREATE TABLE IF NOT EXISTS session_tags (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, session_id, tag)
+);
+CREATE INDEX IF NOT EXISTS session_tags_user_idx ON session_tags(user_id, tag);
+CREATE INDEX IF NOT EXISTS sessions_created_idx ON sessions(created_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_title_idx ON sessions(title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS sessions_messages_idx ON sessions(message_count DESC);
 `)
 	if err != nil {
 		return err
@@ -249,6 +270,8 @@ CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, crea
 	_, _ = s.db.Exec(`ALTER TABLE auth_sessions ADD COLUMN step_up_until INTEGER`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_url TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN disabled_at INTEGER`)
+	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
 	return nil
 }
 
@@ -302,6 +325,35 @@ func (s *Store) SetUserTheme(userID, theme string) error {
 	_, err := s.db.Exec(`INSERT INTO user_settings(user_id,theme,updated_at) VALUES(?,?,?)
 		ON CONFLICT(user_id) DO UPDATE SET theme=excluded.theme, updated_at=excluded.updated_at`,
 		userID, theme, ms(time.Now()))
+	return err
+}
+
+// NotificationPrefs returns the push opt-outs for one user. Missing keys mean
+// enabled; the in-app inbox is never filtered by these preferences.
+func (s *Store) NotificationPrefs(userID string) (map[string]bool, error) {
+	var raw string
+	err := s.db.QueryRow(`SELECT notify_prefs FROM user_settings WHERE user_id=?`, userID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	prefs := map[string]bool{}
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &prefs)
+	}
+	return prefs, nil
+}
+
+func (s *Store) SetNotificationPrefs(userID string, prefs map[string]bool) error {
+	raw, err := json.Marshal(prefs)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`INSERT INTO user_settings(user_id,theme,notify_prefs,updated_at) VALUES(?,'system',?,?)
+		ON CONFLICT(user_id) DO UPDATE SET notify_prefs=excluded.notify_prefs, updated_at=excluded.updated_at`,
+		userID, string(raw), ms(time.Now()))
 	return err
 }
 

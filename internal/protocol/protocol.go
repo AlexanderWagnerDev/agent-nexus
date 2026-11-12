@@ -185,6 +185,10 @@ type RunSpec struct {
 	Mode      string `json:"mode"`
 	Cols      int    `json:"cols"`
 	Rows      int    `json:"rows"`
+	// Force resumes a session that a best-effort process scan reports as open
+	// in a native terminal. The hub only sets it after an explicit,
+	// step-up-confirmed user decision; the host still enforces run uniqueness.
+	Force bool `json:"force,omitempty"`
 }
 
 // RunEvent is a normalized structured-mode event. Terminal runs do not use it.
@@ -307,6 +311,7 @@ type HostView struct {
 	Index    *IndexStatus   `json:"index,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`
 	SAS      string         `json:"sas,omitempty"`
+	Disabled bool           `json:"disabled,omitempty"`
 }
 
 // IndexStatus is the host-local full-text index progress. It never contains
@@ -337,6 +342,10 @@ type SessionView struct {
 	State           string    `json:"state"`
 	ActiveElsewhere bool      `json:"active_elsewhere"`
 	Warning         string    `json:"warning,omitempty"`
+	// LocalTitle and Tags are per-user hub metadata. They never modify the
+	// agent's native title or transcript.
+	LocalTitle string   `json:"local_title,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 }
 
 // RunView is the hub-side projection of a run.

@@ -43,6 +43,8 @@ func main() {
 		tlsCert     = flag.String("tls-cert", envOr("NEXUS_TLS_CERT", ""), "TLS certificate file")
 		tlsKey      = flag.String("tls-key", envOr("NEXUS_TLS_KEY", ""), "TLS private key file")
 		hubName     = flag.String("name", envOr("NEXUS_HUB_NAME", "AgentNexus"), "hub display name")
+		metrics     = flag.Bool("metrics", envOr("NEXUS_METRICS", "") == "true", "expose /metrics")
+		metricsTok  = flag.String("metrics-token", envOr("NEXUS_METRICS_TOKEN", ""), "bearer token required by /metrics")
 		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
 		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
 		backup      = flag.String("backup", "", "write a consistent database snapshot to this file and exit")
@@ -98,12 +100,14 @@ func main() {
 	}
 
 	srv := hub.NewServer(hub.Config{
-		Addr:      *addr,
-		DataDir:   *dataDir,
-		PublicURL: *publicURL,
-		TLSCert:   *tlsCert,
-		TLSKey:    *tlsKey,
-		HubName:   *hubName,
+		Addr:           *addr,
+		DataDir:        *dataDir,
+		PublicURL:      *publicURL,
+		TLSCert:        *tlsCert,
+		TLSKey:         *tlsKey,
+		HubName:        *hubName,
+		MetricsEnabled: *metrics,
+		MetricsToken:   *metricsTok,
 	}, store, logger)
 	srv.SetSigner(signer)
 	srv.SetAssets(web.Handler())

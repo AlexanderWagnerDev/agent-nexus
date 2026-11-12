@@ -18,7 +18,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range hosts {
-		if s.hostOnline(hosts[i].ID) {
+		if hosts[i].Disabled {
+			hosts[i].Status = "disabled"
+		} else if s.hostOnline(hosts[i].ID) {
 			hosts[i].Status = "online"
 		}
 		s.updateMu.Lock()
@@ -116,6 +118,88 @@ func (s *Server) handleConfirmHost(w http.ResponseWriter, r *http.Request) {
 	s.broadcastHostUpdate(id)
 	s.audit(u.Username, "host.confirmed", map[string]string{"host_id": id})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "confirmed"})
+}
+
+// handleHostUpdateSettings renames or disables a host. Both actions are
+// security-relevant (a disabled host must not receive new runs), so the route
+// requires step-up confirmation and the manage grant.
+func (s *Server) handleHostUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	id := r.PathValue("id")
+	if !s.hostPermission(u, id, "manage") {
+		writeError(w, http.StatusForbidden, "host manage permission required")
+		return
+	}
+	var req struct {
+		Name     *string `json:"name"`
+		Disabled *bool   `json:"disabled"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if req.Name == nil && req.Disabled == nil {
+		writeError(w, http.StatusBadRequest, "name or disabled is required")
+		return
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if len(name) < 1 || len(name) > 80 {
+			writeError(w, http.StatusBadRequest, "name must be 1-80 characters")
+			return
+		}
+		if err := s.store.RenameHost(id, name); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.audit(u.Username, "host.rename", map[string]string{"host_id": id, "name": name})
+	}
+	if req.Disabled != nil {
+		disabled := *req.Disabled
+		if _, err := s.store.HostByID(id); err != nil {
+			writeError(w, http.StatusNotFound, "host not found")
+			return
+		}
+		if err := s.store.SetHostDisabled(id, disabled); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		action := "host.enable"
+		if disabled {
+			action = "host.disable"
+		}
+		s.audit(u.Username, action, map[string]string{"host_id": id})
+		if disabled {
+			// Ask the daemon to stop every run before dropping the link. The
+			// host must not keep an orphaned agent process running while the
+			// hub refuses its reconnect.
+			if runs, err := s.store.ActiveRuns(id); err == nil {
+				for _, run := range runs {
+					_ = s.sendHost(id, protocol.Envelope{Type: "run.stop", RunID: run.ID})
+					s.setRunState(run.ID, protocol.StateStopping)
+				}
+			}
+			go func() {
+				time.Sleep(2 * time.Second)
+				s.dropHost(id, "host disabled")
+				s.broadcastHostUpdate(id)
+			}()
+		} else {
+			s.broadcastHostUpdate(id)
+		}
+	}
+	host, err := s.store.HostByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	hv := host.HostView
+	if host.DisabledAt != nil {
+		hv.Status = "disabled"
+	} else if s.hostOnline(id) {
+		hv.Status = "online"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"host": hv})
 }
 
 func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {

@@ -239,6 +239,7 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.approval", RunID: msg.RunID, ApprovalID: msg.ApprovalID, Decision: msg.Decision}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
 		}
+		s.metrics.approvalAnswered(msg.ApprovalID)
 		s.audit(c.user.Username, "approval.answered", map[string]string{"run_id": msg.RunID, "approval_id": msg.ApprovalID, "decision": msg.Decision})
 	case "interrupt":
 		run, startedBy, err := s.store.RunByID(msg.RunID)

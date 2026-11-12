@@ -55,6 +55,11 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unknown or revoked host")
 		return
 	}
+	hostMeta, err := s.store.HostByID(hostID)
+	if err != nil || hostMeta.DisabledAt != nil {
+		writeError(w, http.StatusForbidden, "host is disabled")
+		return
+	}
 	if _, confirmed, _, err := s.store.HostConfirmation(hostID); err == nil && !confirmed {
 		writeError(w, http.StatusForbidden, "host awaiting local SAS confirmation")
 		return
@@ -97,9 +102,9 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	defer s.unregisterHost(hostID, hc)
 	go hc.runWriter(ctx)
 
-	if auth.HostName != "" {
-		_, _ = s.store.db.Exec(`UPDATE hosts SET name=? WHERE id=?`, auth.HostName, hostID)
-	}
+	// The hub-side name is authoritative after pairing so an administrator's
+	// rename is not reverted by every reconnect. The daemon still reports its
+	// platform and version.
 	// The platform is reported on every connection. Persist it so a host that
 	// was paired from a different machine or upgraded to another OS does not
 	// keep stale inventory metadata.
@@ -318,6 +323,7 @@ func (s *Server) registerHost(hc *hostConn) {
 	s.hosts[hc.id] = hc
 	s.mu.Unlock()
 	if old != nil {
+		s.metrics.hostReconnected()
 		old.close()
 	}
 }
@@ -382,7 +388,9 @@ func (s *Server) broadcastHostUpdate(id string) {
 		return
 	}
 	hv := host.HostView
-	if s.hostOnline(id) {
+	if host.DisabledAt != nil {
+		hv.Status = "disabled"
+	} else if s.hostOnline(id) {
 		hv.Status = "online"
 	}
 	s.updateMu.Lock()

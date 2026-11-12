@@ -123,6 +123,38 @@ async function run() {
     await page.waitForSelector('#notif-panel:not([hidden])');
     await page.keyboard.press('Escape');
 
+    // The conflict dialog is reproduced without a real host: a synthetic
+    // session reports active_elsewhere and the run endpoint answers 409.
+    const conflict = await desktop.newPage();
+    const session = {
+      id: 'fake-session', host_id: 'fake-host', host_name: 'synthetic', agent: 'opencode',
+      native_id: 'native-1', title: 'Conflict fixture', cwd: '/tmp/conflict', message_count: 3,
+      state: 'idle', active_elsewhere: true, tags: ['demo'],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    };
+    await conflict.route('**/api/v1/**', async (route) => {
+      const request = route.request();
+      const pathname = new URL(request.url()).pathname;
+      const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+      if (pathname === '/api/v1/hosts') return json(200, { hosts: [{ id: 'fake-host', name: 'synthetic', status: 'online', agents: [{ name: 'opencode', capabilities: ['structured'], version: '2.2.0' }] }] });
+      if (pathname === '/api/v1/sessions' && request.method() === 'GET') return json(200, { sessions: [session], has_more: false, offset: 0 });
+      if (pathname === '/api/v1/sessions/fake-session' && request.method() === 'GET') return json(200, session);
+      if (pathname === '/api/v1/sessions/fake-session/transcript') return json(200, { messages: [], total: 0 });
+      if (pathname === '/api/v1/sessions/fake-session/runs') return json(409, { error: 'session is open in a native terminal', reason: 'active_elsewhere' });
+      if (pathname === '/api/v1/sessions/tags') return json(200, { tags: ['demo'] });
+      return route.continue();
+    });
+    await login(conflict);
+    await conflict.goto(`${baseURL}/#/sessions/fake-session`, { waitUntil: 'networkidle' });
+    await conflict.waitForSelector('#structured-session');
+    await conflict.click('#structured-session');
+    await conflict.waitForSelector('.modal');
+    assert((await conflict.locator('.modal').innerText()).includes('Open in native terminal'), 'conflict dialog did not explain the native terminal');
+    assert(await conflict.locator('#conflict-force').count() === 1, 'forced resume option missing');
+    assert(await conflict.locator('#conflict-readonly').count() === 1, 'read-only option missing');
+    await conflict.click('[data-close]');
+    await conflict.close();
+
     const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const phone = await mobile.newPage();
     await login(phone);

@@ -22,7 +22,40 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		limit = 2000
 	}
 	offset := atoiOr(q.Get("offset"), 0)
-	sessions, err := s.store.ListSessions(u.ID, q.Get("host"), q.Get("agent"), q.Get("project"), q.Get("state"), q.Get("q"), limit+1, offset, isAdminRole(u.Role))
+	filter := SessionFilter{
+		HostID: q.Get("host"), Agent: q.Get("agent"), Project: q.Get("project"),
+		State: q.Get("state"), Query: q.Get("q"), Tag: normalizeTag(q.Get("tag")),
+		Sort: q.Get("sort"), Order: q.Get("order"), Limit: limit + 1, Offset: offset,
+	}
+	if raw := strings.TrimSpace(q.Get("since")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "since must be an RFC 3339 timestamp")
+			return
+		}
+		filter.Since = t
+	}
+	if raw := strings.TrimSpace(q.Get("until")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "until must be an RFC 3339 timestamp")
+			return
+		}
+		filter.Until = t
+	}
+	switch filter.Sort {
+	case "", "updated", "created", "title", "messages":
+	default:
+		writeError(w, http.StatusBadRequest, "sort must be updated, created, title or messages")
+		return
+	}
+	switch filter.Order {
+	case "", "asc", "desc":
+	default:
+		writeError(w, http.StatusBadRequest, "order must be asc or desc")
+		return
+	}
+	sessions, err := s.store.ListSessionsFiltered(u.ID, filter, isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -35,6 +68,141 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		sessions = []protocol.SessionView{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "has_more": hasMore, "offset": offset})
+}
+
+// validTag keeps tags short, searchable and safe in a URL query.
+func normalizeTag(raw string) string {
+	tag := strings.ToLower(strings.TrimSpace(raw))
+	if tag == "" {
+		return ""
+	}
+	if len(tag) > 32 {
+		tag = tag[:32]
+	}
+	for _, r := range tag {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return ""
+	}
+	return tag
+}
+
+func (s *Server) handleSessionTags(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	tags, err := s.store.SessionTags(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+}
+
+func (s *Server) handleSessionMetadata(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	var req struct {
+		LocalTitle *string `json:"local_title"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if req.LocalTitle == nil {
+		writeError(w, http.StatusBadRequest, "local_title is required")
+		return
+	}
+	title := strings.TrimSpace(*req.LocalTitle)
+	if len(title) > 200 {
+		writeError(w, http.StatusBadRequest, "local title must be at most 200 characters")
+		return
+	}
+	if err := s.store.SetSessionLocalTitle(u.ID, sess.ID, title); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "session.local_title", map[string]string{"session_id": sess.ID})
+	local, tags := s.store.SessionMetadata(u.ID, sess.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"local_title": local, "tags": tags})
+}
+
+func (s *Server) handleAddSessionTag(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	var req struct {
+		Tag string `json:"tag"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	tag := normalizeTag(req.Tag)
+	if tag == "" {
+		writeError(w, http.StatusBadRequest, "tag must be 1-32 lowercase letters, digits, - or _")
+		return
+	}
+	_, currentTags := s.store.SessionMetadata(u.ID, sess.ID)
+	if len(currentTags) >= 10 && !contains(currentTags, tag) {
+		writeError(w, http.StatusBadRequest, "at most 10 tags per session")
+		return
+	}
+	if err := s.store.AddSessionTag(u.ID, sess.ID, tag); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "session.tag_added", map[string]string{"session_id": sess.ID, "tag": tag})
+	_, tags := s.store.SessionMetadata(u.ID, sess.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+}
+
+func (s *Server) handleDeleteSessionTag(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	tag := normalizeTag(r.PathValue("tag"))
+	if tag == "" {
+		writeError(w, http.StatusBadRequest, "invalid tag")
+		return
+	}
+	if err := s.store.DeleteSessionTag(u.ID, sess.ID, tag); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "session.tag_removed", map[string]string{"session_id": sess.ID, "tag": tag})
+	_, tags := s.store.SessionMetadata(u.ID, sess.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+}
+
+func contains(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -204,8 +372,14 @@ type runRequest struct {
 	Cwd    string `json:"cwd"`
 	Mode   string `json:"mode"`
 	Fork   bool   `json:"fork"`
+	Force  bool   `json:"force"`
 	Cols   int    `json:"cols"`
 	Rows   int    `json:"rows"`
+}
+
+func stepUpValid(r *http.Request) bool {
+	until, _ := r.Context().Value(ctxStepUp).(time.Time)
+	return time.Now().Before(until)
 }
 
 func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
@@ -219,20 +393,43 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "resume permission required")
 		return
 	}
-	if !s.hostOnline(sess.HostID) {
-		writeError(w, http.StatusServiceUnavailable, "host is offline")
+	if host, err := s.store.HostByID(sess.HostID); err != nil || host.DisabledAt != nil {
+		writeError(w, http.StatusConflict, "host is disabled")
 		return
 	}
-	if runID, active := s.store.ActiveRunForSession(sess.ID); active {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"error": "session is already active", "run_id": runID,
-		})
+	if !s.hostOnline(sess.HostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
 		return
 	}
 	var req runRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
+	}
+	if runID, active := s.store.ActiveRunForSession(sess.ID); active {
+		// The UI offers "Attach" for this reason; resuming would create a
+		// second writer on the same native session.
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  "session is already active",
+			"reason": "active_run",
+			"run_id": runID,
+		})
+		return
+	}
+	if sess.ActiveElsewhere && !req.Fork && !req.Force {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  "session is open in a native terminal",
+			"reason": "active_elsewhere",
+		})
+		return
+	}
+	if req.Force && !req.Fork {
+		if !stepUpValid(r) {
+			writeJSON(w, http.StatusForbidden, map[string]any{
+				"error": "step-up required", "step_up_required": true,
+			})
+			return
+		}
 	}
 	if req.Fork && !s.sessionPermission(u, sess, "fork") {
 		writeError(w, http.StatusForbidden, "fork permission required")
@@ -252,10 +449,16 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	if req.Fork {
 		action = protocol.ActionFork
 	}
-	run, err := s.startRun(u, deviceFrom(r), sess, action, req.Cwd, req.Mode, req.Cols, req.Rows)
+	run, err := s.startRun(u, deviceFrom(r), sess, action, req.Cwd, req.Mode, req.Cols, req.Rows, req.Force)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
+	}
+	if req.Force {
+		s.audit(u.Username, "run.force_resume", map[string]string{
+			"run_id": run.ID, "host_id": sess.HostID, "session_id": sess.ID,
+			"reason": "session reported active in a native terminal",
+		})
 	}
 	writeJSON(w, http.StatusAccepted, run)
 }
@@ -266,6 +469,10 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	host, err := s.store.HostByID(hostID)
 	if err != nil || host.RevokedAt != nil {
 		writeError(w, http.StatusNotFound, "host not found")
+		return
+	}
+	if host.DisabledAt != nil {
+		writeError(w, http.StatusConflict, "host is disabled")
 		return
 	}
 	if !s.hostPermission(u, hostID, "create") {
@@ -295,7 +502,7 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	if req.Cols <= 0 {
 		req.Cols, req.Rows = 120, 30
 	}
-	run, err := s.startRun(u, deviceFrom(r), protocol.SessionView{HostID: hostID, Agent: req.Agent}, protocol.ActionNew, req.Cwd, req.Mode, req.Cols, req.Rows)
+	run, err := s.startRun(u, deviceFrom(r), protocol.SessionView{HostID: hostID, Agent: req.Agent}, protocol.ActionNew, req.Cwd, req.Mode, req.Cols, req.Rows, false)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -303,7 +510,7 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, run)
 }
 
-func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, cwd, mode string, cols, rows int) (protocol.RunView, error) {
+func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, cwd, mode string, cols, rows int, force bool) (protocol.RunView, error) {
 	id := newID()
 	if cwd == "" {
 		cwd = sess.Cwd
@@ -316,7 +523,7 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 	}
 	spec := protocol.RunSpec{
 		RunID: id, SessionID: sess.ID, Agent: sess.Agent, NativeID: sess.NativeID,
-		Cwd: cwd, Action: action, Mode: mode, Cols: cols, Rows: rows,
+		Cwd: cwd, Action: action, Mode: mode, Cols: cols, Rows: rows, Force: force,
 	}
 	s.mu.Lock()
 	s.runHosts[id] = sess.HostID

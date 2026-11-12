@@ -8,6 +8,10 @@ type Config struct {
 	TLSCert   string
 	TLSKey    string
 	HubName   string
+	// MetricsEnabled exposes /metrics. MetricsToken is the required bearer
+	// token; an empty token disables the endpoint even when enabled is true.
+	MetricsEnabled bool
+	MetricsToken   string
 }
 
 type ctxKey int

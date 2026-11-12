@@ -70,11 +70,12 @@ func (s *Store) ConsumePairingCode(code string) (ownerID string, err error) {
 
 type Host struct {
 	protocol.HostView
-	OwnerID   string
-	PublicKey []byte
-	RevokedAt *time.Time
-	Policy    *protocol.PolicySummary
-	CreatedAt time.Time
+	OwnerID    string
+	PublicKey  []byte
+	RevokedAt  *time.Time
+	DisabledAt *time.Time
+	Policy     *protocol.PolicySummary
+	CreatedAt  time.Time
 }
 
 func (s *Store) CreateHost(ownerID, name string, publicKey []byte, osName, arch, version string) (string, error) {
@@ -129,7 +130,7 @@ func (s *Store) HostPublicKey(hostID string) ([]byte, error) {
 
 func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) {
 	q := `SELECT h.id,h.name,h.os,h.arch,h.version,h.last_seen,h.policy,
-		COALESCE(c.sas,''), c.confirmed_at FROM hosts h
+		COALESCE(c.sas,''), c.confirmed_at, h.disabled_at FROM hosts h
 		LEFT JOIN host_confirmations c ON c.host_id=h.id WHERE h.revoked_at IS NULL`
 	args := []any{}
 	if !all {
@@ -146,8 +147,8 @@ func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) 
 		var h protocol.HostView
 		var seen int64
 		var policyJSON, sas string
-		var confirmed sql.NullInt64
-		if err := rows.Scan(&h.ID, &h.Name, &h.OS, &h.Arch, &h.Version, &seen, &policyJSON, &sas, &confirmed); err != nil {
+		var confirmed, disabled sql.NullInt64
+		if err := rows.Scan(&h.ID, &h.Name, &h.OS, &h.Arch, &h.Version, &seen, &policyJSON, &sas, &confirmed, &disabled); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -155,6 +156,7 @@ func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) 
 		h.Status = "offline"
 		h.SAS = sas
 		h.Pending = sas != "" && (!confirmed.Valid || confirmed.Int64 == 0)
+		h.Disabled = disabled.Valid && disabled.Int64 > 0
 		h.Agents = []protocol.AgentInfo{}
 		if policyJSON != "" && policyJSON != "{}" {
 			var p protocol.PolicySummary
@@ -180,10 +182,10 @@ func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) 
 func (s *Store) HostByID(hostID string) (Host, error) {
 	var h Host
 	var seen, created int64
-	var revoked sql.NullInt64
+	var revoked, disabled sql.NullInt64
 	var policyJSON string
-	err := s.db.QueryRow(`SELECT id,owner_id,name,public_key,os,arch,version,policy,created_at,last_seen,revoked_at FROM hosts WHERE id=?`, hostID).
-		Scan(&h.ID, &h.OwnerID, &h.Name, &h.PublicKey, &h.OS, &h.Arch, &h.Version, &policyJSON, &created, &seen, &revoked)
+	err := s.db.QueryRow(`SELECT id,owner_id,name,public_key,os,arch,version,policy,created_at,last_seen,revoked_at,disabled_at FROM hosts WHERE id=?`, hostID).
+		Scan(&h.ID, &h.OwnerID, &h.Name, &h.PublicKey, &h.OS, &h.Arch, &h.Version, &policyJSON, &created, &seen, &revoked, &disabled)
 	if err != nil {
 		return h, err
 	}
@@ -199,6 +201,11 @@ func (s *Store) HostByID(hostID string) (Host, error) {
 	if revoked.Valid {
 		t := fromMS(revoked.Int64)
 		h.RevokedAt = &t
+	}
+	if disabled.Valid {
+		t := fromMS(disabled.Int64)
+		h.DisabledAt = &t
+		h.Disabled = t.UnixMilli() > 0
 	}
 	return h, nil
 }
@@ -258,6 +265,24 @@ func (s *Store) RevokeHost(ownerID, hostID string) error {
 
 func (s *Store) RevokeHostByID(hostID string) error {
 	_, err := s.db.Exec(`UPDATE hosts SET revoked_at=? WHERE id=?`, ms(time.Now()), hostID)
+	return err
+}
+
+// RenameHost changes only the hub-visible display name. The daemon keeps its
+// own configured name until it reconnects with one.
+func (s *Store) RenameHost(hostID, name string) error {
+	_, err := s.db.Exec(`UPDATE hosts SET name=? WHERE id=? AND revoked_at IS NULL`, name, hostID)
+	return err
+}
+
+// SetHostDisabled blocks new runs and host reconnects. Disabling is reversible;
+// revocation is not and requires pairing again.
+func (s *Store) SetHostDisabled(hostID string, disabled bool) error {
+	var value any
+	if disabled {
+		value = ms(time.Now())
+	}
+	_, err := s.db.Exec(`UPDATE hosts SET disabled_at=? WHERE id=? AND revoked_at IS NULL`, value, hostID)
 	return err
 }
 

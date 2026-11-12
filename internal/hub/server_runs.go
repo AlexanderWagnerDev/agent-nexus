@@ -44,6 +44,9 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	if ev.Type == "run.state" && ev.State != "" {
 		rs.state = ev.State
 	}
+	if ev.Type == "approval.requested" && ev.ApprovalID != "" {
+		s.metrics.approvalRequested(ev.ApprovalID)
+	}
 	rs.events = append(rs.events, ev)
 	if len(rs.events) > 500 {
 		rs.events = rs.events[len(rs.events)-500:]
