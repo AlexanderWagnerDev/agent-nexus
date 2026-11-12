@@ -77,21 +77,23 @@ tested versus what is still open.
 ### NFR-06: discovery watcher (2026-11-12)
 
 The daemon no longer walks every session file on the two-second poll. It stats
-directory mtimes, the 200 most recently modified session files and SQLite
-database/WAL files; a full scan runs every 30 seconds as a safety net.
+directory mtimes, the 200 most recently modified session files, entry counts of
+the 10 hottest and 10 newest directories, and SQLite database/WAL files; a
+full scan runs every 30 seconds as a safety net. Entry counts make new files
+reliable even when Windows updates a directory timestamp late.
 
 Measured with `go test ./internal/host -run '^$' -bench 'StoreWatcher|LegacyWalk' -benchtime=10x`
 on 10,000 synthetic session files (Windows 11, AMD EPYC 7543):
 
 | Operation | Result |
 | --- | --- |
-| Fast poll (steady state) | 3.07 ms/op |
+| Fast poll (steady state) | 8.6 ms/op |
 | Full safety scan | 48.1 ms/op |
 | Previous full walk every 2 s | 34.8 ms/op |
 | New file detected | 19 ms |
 | Changed hot file detected | 3 ms |
 
-The fast poll costs about 0.15 % of one core at a two-second cadence; the old
+The fast poll costs about 0.43 % of one core at a two-second cadence; the old
 walk cost about 1.7 %. Directory timestamp updates can lag on Windows right
 after a bulk import, so one poll may fall back to a full scan; steady state is
 measured after that. Cold files (outside the newest 200) are detected by the
