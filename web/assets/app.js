@@ -23,6 +23,7 @@ import { pageSettings } from './views/settings.js';
 import { pageDevices } from './views/devices.js';
 import { pageUsers } from './views/users.js';
 import { pageAudit } from './views/audit.js';
+import { pageDiagnostics } from './views/diagnostics.js';
 import { pageRuns } from './views/runs.js';
 import { pageWorkspace } from './views/workspace.js';
 import { pageRun } from './views/run.js';
@@ -47,6 +48,7 @@ const pages = {
   devices: pageDevices,
   users: pageUsers,
   audit: pageAudit,
+  diagnostics: pageDiagnostics,
   runs: pageRuns,
   workspace: pageWorkspace,
   run: pageRun,

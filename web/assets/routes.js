@@ -20,6 +20,7 @@ export function parseRoute(hash) {
   if (h.startsWith('#/devices')) return { page: 'devices' };
   if (h.startsWith('#/users')) return { page: 'users' };
   if (h.startsWith('#/audit')) return { page: 'audit' };
+  if (h.startsWith('#/diagnostics')) return { page: 'diagnostics' };
   return { page: 'overview' };
 }
 
@@ -35,5 +36,6 @@ export function activeFromHash() {
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/settings')) return 'settings';
   if (h.startsWith('#/devices') || h.startsWith('#/users') || h.startsWith('#/audit')) return 'settings';
+  if (h.startsWith('#/diagnostics')) return 'settings';
   return 'overview';
 }

@@ -18,6 +18,7 @@ test('routes the home and section pages', () => {
   assert.equal(parseRoute('#/devices').page, 'devices');
   assert.equal(parseRoute('#/users').page, 'users');
   assert.equal(parseRoute('#/audit').page, 'audit');
+  assert.equal(parseRoute('#/diagnostics').page, 'diagnostics');
 });
 
 test('extracts session and run ids', () => {

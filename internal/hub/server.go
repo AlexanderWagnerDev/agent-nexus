@@ -45,6 +45,8 @@ type Server struct {
 	runHosts map[string]string
 	pending  map[string]*pendingRequest
 
+	startedAt time.Time
+
 	vapidPublic  string
 	vapidPrivate string
 	epoch        string
@@ -100,6 +102,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		queueKick:          make(chan struct{}, 1),
 		queueArmed:         map[string]bool{},
 		mcpLimiter:         newRateLimiter(120, time.Minute),
+		startedAt:          time.Now().UTC(),
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
@@ -187,6 +190,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}/favorite", s.requireAuth(func(w http.ResponseWriter, r *http.Request) { s.handleSetFavorite(w, r, false) }))
 	mux.HandleFunc("GET /api/v1/search", s.requireAuth(s.handleSearch))
 	mux.HandleFunc("GET /api/v1/audit", s.requireAuth(s.handleAudit))
+	mux.HandleFunc("GET /api/v1/admin/diagnostics", s.requireAuth(s.handleAdminDiagnostics))
+	mux.HandleFunc("GET /api/v1/admin/diagnostics/export", s.requireAuth(s.handleDiagnosticsExport))
 
 	mux.HandleFunc("GET /api/v1/runs", s.requireAuth(s.handleActiveRuns))
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.requireAuth(s.handleRun))
