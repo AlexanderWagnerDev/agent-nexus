@@ -8,8 +8,6 @@ on:
   schedule:
     - cron: "32 3 * * 1"
 
-# Workflows run on Avrea-hosted runners. Avrea GitHub App access is required.
-
 permissions:
   contents: read
   security-events: write
@@ -17,7 +15,7 @@ permissions:
 
 jobs:
   analyze:
-    runs-on: avrea-ubuntu-26.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false

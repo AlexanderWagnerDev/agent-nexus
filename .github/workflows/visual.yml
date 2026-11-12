@@ -1,9 +1,8 @@
 name: Visual regression (manual and nightly)
 
-# Baselines are captured from the synthetic demo with a pinned clock. They are
-# currently produced on Windows 11; the Windows runner has slightly different
-# font rasterisation, hence the wider tolerance in this job. Linux/macOS
-# reference baselines do not exist yet.
+# Baselines are captured from the synthetic demo with a pinned clock. They were
+# produced on Windows 11; Linux font rasterisation differs, hence the wider
+# tolerance in this job. Linux reference baselines do not exist yet.
 on:
   workflow_dispatch:
   schedule:
@@ -19,7 +18,7 @@ concurrency:
 jobs:
   visual:
     name: Demo pixel diff
-    runs-on: avrea-windows-2025-2-vcpu
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -34,14 +33,14 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build hub and synthetic host
         run: |
-          New-Item -ItemType Directory -Force bin | Out-Null
-          go build -trimpath -o bin/nexus-hub.exe ./cmd/nexus-hub
-          go build -trimpath -o bin/nexus-demo.exe ./cmd/nexus-demo
+          mkdir -p bin
+          go build -trimpath -o bin/nexus-hub ./cmd/nexus-hub
+          go build -trimpath -o bin/nexus-demo ./cmd/nexus-demo
       - name: Install browser test dependencies
         working-directory: web
         run: |
           npm ci
-          npx playwright install chromium
+          npx playwright install --with-deps chromium
       - name: Compare demo views with baselines
         working-directory: web
         env:

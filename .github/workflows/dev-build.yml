@@ -19,7 +19,7 @@ concurrency:
 jobs:
   host:
     name: nexusd (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: avrea-ubuntu-26.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
