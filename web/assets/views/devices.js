@@ -9,7 +9,7 @@ import { esc, fmtTime, shortId } from '../ui-format.js';
 export async function pageDevices() {
   const pageGen = state.pageGen;
   renderShell('devices');
-  const view = setPage(t('Devices'), t('Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.'), `<button class="btn primary small" id="pair-device">${t('Pair a device')}</button>`);
+  const view = setPage(t('Devices'), t('Signed-in browsers. Revoke anything you no longer trust; revocation ends its session immediately.'), `<button class="btn small danger" id="revoke-others">${t('Revoke other devices')}</button><button class="btn primary small" id="pair-device">${t('Pair a device')}</button>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const data = await api('/devices');
   if (pageGen !== state.pageGen) return;
@@ -20,7 +20,7 @@ export async function pageDevices() {
         <td><b>${esc(d.name)}</b><div class="mono-small">${esc(shortId(d.id))}</div></td>
         <td>${esc(fmtTime(d.created_at))}</td>
         <td>${esc(fmtTime(d.last_seen))}</td>
-        <td class="nowrap">${d.id === data.current_device_id ? badge('this device', 'online') : `<button class="btn small danger" data-revoke-device="${esc(d.id)}">${t('Revoke')}</button>`}</td>
+        <td class="nowrap">${d.revoked_at ? badge(t('revoked'), 'failed') : (d.id === data.current_device_id ? badge('this device', 'online') : `<button class="btn small danger" data-revoke-device="${esc(d.id)}">${t('Revoke')}</button>`)}</td>
       </tr>`).join('')}
       </tbody></table>
     </div>
@@ -49,6 +49,15 @@ export async function pageDevices() {
       pageDevices();
     });
   }));
+  document.getElementById('revoke-others')?.addEventListener('click', () => {
+    confirmDanger(t('This signs out every other browser immediately. The current device stays signed in.'), async () => {
+      try {
+        const result = await api('/devices/revoke-others', { method: 'POST' });
+        toast(t('{n} devices signed out', { n: result.revoked || 0 }));
+        pageDevices();
+      } catch (err) { toast(err.message, true); }
+    });
+  });
   document.getElementById('pair-device')?.addEventListener('click', async () => {
     try {
       const data = await api('/devices/pairing', { method: 'POST' });

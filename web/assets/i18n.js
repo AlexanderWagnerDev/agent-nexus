@@ -1034,6 +1034,10 @@ Object.assign(de, {
   'update available': 'Update verfügbar',
   'up to date': 'aktuell',
   Template: 'Vorlage',
+  'Revoke other devices': 'Andere Geräte abmelden',
+  revoked: 'Widerrufen',
+  'This signs out every other browser immediately. The current device stays signed in.': 'Dies meldet jeden anderen Browser sofort ab. Das aktuelle Gerät bleibt angemeldet.',
+  '{n} devices signed out': '{n} Geräte abgemeldet',
 });
 
 const supported = ['en', 'de'];

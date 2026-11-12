@@ -269,6 +269,43 @@ func (s *Store) RevokeDevice(userID, deviceID string) error {
 	return err
 }
 
+// RevokeOtherDevices signs out every device except the current one. The
+// caller closes their WebSockets after the store change.
+func (s *Store) RevokeOtherDevices(userID, currentDeviceID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT id FROM devices WHERE user_id=? AND id<>? AND revoked_at IS NULL`, userID, currentDeviceID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	now := ms(time.Now())
+	for _, id := range ids {
+		if _, err := s.db.Exec(`UPDATE devices SET revoked_at=? WHERE id=? AND user_id=?`, now, id, userID); err != nil {
+			return ids, err
+		}
+		_, _ = s.db.Exec(`DELETE FROM push_subscriptions WHERE device_id=?`, id)
+		_, _ = s.db.Exec(`DELETE FROM auth_sessions WHERE device_id=?`, id)
+	}
+	return ids, nil
+}
+
+// PurgeExpiredSessions removes auth sessions past their expiry. It runs at hub
+// start and never touches unexpired device sessions.
+func (s *Store) PurgeExpiredSessions() int {
+	res, err := s.db.Exec(`DELETE FROM auth_sessions WHERE expires_at<?`, ms(time.Now()))
+	if err != nil {
+		return 0
+	}
+	n, _ := res.RowsAffected()
+	return int(n)
+}
+
 // ---- host grants ----
 
 func (s *Store) SavePasskey(userID, name string, cred *webauthn.Credential) error {

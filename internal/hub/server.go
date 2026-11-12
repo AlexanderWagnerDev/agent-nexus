@@ -107,6 +107,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
 	store.ReconcileTasks()
+	store.PurgeExpiredSessions()
 	if queued, _ := store.HasQueuedPrompts(); queued {
 		s.kickQueue()
 	}
@@ -150,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/totp/enable", s.requireAuth(s.requireStepUp(s.handleTOTPEnable)))
 	mux.HandleFunc("GET /api/v1/devices", s.requireAuth(s.handleDevices))
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeDevice)))
+	mux.HandleFunc("POST /api/v1/devices/revoke-others", s.requireAuth(s.requireStepUp(s.handleRevokeOtherDevices)))
 	mux.HandleFunc("POST /api/v1/devices/pairing", s.requireAuth(s.requireStepUp(s.handleCreateDevicePairing)))
 	mux.HandleFunc("GET /api/v1/push/key", s.requireAuth(s.handlePushKey))
 	mux.HandleFunc("POST /api/v1/push/subscribe", s.requireAuth(s.handlePushSubscribe))

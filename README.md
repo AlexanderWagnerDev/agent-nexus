@@ -72,6 +72,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
+| **Devices** | Per-browser sessions with last-seen metadata, individual revocation, step-up-protected "sign out all other devices", revoked-device labels, and expired-session cleanup at hub start |
 | **Device pairing** | QR/link pairing from a signed-in device, single-use 2-minute token |
 | **Discovery** | Existing Claude Code (JSONL), Codex CLI (JSONL + zstd rollouts) and OpenCode (SQLite) sessions; best-effort Gemini CLI |
 | **Home** | Workspace summary, open agent activity, projects, recent sessions and host status |

@@ -352,4 +352,21 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
+// handleRevokeOtherDevices signs out every other device for the current user.
+// It requires step-up because it can interrupt active work elsewhere.
+func (s *Server) handleRevokeOtherDevices(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	current := deviceFrom(r).ID
+	ids, err := s.store.RevokeOtherDevices(u.ID, current)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, id := range ids {
+		s.closeDevice(id)
+	}
+	s.audit(u.Username, "device.revoked_others", map[string]any{"count": len(ids)})
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": len(ids)})
+}
+
 // ---- hosts ----
