@@ -221,13 +221,15 @@ After=network-online.target
 
 [Service]
 Type=simple
+WorkingDirectory=%s
+Environment="PATH=%s"
 ExecStart=%q run
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-`, exe)
+`, home, servicePath(home), exe)
 		if err := os.WriteFile(unit, []byte(content), 0o644); err != nil {
 			return err
 		}
@@ -252,15 +254,25 @@ func launchdService(action, exe string) error {
 		if err := os.MkdirAll(filepath.Dir(plist), 0o755); err != nil {
 			return err
 		}
+		logDir := filepath.Join(home, "Library", "Logs", "AgentNexus")
+		if err := os.MkdirAll(logDir, 0o700); err != nil {
+			return err
+		}
 		content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.agentnexus.nexusd</string>
   <key>ProgramArguments</key><array><string>%s</string><string>run</string></array>
+  <key>WorkingDirectory</key><string>%s</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>%s</string></dict>
+  <key>StandardOutPath</key><string>%s</string>
+  <key>StandardErrorPath</key><string>%s</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
 </dict></plist>
-`, exe)
+`, xmlEscapeText(exe), xmlEscapeText(home), xmlEscapeText(servicePath(home)),
+			xmlEscapeText(filepath.Join(logDir, "nexusd.log")),
+			xmlEscapeText(filepath.Join(logDir, "nexusd.error.log")))
 		if err := os.WriteFile(plist, []byte(content), 0o644); err != nil {
 			return err
 		}

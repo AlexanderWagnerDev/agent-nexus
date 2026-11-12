@@ -207,15 +207,19 @@ exists. If Task Scheduler is disabled by policy, installation fails with the
 ## Linux and macOS services
 
 - Linux: a systemd **user** unit at
-  `~/.config/systemd/user/agentnexus.service`, enabled with `systemctl --user`.
-  Enable lingering (`loginctl enable-linger <user>`) if it must start before
-  login.
+  `~/.config/systemd/user/agentnexus.service`, enabled with `systemctl --user`
+  and restarted after a crash. The unit carries a per-user `PATH` covering
+  `~/.local/bin`, `~/.npm-global/bin`, `/usr/local/bin` and Homebrew so agent
+  CLIs installed outside the system path are found. Enable lingering
+  (`loginctl enable-linger <user>`) if it must start before login.
 - macOS: a LaunchAgent at
-  `~/Library/LaunchAgents/dev.agentnexus.nexusd.plist` with `RunAtLoad` and
-  `KeepAlive`.
+  `~/Library/LaunchAgents/dev.agentnexus.nexusd.plist` with `RunAtLoad`,
+  `KeepAlive`, the same per-user `PATH`, and logs under
+  `~/Library/Logs/AgentNexus/`.
 
 Both need the same user context as the agents. `nexusd doctor` reports missing
-or unreadable agent stores.
+or unreadable agent stores. Grant Full Disk Access / Files and Folders to the
+daemon process on macOS when projects live in protected directories.
 
 ## Reverse proxy and TLS
 
