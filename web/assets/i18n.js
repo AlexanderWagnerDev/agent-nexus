@@ -1052,6 +1052,10 @@ Object.assign(de, {
   'Tokens (reported)': 'Tokens (gemeldet)',
   'Cost (reported)': 'Kosten (gemeldet)',
   'Runs with usage': 'Runs mit Nutzungsdaten',
+  'open tasks': 'offene Aufgaben',
+  'All tasks': 'Alle Aufgaben',
+  'No open tasks': 'Keine offenen Aufgaben',
+  'Create a task to delegate work and track its run.': 'Lege eine Aufgabe an, um Arbeit zu delegieren und den zugehörigen Run zu verfolgen.',
 });
 
 const supported = ['en', 'de'];

@@ -12,11 +12,12 @@ export async function pageOverview() {
   renderShell('overview');
   const view = setPage(t('Home'), t('Your coding agents across every paired machine.'), `<button class="btn primary small" id="overview-new">${t('New session')}</button><a class="btn small" href="#/runs">${t('Control room')}</a>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-  const [{ hosts }, { sessions }, { projects }, { runs }] = await Promise.all([
+  const [{ hosts }, { sessions }, { projects }, { runs }, { tasks }] = await Promise.all([
     api('/hosts'),
     api('/sessions?limit=80'),
     api('/projects?limit=200'),
     api('/runs'),
+    api('/tasks?limit=50').catch(() => ({ tasks: [] })),
   ]);
   if (pageGen !== state.pageGen) return;
   document.getElementById('overview-new').addEventListener('click', newSessionPicker);
@@ -26,6 +27,7 @@ export async function pageOverview() {
   hosts.forEach((h) => (h.agents || []).forEach((a) => agents.add(a.name)));
   const activeRuns = runs.slice(0, 6);
   const liveRuns = runs.filter((r) => r.state === 'running' || r.state === 'starting' || r.state === 'waiting_for_input');
+  const openTasks = tasks.filter((task) => !['completed', 'cancelled'].includes(task.status));
   const openWorktrees = new Set(runs.map((r) => cwdKey(r.cwd)).filter(Boolean)).size;
   view.innerHTML = `
     <div class="home-head">
@@ -37,6 +39,7 @@ export async function pageOverview() {
         <span><strong>${totalSessions}</strong> ${t(totalSessions === 1 ? 'session' : 'sessions')}</span>
         <span><strong>${projects.length}</strong> ${t(projects.length === 1 ? 'project' : 'projects')}</span>
         <span><strong>${liveRuns.length}</strong> ${t('working')}</span>
+        <span><strong>${openTasks.length}</strong> ${t('open tasks')}</span>
       </div>
     </div>
 
@@ -55,6 +58,11 @@ export async function pageOverview() {
         ${sessions.length ? `<div class="session-list">${sessions.slice(0, 7).map(sessionRow).join('')}</div>` : `<div class="card empty"><strong>${t('No sessions')}</strong>${t('Pair a host that already has coding-agent history.')}</div>`}
       </section>
     </div>
+
+    <section class="home-section">
+      <div class="section-head"><h2>${t('Tasks')}</h2><a class="small" href="#/tasks">${t('All tasks')}</a></div>
+      ${openTasks.length ? `<div class="session-list">${openTasks.slice(0, 6).map(taskRow).join('')}</div>` : `<div class="home-empty"><span>${svgIcon('task', 20)}</span><div><strong>${t('No open tasks')}</strong><p>${t('Create a task to delegate work and track its run.')}</p></div><a class="btn small" href="#/tasks">${t('New task')}</a></div>`}
+    </section>
 
     <section class="home-section">
       <div class="section-head"><h2>${t('Hosts')}</h2><a class="small" href="#/hosts">${t('Manage hosts')}</a></div>
@@ -77,6 +85,18 @@ export function projectRow(p) {
     <span class="project-row-main"><strong>${esc(p.name)}</strong><small>${esc(p.host_name)}${p.branch ? ` · ${esc(p.branch)}` : ''} · ${countLabel(p.sessions, 'session', 'sessions')}</small></span>
     <span class="project-row-agents">${(p.agents || []).slice(0, 3).map((agent) => agentGlyph(agent, 'tiny')).join('')}${p.active ? `<span class="active-pill">${t('{n} active', { n: p.active })}</span>` : ''}</span>
     <span class="project-row-time">${esc(fmtRelative(p.last_at))}</span>
+  </a>`;
+}
+
+export function taskRow(task) {
+  const cls = task.status === 'failed' ? 'failed' : task.status === 'running' ? 'running' : task.status === 'blocked' ? 'waiting_for_input' : 'idle';
+  return `<a class="session-row" href="#/tasks">
+    <span class="project-row-icon">${svgIcon('task', 16)}</span>
+    <span class="session-row-main">
+      <strong>${esc(task.title)}</strong>
+      <small>${esc(task.host_name || t('No host'))}${task.agent ? ` · ${esc(task.agent)}` : ''} · ${esc(t(task.status.replaceAll('_', ' ')))}</small>
+    </span>
+    ${badge(t(task.status.replaceAll('_', ' ')), cls)}
   </a>`;
 }
 
