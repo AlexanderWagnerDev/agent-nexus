@@ -54,8 +54,8 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		d.log.Warn("codex structured run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
-	if !d.policy.AgentAllowed("codex") {
-		fail("agent is not allowed by host policy")
+	if err := d.validateRunPolicy(spec); err != nil {
+		fail(err.Error())
 		return
 	}
 	if spec.Action == protocol.ActionFork {

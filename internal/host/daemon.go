@@ -901,6 +901,12 @@ func (d *Daemon) runActiveLocked(id string) bool {
 // any process is started. It is deliberately independent of the hub: a
 // compromised hub must not be able to bypass host policy.
 func (d *Daemon) validateRunPolicy(spec protocol.RunSpec) error {
+	if spec.Force && !d.policy.ForceResumeAllowed() {
+		hostAudit("run.force_resume_rejected", map[string]any{
+			"run_id": spec.RunID, "agent": spec.Agent, "action": spec.Action,
+		})
+		return fmt.Errorf("force resume is disabled by host policy")
+	}
 	switch spec.Action {
 	case protocol.ActionNew, protocol.ActionResume, protocol.ActionFork, "":
 	default:

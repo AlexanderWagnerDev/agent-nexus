@@ -24,9 +24,19 @@ type Policy struct {
 	AllowNew      bool     `json:"allow_new_sessions"`
 	AllowFork     bool     `json:"allow_fork"`
 	ForbiddenArgs []string `json:"forbidden_args"`
+	// AllowForceResume permits the hub to ask for a resume even when a
+	// best-effort process scan reports the native session as open elsewhere.
+	// Omitted means enabled for backward compatibility.
+	AllowForceResume *bool `json:"allow_force_resume,omitempty"`
 	// ProcessGraceSeconds is how long a stopped run may take to exit before
 	// its process tree is killed. Zero means the five-second default.
 	ProcessGraceSeconds int `json:"process_grace_seconds,omitempty"`
+}
+
+// ForceResumeAllowed reports whether a force-resume request is acceptable.
+// The zero value is enabled so existing configurations keep working.
+func (p Policy) ForceResumeAllowed() bool {
+	return p.AllowForceResume == nil || *p.AllowForceResume
 }
 
 // ProcessGrace returns the configured grace period, clamped to a sane range.

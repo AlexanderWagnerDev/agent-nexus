@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,5 +145,70 @@ func TestReserveRunPreventsStartupRace(t *testing.T) {
 	d.releaseRunLocked("codex:abc", "run1")
 	if !d.reserveRunLocked("codex:abc", "run2") {
 		t.Fatal("session was not released")
+	}
+}
+
+func TestForceResumePolicy(t *testing.T) {
+	off := false
+	d := &Daemon{policy: Policy{
+		AllowedAgents: []string{"codex"}, AllowNew: true,
+		AllowForceResume: &off, ForbiddenArgs: DefaultForbiddenArgs(),
+	}}
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionResume, NativeID: "abc-123", Force: true,
+	}); err == nil {
+		t.Fatal("force resume was accepted although allow_force_resume is false")
+	} else if !strings.Contains(err.Error(), "force resume is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionResume, NativeID: "abc-123",
+	}); err != nil {
+		t.Fatalf("ordinary resume was rejected: %v", err)
+	}
+
+	on := true
+	d.policy.AllowForceResume = &on
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionResume, NativeID: "abc-123", Force: true,
+	}); err != nil {
+		t.Fatalf("force resume with the override enabled was rejected: %v", err)
+	}
+	d.policy.AllowForceResume = nil
+	if err := d.validateRunPolicy(protocol.RunSpec{
+		Agent: "codex", Action: protocol.ActionResume, NativeID: "abc-123", Force: true,
+	}); err != nil {
+		t.Fatalf("default policy must allow force resume: %v", err)
+	}
+}
+
+// A compromised hub can sign a force-resume command; the host policy must
+// still reject it when the local switch is off.
+func TestSignedForceResumeRejectedWhenDisabled(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	root := t.TempDir()
+	d := &Daemon{
+		cfg: Config{HubPublicKey: base64.StdEncoding.EncodeToString(public)},
+		policy: Policy{
+			AllowedRoots: []string{root}, AllowedAgents: []string{"codex"}, AllowNew: true,
+			AllowForceResume: &off, ForbiddenArgs: DefaultForbiddenArgs(),
+		},
+		hubNonces: map[string]time.Time{},
+	}
+	spec := protocol.RunSpec{RunID: "run-force", Agent: "codex", Action: protocol.ActionResume, NativeID: "abc-123", Cwd: root, Force: true}
+	raw, _ := json.Marshal(spec)
+	envelope := protocol.Envelope{Type: "run.start", Run: &spec, Params: raw}
+	if err := protocol.SignEnvelope(private, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.verifyHubEnvelope(&envelope); err != nil {
+		t.Fatalf("valid signature rejected: %v", err)
+	}
+	if err := d.validateRunPolicy(spec); err == nil {
+		t.Fatal("signed force-resume command bypassed allow_force_resume=false")
 	}
 }
