@@ -1041,6 +1041,10 @@ Object.assign(de, {
   '{n} changed files': '{n} geänderte Dateien',
   'Files also changed by another run': 'Dateien, die auch ein anderer Run geändert hat',
   'Overlapping files': 'Überschneidende Dateien',
+  Worktrees: 'Worktrees',
+  Repositories: 'Repositories',
+  'No repositories match': 'Keine passenden Repositories',
+  '{n} repositories': '{n} Repositories',
 });
 
 const supported = ['en', 'de'];

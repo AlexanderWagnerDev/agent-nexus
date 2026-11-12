@@ -1345,3 +1345,13 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 @media (max-width: 640px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- repository grouping ---------- */
+
+.repo-grid { display: grid; gap: 10px; }
+.repo-card { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); }
+.repo-head { display: flex; gap: 11px; align-items: center; }
+.repo-worktrees { display: grid; gap: 3px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.repo-worktree { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 6px; color: inherit; border-radius: var(--radius-sm); }
+.repo-worktree:hover { background: var(--bg-hover); }
+.repo-worktree .mono-small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
