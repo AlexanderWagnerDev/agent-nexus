@@ -734,6 +734,9 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 
 func (d *Daemon) handleRequest(msg protocol.Envelope) {
 	result, err := d.dispatchRequest(msg.Method, msg.Params)
+	if msg.TraceID != "" {
+		d.log.Debug("host request handled", "request_id", msg.TraceID, "host_request_id", msg.RequestID, "method", msg.Method, "ok", err == nil)
+	}
 	if err != nil {
 		_ = d.send(protocol.Envelope{Type: "result", RequestID: msg.RequestID, OK: false, Error: err.Error()})
 		return

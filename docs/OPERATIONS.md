@@ -307,6 +307,15 @@ that native session.
   secure), browser notification permission and, on iOS, an installed PWA.
   The payload contains only a generic title, body and run URL.
 
+## Request tracing
+
+Every HTTP response carries `X-Request-ID`; a client may send a bounded,
+log-safe value (8-64 characters, letters/digits/`-_.:`) and the hub reuses it
+otherwise it generates one. API request logs include `request_id`, method,
+route and status. Host-link requests forward the hub request id as `trace_id`
+and log both ids together, so a slow search or transcript read can be followed
+from the browser request to the host.
+
 ## Host search index
 
 Each daemon builds `search-index.db` in its config directory on first start

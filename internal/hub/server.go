@@ -62,8 +62,10 @@ type Server struct {
 }
 
 type pendingRequest struct {
-	hostID string
-	ch     chan protocol.Envelope
+	hostID    string
+	requestID string
+	method    string
+	ch        chan protocol.Envelope
 }
 
 func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {

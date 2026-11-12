@@ -224,23 +224,26 @@ type RunInfo struct {
 
 // Envelope is the message format of the host link.
 type Envelope struct {
-	Type       string         `json:"type"`
-	Protocol   string         `json:"protocol,omitempty"`
-	HostID     string         `json:"host_id,omitempty"`
-	HostName   string         `json:"host_name,omitempty"`
-	OS         string         `json:"os,omitempty"`
-	Arch       string         `json:"arch,omitempty"`
-	Version    string         `json:"version,omitempty"`
-	Nonce      string         `json:"nonce,omitempty"`
-	IssuedAt   int64          `json:"issued_at,omitempty"`
-	Signature  string         `json:"signature,omitempty"`
-	Agents     []AgentInfo    `json:"agents,omitempty"`
-	Policy     *PolicySummary `json:"policy,omitempty"`
-	Sessions   []Session      `json:"sessions,omitempty"`
-	Removed    []SessionKey   `json:"removed,omitempty"`
-	Full       bool           `json:"full,omitempty"`
-	Features   []string       `json:"features,omitempty"`
-	RequestID  string         `json:"request_id,omitempty"`
+	Type      string         `json:"type"`
+	Protocol  string         `json:"protocol,omitempty"`
+	HostID    string         `json:"host_id,omitempty"`
+	HostName  string         `json:"host_name,omitempty"`
+	OS        string         `json:"os,omitempty"`
+	Arch      string         `json:"arch,omitempty"`
+	Version   string         `json:"version,omitempty"`
+	Nonce     string         `json:"nonce,omitempty"`
+	IssuedAt  int64          `json:"issued_at,omitempty"`
+	Signature string         `json:"signature,omitempty"`
+	Agents    []AgentInfo    `json:"agents,omitempty"`
+	Policy    *PolicySummary `json:"policy,omitempty"`
+	Sessions  []Session      `json:"sessions,omitempty"`
+	Removed   []SessionKey   `json:"removed,omitempty"`
+	Full      bool           `json:"full,omitempty"`
+	Features  []string       `json:"features,omitempty"`
+	RequestID string         `json:"request_id,omitempty"`
+	// TraceID carries the hub HTTP request id across the host link. It is
+	// optional and never used as a metric label.
+	TraceID    string         `json:"trace_id,omitempty"`
 	Method     string         `json:"method,omitempty"`
 	Params     []byte         `json:"params,omitempty"`
 	Result     []byte         `json:"result,omitempty"`

@@ -123,7 +123,7 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	_ = writeWS(ctx, ws, authOK)
 	s.store.UpdateHostSeen(hostID)
 	s.broadcastHostUpdate(hostID)
-	s.log.Info("host connected", "host_id", hostID, "version", auth.Version, "os", auth.OS, "arch", auth.Arch)
+	s.log.Info("host connected", "request_id", requestIDFrom(ctx), "host_id", hostID, "version", auth.Version, "os", auth.OS, "arch", auth.Arch)
 	s.audit(auth.HostName, "host.connected", map[string]string{"host_id": hostID, "version": auth.Version})
 
 	// Ping the daemon so dead NAT mappings are noticed even when idle.
@@ -151,7 +151,7 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, data, err := ws.Read(ctx)
 		if err != nil {
-			s.log.Info("host disconnected", "host_id", hostID, "error", err)
+			s.log.Info("host disconnected", "request_id", requestIDFrom(ctx), "host_id", hostID, "error", err)
 			return
 		}
 		var msg protocol.Envelope
@@ -276,6 +276,9 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		p := s.pending[msg.RequestID]
 		s.mu.RUnlock()
 		if p != nil && p.hostID == hc.id {
+			if p.requestID != "" {
+				s.log.Debug("host result", "request_id", p.requestID, "host_request_id", msg.RequestID, "host_id", hc.id, "method", p.method, "ok", msg.OK)
+			}
 			select {
 			case p.ch <- msg:
 			default:
@@ -409,20 +412,25 @@ func (s *Server) hostRequest(ctx context.Context, hostID, method string, params 
 		return nil, errors.New("host is offline")
 	}
 	id := newID()
-	p := &pendingRequest{hostID: hostID, ch: make(chan protocol.Envelope, 1)}
+	requestID := requestIDFrom(ctx)
+	p := &pendingRequest{hostID: hostID, requestID: requestID, method: method, ch: make(chan protocol.Envelope, 1)}
 	s.mu.Lock()
 	s.pending[id] = p
 	s.mu.Unlock()
+	if requestID != "" {
+		s.log.Debug("host request", "request_id", requestID, "host_request_id", id, "host_id", hostID, "method", method)
+	}
 	defer func() {
 		s.mu.Lock()
 		delete(s.pending, id)
 		s.mu.Unlock()
 	}()
-	if err := s.sendHost(hostID, protocol.Envelope{Type: "request", RequestID: id, Method: method, Params: params}); err != nil {
+	if err := s.sendHost(hostID, protocol.Envelope{Type: "request", RequestID: id, TraceID: requestID, Method: method, Params: params}); err != nil {
 		return nil, err
 	}
 	select {
 	case <-ctx.Done():
+		s.log.Debug("host request ended without a result", "request_id", requestID, "host_request_id", id, "host_id", hostID, "method", method, "error", ctx.Err())
 		return nil, ctx.Err()
 	case res := <-p.ch:
 		if !res.OK {

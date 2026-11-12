@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bufio"
+	"context"
 	"crypto/subtle"
 	"fmt"
 	"net"
@@ -203,11 +204,9 @@ func (w *httpMetricsWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func (s *Server) observeHTTP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
-		if requestID == "" || len(requestID) > 64 {
-			requestID = randomToken(12)
-		}
+		requestID := sanitizeRequestID(r.Header.Get("X-Request-ID"))
 		w.Header().Set("X-Request-ID", requestID)
+		r = r.WithContext(context.WithValue(r.Context(), ctxRequestID, requestID))
 		rec := &httpMetricsWriter{ResponseWriter: w}
 		next.ServeHTTP(rec, r)
 		status := rec.status
