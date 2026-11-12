@@ -100,6 +100,49 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### P0b: multi-host simulation (2026-11-12)
+
+A deterministic test starts three fake hosts with six sessions, launches three
+parallel structured runs, disconnects one host and verifies that only its run
+fails, then creates a second server on the same store to verify session and run
+metadata survive a hub restart. This is explicitly a simulation; the real
+Portainer/three-Windows-host run and the browser/network failure drills remain
+manual (see [VERIFICATION.md](VERIFICATION.md)).
+
+### P0c: real-agent compatibility (2026-11-12)
+
+Codex CLI 0.156.1 and OpenCode 2.2.7 are installed. The Codex app-server schema
+was generated and `thread/fork`/`thread/resume` are present; the structured
+driver is fake-agent tested. OpenCode 2.2.7 is outside the tested structured
+band and its structured mode is disabled with a warning; `--session` exists in
+its help. Claude Code and Gemini CLI are not installed. No real prompt was sent
+through AgentNexus to any of them in this run.
+
+### P0d: security and stability tests (2026-11-12)
+
+Covered: hub/host restart metadata, host disconnect isolation, concurrent
+approvals, queue claims, SSRF blocking, encrypted secrets, token revocation,
+request-ID sanitization, per-host grants, process-tree termination, update
+refusal and rollback state. Race tests run in CI. Not covered: 72-hour soak,
+50-host/200-viewer load, real network partition chaos, PostgreSQL and an
+external penetration test.
+
+### P0e: client/device-signed commands (2026-11-12)
+
+The trust-boundary analysis is documented in
+[DEVICE-SIGNING.md](DEVICE-SIGNING.md). A web UI delivered by the hub cannot
+provide a trustworthy client signature against a compromised hub; the current
+enforced properties remain hub command signing, nonce replay protection,
+revocable device sessions, step-up and host policy. A native client key is a
+future option, not implemented or claimed.
+
+### P0a: installer/update safety (2026-11-12)
+
+Both installers require the artifact SHA-256, execute a version check, read the
+daemon's fresh runtime snapshot and refuse to replace it while runs are active.
+`-Force`/`--force` requires typing `FORCE`; service-install failure restores
+`nexusd.previous`. Unit tests cover active-run refusal and stale snapshots.
+
 ### B9: terminal client (2026-11-12)
 
 `cmd/nexus` provides login (device pairing token or password/TOTP), session

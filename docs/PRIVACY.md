@@ -12,12 +12,14 @@ personal data.
 | Repository | [AlexanderWagnerDev/agent-nexus](https://github.com/AlexanderWagnerDev/agent-nexus) |
 | Public author | `AlexanderWagnerDev` |
 | Copyright holder | `AlexanderWagnerDev` |
-| Commit identity | `AlexanderWagnerDev <207699914+AlexanderWagnerDev@users.noreply.github.com>` |
+| Commit identity | `AlexanderWagnerDev <info@alexanderwagnerdev.com>` |
 
-The project uses the GitHub account name and the GitHub-provided no-reply
-address. Do not add a legal name, a private email address, a company name or an
-invented contact address to project files, package metadata, commits or
-releases.
+The project uses the GitHub account name and the approved pseudonymous
+address `info@alexanderwagnerdev.com` for this development round. Do not add a
+legal name, a different private email address, a company name or an invented
+contact address to project files, package metadata, commits or releases.
+Older commits may retain historical no-reply identities; see the history
+notes below.
 
 ## Demo data rules
 

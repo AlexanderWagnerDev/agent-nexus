@@ -90,7 +90,7 @@ allowed agent are indexed. The file contains transcript text, is created with
 | OpenCode | SQLite v1/v2 | `opencode --session <id>` | `opencode serve` |
 | Codex CLI | rollout JSONL/JSONL.ZST | `codex resume <id>` | `codex app-server` |
 | Claude Code | JSONL projects | `claude --resume <id>` | ACP adapter (optional) |
-| Gemini CLI | best effort | `gemini --resume <id>` | not implemented |
+| Gemini CLI | best effort | `gemini --resume <id>` | ACP via `gemini --acp` (fake-tested, not real-tested) |
 | Other ACP agents | adapter-dependent | configured command | `nexusd acp` |
 
 Native resume uses the original session ID and the agent's own store/context.

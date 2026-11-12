@@ -1,0 +1,48 @@
+# Verification status
+
+Last updated: 2026-11-12. This file records what was actually executed in the
+development environment and what remains a manual step. It is deliberately
+conservative.
+
+## Automated and executed here
+
+| Area | Evidence |
+| --- | --- |
+| Go unit/integration | `gofmt -l .`, `go vet ./...`, `go test ./...` pass locally (Windows); CI runs Linux, macOS and Windows plus `go test -race` |
+| Static analysis | `staticcheck` passes; `govulncheck` reports no vulnerabilities |
+| Browser unit tests | `node web/scripts/check-syntax.mjs`, `npm test` pass |
+| Browser smoke | `npm run e2e` passes |
+| Virtualized 10k sessions | `node e2e/virtual.mjs`: ~20 rows initially, 33 after 1,400 sessions, 222/252 DOM nodes, no duplicates |
+| Accessibility | axe-core scan passes desktop and mobile for home, projects, sessions, usage, fan-out, runs, hosts and settings; no critical/serious violations |
+| Visual regression | Four stable demo views compare at 0 px; activity views are excluded because elapsed times are live |
+| Multi-host simulation | Three fake hosts, six sessions, three parallel structured runs, host-disconnect isolation and hub-restart metadata persistence |
+| Installer/update | Active-run refusal, stale runtime snapshot, checksum and version checks, rollback path, fake-host tests |
+| Prompt queue | Store/API tests for order, schedule, pause, atomic claim, lease mismatch, crash recovery, duplicate prevention |
+| MCP | Auth, revocation, initialize, tools/list, tool calls and error results |
+| CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
+
+## Not verified here
+
+- Three real Windows hosts through Portainer, a real browser over the public
+  internet, a real host disconnect and a real hub process restart.
+- Real Claude Code and Gemini CLI sessions. Neither CLI is installed.
+- Real OpenCode 2.2.7 structured mode: it is outside the tested band, so the
+  driver is disabled with a warning. Terminal `--session` was only checked in
+  `--help`.
+- Real Codex 0.156.1 prompt execution through `app-server`; only the generated
+  schema and a fake app-server are covered.
+- Real ntfy/Gotify/Telegram/Discord/Slack or generic webhook endpoints.
+- Real MCP clients (Claude Desktop, Cursor) and real microphone dictation.
+- PostgreSQL, large-scale load/soak (50 hosts/200 viewers/72 h), external
+  penetration test and manual WCAG 2.2 AA audit.
+- Container/Portainer runtime in this environment.
+
+## Manual steps for the operator
+
+1. Deploy the hub behind HTTPS/WebSocket and pair a real Windows host.
+2. Open an existing OpenCode session in AgentNexus, continue it, then reopen it
+   with `opencode --session <id>` on that machine.
+3. Repeat with Codex (`codex resume <id>`) and, if installed, Claude/Gemini.
+4. Disconnect the browser, host and hub in turn and confirm the run/session
+   recovery behaviour.
+5. Run the load/soak and manual accessibility checks before production use.
