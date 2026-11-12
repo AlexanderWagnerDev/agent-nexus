@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+// waitForWatcherChange polls like the daemon loop does. It absorbs the
+// directory-timestamp lag Windows shows right after a write.
+func waitForWatcherChange(w *storeWatcher, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if w.FastChanged(time.Now()) {
+			return true
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return w.FastChanged(time.Now())
+}
+
 func TestWatchPathsComeFromAdapters(t *testing.T) {
 	d := &Daemon{adapters: []Adapter{
 		NewClaudeAdapter("claude"),
@@ -46,8 +59,12 @@ func TestStoreWatcherDetectsNewAndChangedFiles(t *testing.T) {
 	if err := os.WriteFile(second, []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if !watcher.FastChanged(time.Now()) {
-		t.Fatal("a new session file was not detected by the fast poll")
+	// Windows can update the parent directory timestamp slightly after the
+	// write. The daemon polls every two seconds; the test polls until the
+	// five-second requirement is satisfied instead of assuming the immediate
+	// next call sees the file.
+	if !waitForWatcherChange(watcher, 5*time.Second) {
+		t.Fatal("a new session file was not detected within five seconds")
 	}
 	if watcher.FastChanged(time.Now()) {
 		t.Fatal("the new file was detected twice without another change")
@@ -185,8 +202,8 @@ func TestStoreWatcher10kReaction(t *testing.T) {
 	if err := os.WriteFile(newFile, []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if !watcher.FastChanged(time.Now()) {
-		t.Fatal("the new file was not detected")
+	if !waitForWatcherChange(watcher, 5*time.Second) {
+		t.Fatal("the new file was not detected within five seconds")
 	}
 	newReaction := time.Since(start)
 
