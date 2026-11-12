@@ -11,10 +11,17 @@ import (
 
 // processGuard puts the agent into a Job Object configured with
 // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, so closing the job (or terminating the
-// daemon) takes every descendant with it. The assignment happens immediately
-// after CreateProcess; a grandchild that is spawned before AssignProcessToJobObject
-// returns could in theory escape the job. This window is small but not zero,
-// and is documented as a residual risk.
+// daemon) takes every descendant with it. Callers create the child with
+// CREATE_SUSPENDED (see suspendForJob/suspendExecForJob); the job is assigned
+// while the process cannot run, and Attach resumes it afterwards on every
+// path. A grandchild therefore cannot be spawned between CreateProcess and
+// job assignment.
+//
+// Residual risks: NtResumeProcess is not a documented stable API, and if it
+// fails the suspended child never runs. If job assignment itself fails
+// (permissions or a restrictive parent job), the child is still resumed but
+// only the direct process is killed on stop. Both cases are logged by the
+// caller and documented in SECURITY.md.
 type processGuard struct {
 	job windows.Handle
 }

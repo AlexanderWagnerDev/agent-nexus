@@ -41,9 +41,10 @@ terminal behavior under real agents is only manually verified on Windows 11.
 - Unix process-group behavior with real agents on Linux and macOS; CI runs the
   grandchild test but not a real agent CLI.
 - WSL, tmux/screen wrappers and terminal multiplexers.
-- The Windows job-assignment race: a grandchild created between
-  `CreateProcess` and `AssignProcessToJobObject` could escape. The window is
-  small but real; see SECURITY.md.
+- Windows creates the child suspended and resumes it only after job
+  assignment, so the old post-create race is closed. Remaining risks are the
+  undocumented `NtResumeProcess` call and a failed job assignment; see
+  SECURITY.md.
 
 ## Fallbacks
 

@@ -41,6 +41,7 @@ new sessions and fork enabled, with permission-bypass flags rejected.
     "allowed_agents": ["claude", "codex", "opencode"],
     "allow_new_sessions": true,
     "allow_fork": true,
+    "allow_force_resume": true,
     "process_grace_seconds": 5,
     "forbidden_args": [
       "--dangerously-skip-permissions",
@@ -51,6 +52,12 @@ new sessions and fork enabled, with permission-bypass flags rejected.
   }
 }
 ```
+
+`allow_force_resume` (default `true`) controls whether the hub may resume a
+session that the host's best-effort process scan reports as open in another
+terminal. Setting it to `false` rejects every `force` run, even from a signed
+hub command and even after a browser confirmation; rejected attempts are
+audited on the host.
 
 `allowed_agents` applies to new and resumed sessions in terminal, OpenCode,
 Codex and ACP modes. Paths are canonicalized (symlinks resolved) before the
@@ -163,8 +170,10 @@ the previous container tag and database backup for rollback.
   builds and unit tests.
 - Terminal output produced while the hub is offline is not replayed; the native
   session and process survive.
-- Process-tree termination covers Unix process groups and Windows Job Objects;
-  the Windows job assignment has a small post-start race (see [SECURITY.md](SECURITY.md)).
+- Process-tree termination covers Unix process groups and Windows Job Objects.
+  The Windows child is created suspended and resumed after job assignment, so
+  grandchildren cannot escape that window. Residual risks are an undocumented
+  resume API and a failed job assignment; see [SECURITY.md](SECURITY.md).
 - Windows Server 2025 uses the same Task Scheduler schema but was not available
   for testing.
 - The release is a pre-release while the Claude and cross-OS real-agent gaps

@@ -58,11 +58,15 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
   hub and host; password input is capped at 1 KiB before Argon2.
 - Every agent process is contained in a process tree: Unix runs in their own
   session/process group and receive `SIGTERM` then `SIGKILL`; Windows runs are
-  assigned to a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. A daemon
-  stop terminates every live tree. On Windows the job assignment happens
-  immediately after `CreateProcess`; a grandchild spawned in that microsecond
-  window could escape the job. The terminal-only alternative (running the
-  agent under a wrapper that creates the job first) is not implemented.
+  created with `CREATE_SUSPENDED`, assigned to a Job Object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and resumed only afterwards, so a
+  grandchild cannot escape between `CreateProcess` and assignment. A daemon
+  stop terminates every live tree.
+- Windows residual risks: `NtResumeProcess` is an undocumented API; if it
+  fails the child stays suspended. If job assignment fails (permissions or a
+  restrictive parent job), the child is resumed without containment and only
+  the direct process is killed. Both cases are logged; the terminal fallback
+  and the native session remain usable.
 - The optional host-local search index is a second copy of transcript text in
   `search-index.db` next to the daemon config. It is created with `0600`
   permissions, never uploaded, and can be disabled with `search_index: false`.
