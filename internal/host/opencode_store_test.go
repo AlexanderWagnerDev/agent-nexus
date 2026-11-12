@@ -19,7 +19,7 @@ func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 	}
 	defer db.Close()
 	for _, stmt := range []string{
-		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, fork_session_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
 		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, seq INTEGER, type TEXT, time_created INTEGER, data TEXT)`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {

@@ -226,6 +226,35 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sess)
 }
 
+func (s *Server) handleSessionRelated(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "view") {
+		writeError(w, http.StatusForbidden, "view permission required")
+		return
+	}
+	all := isAdminRole(u.Role)
+	var parent *protocol.SessionView
+	if sess.ForkedFromNativeID != "" || sess.ParentNativeID != "" {
+		native := sess.ForkedFromNativeID
+		if native == "" {
+			native = sess.ParentNativeID
+		}
+		if p, err := s.store.SessionByNativeID(u.ID, sess.HostID, sess.Agent, native, all); err == nil {
+			parent = &p
+		}
+	}
+	forks, _ := s.store.ForkedSessions(u.ID, sess.HostID, sess.Agent, sess.NativeID, all)
+	children, _ := s.store.ChildSessions(u.ID, sess.HostID, sess.Agent, sess.NativeID, all)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"parent": parent, "forks": forks, "children": children,
+	})
+}
+
 func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))

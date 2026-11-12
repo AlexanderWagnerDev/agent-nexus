@@ -175,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sessions", s.requireAuth(s.handleSessions))
 	mux.HandleFunc("GET /api/v1/sessions/tags", s.requireAuth(s.handleSessionTags))
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.requireAuth(s.handleSession))
+	mux.HandleFunc("GET /api/v1/sessions/{id}/related", s.requireAuth(s.handleSessionRelated))
 	mux.HandleFunc("PATCH /api/v1/sessions/{id}", s.requireAuth(s.handleSessionMetadata))
 	mux.HandleFunc("POST /api/v1/sessions/{id}/tags", s.requireAuth(s.handleAddSessionTag))
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}/tags/{tag}", s.requireAuth(s.handleDeleteSessionTag))

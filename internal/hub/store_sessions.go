@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"database/sql"
 	"strings"
 	"time"
 
@@ -111,7 +112,7 @@ func (s *Store) ListSessionsFiltered(userID string, f SessionFilter, all bool) (
 	}
 	where, args := s.sessionFilterClause(userID, f, all)
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
-		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
+		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning,s.parent_native_id,s.forked_from_native_id
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
 		LEFT JOIN session_overrides o ON o.session_id=s.id AND o.user_id=?` + where
 	sortColumn := "s.updated_at"
@@ -320,19 +321,71 @@ func (s *Store) SessionIDForNative(hostID, agent, nativeID string) (string, erro
 	return id, err
 }
 
+// SessionByNativeID resolves a native relationship without exposing a second
+// identity mapping. The host, agent and native id together are the key.
+func (s *Store) SessionByNativeID(userID, hostID, agent, nativeID string, all bool) (protocol.SessionView, error) {
+	hostID = strings.TrimSpace(hostID)
+	agent = strings.TrimSpace(agent)
+	nativeID = strings.TrimSpace(nativeID)
+	if hostID == "" || agent == "" || nativeID == "" {
+		return protocol.SessionView{}, sql.ErrNoRows
+	}
+	var id string
+	if err := s.db.QueryRow(`SELECT id FROM sessions WHERE host_id=? AND agent=? AND native_id=?`, hostID, agent, nativeID).Scan(&id); err != nil {
+		return protocol.SessionView{}, err
+	}
+	return s.SessionByID(userID, id, all)
+}
+
+// ForkedSessions lists sessions whose native fork source is nativeID.
+func (s *Store) ForkedSessions(userID, hostID, agent, nativeID string, all bool) ([]protocol.SessionView, error) {
+	return s.relatedSessions(userID, hostID, agent, nativeID, "forked_from_native_id", all)
+}
+
+// ChildSessions lists sessions whose native parent is nativeID.
+func (s *Store) ChildSessions(userID, hostID, agent, nativeID string, all bool) ([]protocol.SessionView, error) {
+	return s.relatedSessions(userID, hostID, agent, nativeID, "parent_native_id", all)
+}
+
+func (s *Store) relatedSessions(userID, hostID, agent, nativeID, column string, all bool) ([]protocol.SessionView, error) {
+	q := `SELECT ` + favoriteSessionColumns + `
+		FROM sessions s JOIN hosts h ON h.id=s.host_id
+		WHERE s.host_id=? AND s.agent=? AND s.` + column + `=? AND h.revoked_at IS NULL`
+	args := []any{hostID, agent, nativeID}
+	if !all {
+		q += ` AND (h.owner_id=? OR EXISTS (SELECT 1 FROM host_grants g WHERE g.host_id=h.id AND g.user_id=?))`
+		args = append(args, userID, userID)
+	}
+	q += ` ORDER BY s.updated_at DESC LIMIT 50`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []protocol.SessionView
+	for rows.Next() {
+		v, err := scanSessionView(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // EnsureForkedSession creates the row for a native session that a structured
 // fork just produced and returns its hub ID. An existing row (for example
 // from the next discovery snapshot) is left untouched.
-func (s *Store) EnsureForkedSession(hostID, agent, nativeID, title, cwd string) (string, error) {
+func (s *Store) EnsureForkedSession(hostID, agent, nativeID, title, cwd, forkedFrom string) (string, error) {
 	id := sessionID(hostID, agent, nativeID)
 	now := ms(time.Now())
 	if len(title) > 200 {
 		title = title[:200]
 	}
-	_, err := s.db.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,created_at,updated_at,state)
-		VALUES(?,?,?,?,?,?,?,?,?)
+	_, err := s.db.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,created_at,updated_at,state,forked_from_native_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(host_id,agent,native_id) DO NOTHING`,
-		id, hostID, agent, nativeID, title, cwd, now, now, protocol.StateIdle)
+		id, hostID, agent, nativeID, title, cwd, now, now, protocol.StateIdle, forkedFrom)
 	return id, err
 }
 
@@ -345,7 +398,7 @@ func (s *Store) RebindRunSession(runID, sessionID string) error {
 // SessionByID returns one session and its per-user local metadata.
 func (s *Store) SessionByID(userID, id string, all bool) (protocol.SessionView, error) {
 	q := `SELECT s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
-		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning
+		s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning,s.parent_native_id,s.forked_from_native_id
 		FROM sessions s JOIN hosts h ON h.id=s.host_id
 		WHERE s.id=? AND h.revoked_at IS NULL`
 	args := []any{id}

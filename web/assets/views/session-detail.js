@@ -17,6 +17,7 @@ export async function pageSession(id) {
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const s = await api(`/sessions/${id}`);
   if (pageGen !== state.pageGen) return;
+  const related = await api(`/sessions/${encodeURIComponent(id)}/related`).catch(() => ({ parent: null, forks: [], children: [] }));
   const agent = agentMeta(s.agent);
   let tags = Array.isArray(s.tags) ? [...s.tags] : [];
   let versionWarning = '';
@@ -94,13 +95,21 @@ export async function pageSession(id) {
           <div class="copy-line"><code>${esc(s.cwd || '')}</code><button class="icon-btn" data-copy="${esc(s.cwd || '')}" title="${t('Copy working directory')}">${svgIcon('copy', 14)}</button></div>
           ${s.git_branch ? `<div class="branch-chip wide">${svgIcon('branch', 13)}${esc(s.git_branch)}</div>` : ''}
           ${s.repo_url ? `<div class="aside-repo">${repoLink(s.repo_url)}${s.repo_root && cwdKey(s.repo_root) !== cwdKey(s.cwd) ? `<span class="muted">${t('worktree')}</span>` : ''}</div>` : ''}
+          ${s.parent_native_id || s.forked_from_native_id ? `<div class="aside-note mt-1">${t('Native parent')}: <code>${esc(s.forked_from_native_id || s.parent_native_id)}</code></div>` : ''}
         </div>
+        ${(related.parent || (related.forks || []).length || (related.children || []).length) ? `<div class="aside-section">
+          <div class="aside-label">${t('Session tree')}</div>
+          ${related.parent ? `<a class="event-row" href="#/sessions/${encodeURIComponent(related.parent.id)}"><span class="event-dot"></span><span class="event-main"><b>${esc(related.parent.local_title || related.parent.title || related.parent.native_id)}</b><small>${t('Parent')}</small></span>${stateBadge(related.parent.state)}</a>` : ''}
+          ${(related.forks || []).map((fork) => `<a class="event-row" href="#/sessions/${encodeURIComponent(fork.id)}"><span class="event-dot"></span><span class="event-main"><b>${esc(fork.local_title || fork.title || fork.native_id)}</b><small>${t('Fork')}</small></span>${stateBadge(fork.state)}</a>`).join('')}
+          ${(related.children || []).map((child) => `<a class="event-row" href="#/sessions/${encodeURIComponent(child.id)}"><span class="event-dot"></span><span class="event-main"><b>${esc(child.local_title || child.title || child.native_id)}</b><small>${t('Child session')}</small></span>${stateBadge(child.state)}</a>`).join('')}
+        </div>` : ''}
         <div class="aside-section">
           <div class="aside-label">${t('Actions')}</div>
           <div class="aside-actions">
             <a class="btn small" id="git-session" href="#/sessions/${s.id}/changes">${svgIcon('git')} ${t('Review changes')}</a>
+            <button class="btn small" id="task-from-session">${svgIcon('task')} ${t('Create task')}</button>
             ${s.agent === 'codex' || s.agent === 'claude' ? `<button class="btn small" id="fork-session">${t('Fork session')}</button>` : ''}
-            ${s.agent === 'codex' ? `<button class="btn small" id="fork-session-structured">${t('Fork in structured mode')}</button>` : ''}
+            ${(s.agent === 'codex' || s.agent === 'opencode') && structuredAllowed ? `<button class="btn small" id="fork-session-structured">${t('Fork in structured mode')}</button>` : ''}
             <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=markdown">${svgIcon('file')} ${t('Export Markdown')}</a>
             <a class="btn small" href="/api/v1/sessions/${encodeURIComponent(s.id)}/export?format=json">${t('Export JSON')}</a>
           </div>
@@ -113,6 +122,28 @@ export async function pageSession(id) {
     </div>`;
   document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
   document.getElementById('fork-session-structured')?.addEventListener('click', () => startRun(s, true, 'structured'));
+  document.getElementById('task-from-session')?.addEventListener('click', () => {
+    modal(`
+      <h2>${t('Create task')}</h2>
+      <p class="hint">${t('The task stays local to the hub and can resume this native session later.')}</p>
+      <label class="label">${t('Title')}<input class="input" id="task-session-title" maxlength="200" value="${esc(title)}"></label>
+      <label class="label">${t('Description / prompt')}<textarea class="input" id="task-session-description" rows="5"></textarea></label>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button><button class="btn primary" type="button" id="task-session-create">${t('Create task')}</button></div>`);
+    document.getElementById('task-session-create').addEventListener('click', async () => {
+      const titleValue = document.getElementById('task-session-title').value.trim();
+      if (!titleValue) { toast(t('Title is required'), true); return; }
+      try {
+        await api('/tasks', { method: 'POST', body: {
+          title: titleValue,
+          description: document.getElementById('task-session-description').value.trim(),
+          host_id: s.host_id, project: s.cwd, agent: s.agent, status: 'ready',
+        } });
+        closeModal();
+        toast(t('Task created'));
+        location.hash = '#/tasks';
+      } catch (err) { toast(err.message, true); }
+    });
+  });
   const renderTagList = () => {
     const box = document.getElementById('tag-list');
     if (!box) return;

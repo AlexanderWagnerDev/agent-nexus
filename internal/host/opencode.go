@@ -105,7 +105,8 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 	if a.tableExists(db, "session_v2") {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
-			(SELECT COUNT(*) FROM session_message m WHERE m.session_id = s.id)
+			(SELECT COUNT(*) FROM session_message m WHERE m.session_id = s.id),
+			COALESCE(s.parent_id,''), COALESCE(s.fork_session_id,'')
 			FROM session_v2 s
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
@@ -113,7 +114,7 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			for rows.Next() {
 				var s protocol.Session
 				var created, updated int64
-				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount) == nil {
+				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID, &s.ForkedFromNativeID) == nil {
 					s.CreatedAt = time.UnixMilli(created).UTC()
 					s.UpdatedAt = time.UnixMilli(updated).UTC()
 					add(s)
@@ -126,7 +127,8 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 	if a.tableExists(db, "session") {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
-			(SELECT COUNT(*) FROM message m WHERE m.session_id = s.id)
+			(SELECT COUNT(*) FROM message m WHERE m.session_id = s.id),
+			COALESCE(s.parent_id,'')
 			FROM session s
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
@@ -134,7 +136,7 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			for rows.Next() {
 				var s protocol.Session
 				var created, updated int64
-				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount) == nil {
+				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID) == nil {
 					s.CreatedAt = time.UnixMilli(created).UTC()
 					s.UpdatedAt = time.UnixMilli(updated).UTC()
 					// v2 is authoritative when the same native ID exists there.

@@ -154,6 +154,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   state TEXT NOT NULL DEFAULT 'unknown',
   active_elsewhere INTEGER NOT NULL DEFAULT 0,
   warning TEXT NOT NULL DEFAULT '',
+  parent_native_id TEXT NOT NULL DEFAULT '',
+  forked_from_native_id TEXT NOT NULL DEFAULT '',
   UNIQUE (host_id, agent, native_id)
 );
 CREATE INDEX IF NOT EXISTS sessions_host_idx ON sessions(host_id, updated_at DESC);
@@ -383,6 +385,8 @@ CREATE INDEX IF NOT EXISTS task_dependencies_dep_idx ON task_dependencies(depend
 	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN disabled_at INTEGER`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
+	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN parent_native_id TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN forked_from_native_id TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 
@@ -479,15 +483,17 @@ func upsertSession(tx *sql.Tx, hostID string, sess protocol.Session) error {
 	if state == "" {
 		state = protocol.StateUnknown
 	}
-	_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,repo_root,repo_url,created_at,updated_at,message_count,state,active_elsewhere,warning)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	_, err := tx.Exec(`INSERT INTO sessions(id,host_id,agent,native_id,title,cwd,git_branch,repo_root,repo_url,created_at,updated_at,message_count,state,active_elsewhere,warning,parent_native_id,forked_from_native_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(host_id,agent,native_id) DO UPDATE SET
 		title=excluded.title, cwd=excluded.cwd, git_branch=excluded.git_branch,
 		repo_root=excluded.repo_root, repo_url=excluded.repo_url,
 		updated_at=excluded.updated_at, message_count=excluded.message_count,
-		state=excluded.state, active_elsewhere=excluded.active_elsewhere, warning=excluded.warning`,
+		state=excluded.state, active_elsewhere=excluded.active_elsewhere, warning=excluded.warning,
+		parent_native_id=excluded.parent_native_id, forked_from_native_id=excluded.forked_from_native_id`,
 		id, hostID, sess.Agent, sess.NativeID, sess.Title, sess.Cwd, sess.GitBranch, sess.RepoRoot, sess.RepoURL,
-		ms(sess.CreatedAt), ms(sess.UpdatedAt), sess.MessageCount, state, boolInt(sess.ActiveElsewhere), sess.Warning)
+		ms(sess.CreatedAt), ms(sess.UpdatedAt), sess.MessageCount, state, boolInt(sess.ActiveElsewhere), sess.Warning,
+		sess.ParentNativeID, sess.ForkedFromNativeID)
 	return err
 }
 
@@ -496,7 +502,7 @@ func scanSessionView(row rowScanner) (protocol.SessionView, error) {
 	var created, updated int64
 	var active int
 	err := row.Scan(&v.ID, &v.HostID, &v.HostName, &v.Agent, &v.NativeID, &v.Title, &v.Cwd, &v.GitBranch, &v.RepoRoot, &v.RepoURL,
-		&created, &updated, &v.MessageCount, &v.State, &active, &v.Warning)
+		&created, &updated, &v.MessageCount, &v.State, &active, &v.Warning, &v.ParentNativeID, &v.ForkedFromNativeID)
 	v.CreatedAt, v.UpdatedAt = fromMS(created), fromMS(updated)
 	v.ActiveElsewhere = active != 0
 	return v, err

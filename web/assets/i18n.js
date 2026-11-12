@@ -998,6 +998,13 @@ Object.assign(de, {
   high: 'Hoch',
   urgent: 'Dringend',
   'Remove': 'Entfernen',
+  // session relationships
+  'Native parent': 'Nativer Vorgänger',
+  'Session tree': 'Session-Baum',
+  Parent: 'Vorgänger',
+  Fork: 'Fork',
+  'Child session': 'Untergeordnete Session',
+  'The task stays local to the hub and can resume this native session later.': 'Die Aufgabe bleibt lokal auf dem Hub und kann diese native Session später fortsetzen.',
 });
 
 const supported = ['en', 'de'];

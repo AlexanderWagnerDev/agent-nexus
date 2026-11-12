@@ -72,7 +72,7 @@ func projectName(cwd string) string {
 // ---- favorites ----
 
 const favoriteSessionColumns = `s.id,s.host_id,h.name,s.agent,s.native_id,s.title,s.cwd,s.git_branch,s.repo_root,s.repo_url,
-	s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning`
+	s.created_at,s.updated_at,s.message_count,s.state,s.active_elsewhere,s.warning,s.parent_native_id,s.forked_from_native_id`
 
 func (s *Store) SetSessionFavorite(userID, sessionID string, favorite bool) error {
 	if !favorite {

@@ -224,7 +224,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	d.runMu.Lock()
 	d.structured[spec.RunID] = sr
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
 	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
@@ -260,6 +260,13 @@ func (d *Daemon) agentBinary(a Adapter) string {
 		return v.bin
 	case *GeminiAdapter:
 		return v.bin
+	}
+	return ""
+}
+
+func forkSource(spec protocol.RunSpec) string {
+	if spec.Action == protocol.ActionFork {
+		return spec.NativeID
 	}
 	return ""
 }

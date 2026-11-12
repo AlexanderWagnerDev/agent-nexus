@@ -78,6 +78,11 @@ type Session struct {
 	State           string    `json:"state"`
 	ActiveElsewhere bool      `json:"active_elsewhere"`
 	Warning         string    `json:"warning,omitempty"`
+	// ParentNativeID and ForkedFromNativeID are native relationships reported
+	// by the agent store (subagent/child and native fork source). They never
+	// replace the session's own native id.
+	ParentNativeID     string `json:"parent_native_id,omitempty"`
+	ForkedFromNativeID string `json:"forked_from_native_id,omitempty"`
 }
 
 // UpdateStatus is reported by a host after checking the release feed. The hub
@@ -293,6 +298,7 @@ type Envelope struct {
 	// source session.
 	NativeID   string         `json:"native_id,omitempty"`
 	Action     string         `json:"action,omitempty"`
+	ForkedFrom string         `json:"forked_from,omitempty"`
 	Agent      string         `json:"agent,omitempty"`
 	Cwd        string         `json:"cwd,omitempty"`
 	Update     *UpdateStatus  `json:"update,omitempty"`
@@ -392,22 +398,24 @@ type IndexStatus struct {
 
 // SessionView is the hub-side projection of a native session.
 type SessionView struct {
-	ID              string    `json:"id"`
-	HostID          string    `json:"host_id"`
-	HostName        string    `json:"host_name"`
-	Agent           string    `json:"agent"`
-	NativeID        string    `json:"native_id"`
-	Title           string    `json:"title"`
-	Cwd             string    `json:"cwd"`
-	GitBranch       string    `json:"git_branch,omitempty"`
-	RepoRoot        string    `json:"repo_root,omitempty"`
-	RepoURL         string    `json:"repo_url,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	MessageCount    int       `json:"message_count"`
-	State           string    `json:"state"`
-	ActiveElsewhere bool      `json:"active_elsewhere"`
-	Warning         string    `json:"warning,omitempty"`
+	ID                 string    `json:"id"`
+	HostID             string    `json:"host_id"`
+	HostName           string    `json:"host_name"`
+	Agent              string    `json:"agent"`
+	NativeID           string    `json:"native_id"`
+	Title              string    `json:"title"`
+	Cwd                string    `json:"cwd"`
+	GitBranch          string    `json:"git_branch,omitempty"`
+	RepoRoot           string    `json:"repo_root,omitempty"`
+	RepoURL            string    `json:"repo_url,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	MessageCount       int       `json:"message_count"`
+	State              string    `json:"state"`
+	ActiveElsewhere    bool      `json:"active_elsewhere"`
+	Warning            string    `json:"warning,omitempty"`
+	ParentNativeID     string    `json:"parent_native_id,omitempty"`
+	ForkedFromNativeID string    `json:"forked_from_native_id,omitempty"`
 	// LocalTitle and Tags are per-user hub metadata. They never modify the
 	// agent's native title or transcript.
 	LocalTitle string   `json:"local_title,omitempty"`
