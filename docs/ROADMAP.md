@@ -45,8 +45,10 @@ tested versus what is still open.
   fake-hub host link with terminal runs, a re-executed fake OpenCode server,
   Codex app-server and ACP agent for structured starts, policy rejection, Codex
   JSON-RPC and Gemini search.
-- 27 JavaScript unit tests pass; the browser smoke test and the axe-core scan
-  pass on desktop and mobile in English and German.
+- 34 JavaScript unit tests pass; the browser smoke test and the axe-core scan
+  pass on desktop and mobile in English and German. A pinned-clock pixel diff
+  covers six stable demo views; the manual/nightly job runs on a Windows
+  runner with a wider tolerance.
 - Store benchmarks at 10,000 sessions: full snapshot replacement 1.42 s,
   listing 500 sessions 140 ms, project aggregation 197 ms.
 - Host FTS5 index with 10,000 synthetic sessions: seeding 188 ms and search

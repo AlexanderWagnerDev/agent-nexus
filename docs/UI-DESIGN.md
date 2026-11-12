@@ -139,6 +139,16 @@ tool output scroll inside their own containers.
   `<html lang>`. Agent names, mode identifiers, paths and transcript content are
   never translated.
 
+## Visual regression
+
+`cd web && npm run e2e:visual` compares six stable views against
+`web/e2e/demo/visual-baseline/` with a pinned clock (`DEMO_NOW`) and the
+synthetic demo. Differences are written to `visual-report/`. After an intended
+UI change, regenerate the baselines with `npm run e2e:visual:update` and review
+the PNG diff. The scheduled/manual GitHub workflow runs the same comparison on
+a Windows runner; it is not a pull-request gate because font rasterisation
+differs between the reference machine and CI.
+
 ## Known gaps
 
 - ACP sessions expose model, reasoning, mode and image-attachment controls only
@@ -152,5 +162,8 @@ tool output scroll inside their own containers.
 - No formal WCAG 2.2 AA audit has been performed. Semantic controls, labels,
   focus styles, reduced-motion handling and contrast were reviewed manually.
 - The renderer and tool formatting have unit tests; chat behavior is verified by
-  the browser smoke test and manual sessions, not by a full visual regression
-  suite.
+  the browser smoke test and manual sessions. A pixel-diff suite covers six
+  stable desktop views (login, home, projects, sessions, hosts, settings).
+  Baselines currently come from Windows 11; the manual/nightly CI job uses a
+  wider tolerance on the Windows runner, and no Linux/macOS reference baselines
+  exist yet.

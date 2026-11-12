@@ -362,6 +362,17 @@ index 8a41e77..f2b7c19 100644
 +}
 `
 
+// fixtureNow allows screenshot and visual-regression runs to pin every
+// synthetic timestamp instead of drifting with the wall clock.
+func fixtureNow() time.Time {
+	if value := strings.TrimSpace(os.Getenv("NEXUS_DEMO_NOW")); value != "" {
+		if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+			return parsed.UTC()
+		}
+	}
+	return time.Now().UTC()
+}
+
 type fixtures struct {
 	os                string
 	arch              string
@@ -374,7 +385,7 @@ type fixtures struct {
 }
 
 func fixturesFor(scenario string) fixtures {
-	now := time.Now().UTC()
+	now := fixtureNow()
 	root := `C:\Users\demo\Projects`
 	agentPath := `C:\Users\demo\AppData\Roaming\npm\opencode.cmd`
 	osName, arch := "windows", "amd64"

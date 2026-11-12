@@ -6,10 +6,14 @@
     "e2e": "node e2e/smoke.mjs",
     "e2e:live": "node e2e/live.mjs",
     "e2e:a11y": "node e2e/a11y.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "e2e:visual": "node e2e/demo/visual.mjs",
+    "e2e:visual:update": "node e2e/demo/visual.mjs --update"
   },
   "devDependencies": {
     "axe-core": "^4.14.0",
-    "playwright": "^1.65.0"
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.65.0",
+    "pngjs": "^7.0.0"
   }
 }
