@@ -51,6 +51,7 @@ type ACPRun struct {
 	state          string
 	active         bool
 	closed         bool
+	usage          protocol.Usage
 }
 
 func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpec, command string) {
@@ -375,10 +376,13 @@ func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
 
 	r.send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
 	go func() {
-		_, err := r.conn.Prompt(context.Background(), acp.PromptRequest{
+		resp, err := r.conn.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    blocks,
 		})
+		if err == nil && resp.Usage != nil {
+			r.reportACPUsage(resp.Usage, nil)
+		}
 		r.mu.Lock()
 		thought := r.thought.String()
 		r.thought.Reset()
@@ -614,6 +618,41 @@ func choosePermissionOption(options []acp.PermissionOption, allow bool) *acp.Per
 	return nil
 }
 
+// reportACPUsage records the cumulative usage the adapter advertised. ACP
+// costs are only stored when the adapter states USD; other currencies are not
+// converted or guessed.
+func (r *ACPRun) reportACPUsage(usage *acp.Usage, cost *acp.Cost) {
+	if usage != nil {
+		r.mu.Lock()
+		r.usage.InputTokens = int64(usage.InputTokens)
+		r.usage.OutputTokens = int64(usage.OutputTokens)
+		if usage.CachedReadTokens != nil {
+			r.usage.CacheReadTokens = int64(*usage.CachedReadTokens)
+		}
+		if usage.CachedWriteTokens != nil {
+			r.usage.CacheWriteTokens = int64(*usage.CachedWriteTokens)
+		}
+		r.usage.Source = "agent"
+		r.usage.UpdatedAt = time.Now().UTC()
+		r.mu.Unlock()
+	}
+	if cost != nil && cost.Currency == "USD" {
+		amount := cost.Amount
+		r.mu.Lock()
+		r.usage.CostUSD = &amount
+		r.usage.Source = "agent"
+		r.usage.UpdatedAt = time.Now().UTC()
+		r.mu.Unlock()
+	}
+	r.mu.Lock()
+	snapshot := r.usage
+	r.mu.Unlock()
+	if snapshot.InputTokens == 0 && snapshot.OutputTokens == 0 && snapshot.CostUSD == nil {
+		return
+	}
+	_ = r.daemon.send(protocol.Envelope{Type: "run.usage", RunID: r.id, Usage: &snapshot})
+}
+
 func (r *ACPRun) SessionUpdate(_ context.Context, params acp.SessionNotification) error {
 	update := params.Update
 	switch {
@@ -673,6 +712,8 @@ func (r *ACPRun) SessionUpdate(_ context.Context, params acp.SessionNotification
 				ToolInput: truncate(jsonText(update.ToolCallUpdate.RawInput), 8000),
 			})
 		}
+	case update.UsageUpdate != nil:
+		r.reportACPUsage(nil, update.UsageUpdate.Cost)
 	}
 	return nil
 }

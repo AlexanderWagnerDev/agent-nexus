@@ -44,6 +44,7 @@ type StructuredRun struct {
 	closed    bool
 	readyOnce *sync.Once
 	state     string
+	usage     protocol.Usage
 }
 
 func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpec) {
@@ -626,6 +627,26 @@ func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
 		send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: id, Decision: str(data["reply"])})
 	case "session.execution.started":
 		send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
+	case "session.usage.recorded":
+		tokens, _ := data["tokens"].(map[string]any)
+		cache, _ := tokens["cache"].(map[string]any)
+		r.mu.Lock()
+		r.usage.InputTokens += int64Number(tokens["input"])
+		r.usage.OutputTokens += int64Number(tokens["output"])
+		r.usage.CacheReadTokens += int64Number(cache["read"])
+		r.usage.CacheWriteTokens += int64Number(cache["write"])
+		if cost := floatNumber(data["cost"]); cost > 0 {
+			total := cost
+			if r.usage.CostUSD != nil {
+				total += *r.usage.CostUSD
+			}
+			r.usage.CostUSD = &total
+		}
+		r.usage.Source = "agent"
+		r.usage.UpdatedAt = time.Now().UTC()
+		snapshot := r.usage
+		r.mu.Unlock()
+		_ = r.daemon.send(protocol.Envelope{Type: "run.usage", RunID: r.id, Usage: &snapshot})
 	case "session.execution.succeeded", "session.idle", "session.execution.interrupted":
 		send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
 	case "session.execution.failed":

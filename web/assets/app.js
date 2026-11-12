@@ -13,6 +13,7 @@ import { pageOverview } from './views/overview.js';
 import { pageHosts } from './views/hosts.js';
 import { pageProjects } from './views/projects.js';
 import { pageSessions } from './views/sessions.js';
+import { pageUsage } from './views/usage.js';
 import { pageSession, pageSessionChanges } from './views/session-detail.js';
 import { pageSearch } from './views/search.js';
 import { pageSettings } from './views/settings.js';
@@ -32,6 +33,7 @@ const pages = {
   hosts: pageHosts,
   projects: pageProjects,
   sessions: pageSessions,
+  usage: pageUsage,
   session: pageSession,
   sessionChanges: pageSessionChanges,
   search: pageSearch,

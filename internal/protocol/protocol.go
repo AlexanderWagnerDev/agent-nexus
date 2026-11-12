@@ -139,6 +139,19 @@ type PromptQueue struct {
 	Paused bool              `json:"paused"`
 }
 
+// Usage is token and cost metadata reported by an agent runtime. Empty values
+// mean the runtime did not expose that measurement; the hub never invents
+// prices or estimates tokens.
+type Usage struct {
+	InputTokens      int64     `json:"input_tokens"`
+	OutputTokens     int64     `json:"output_tokens"`
+	CacheReadTokens  int64     `json:"cache_read_tokens"`
+	CacheWriteTokens int64     `json:"cache_write_tokens"`
+	CostUSD          *float64  `json:"cost_usd,omitempty"`
+	Source           string    `json:"source,omitempty"` // agent, estimated
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+}
+
 // ModelOption is one model advertised by a native agent runtime.
 type ModelOption struct {
 	ID             string   `json:"id"`
@@ -281,6 +294,7 @@ type Envelope struct {
 	Update     *UpdateStatus  `json:"update,omitempty"`
 	Index      *IndexStatus   `json:"index,omitempty"`
 	Event      *RunEvent      `json:"event,omitempty"`
+	Usage      *Usage         `json:"usage,omitempty"`
 	RunID      string         `json:"run_id,omitempty"`
 	Seq        uint64         `json:"seq,omitempty"`
 	Data       []byte         `json:"data,omitempty"`
@@ -318,6 +332,7 @@ type ServerEnvelope struct {
 	Sessions []SessionView `json:"sessions,omitempty"`
 	Run      *RunView      `json:"run,omitempty"`
 	Event    *RunEvent     `json:"event,omitempty"`
+	Usage    *Usage        `json:"usage,omitempty"`
 	RunID    string        `json:"run_id,omitempty"`
 	Seq      uint64        `json:"seq,omitempty"`
 	State    string        `json:"state,omitempty"`

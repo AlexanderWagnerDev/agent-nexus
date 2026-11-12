@@ -187,6 +187,16 @@ CREATE TABLE IF NOT EXISTS prompt_queue (
 );
 CREATE INDEX IF NOT EXISTS prompt_queue_run_idx ON prompt_queue(run_id, state, position);
 CREATE INDEX IF NOT EXISTS prompt_queue_due_idx ON prompt_queue(state, scheduled_at);
+CREATE TABLE IF NOT EXISTS run_usage (
+  run_id TEXT PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL,
+  source TEXT NOT NULL DEFAULT 'agent',
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at INTEGER NOT NULL,

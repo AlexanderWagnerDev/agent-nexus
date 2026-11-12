@@ -299,6 +299,15 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 				go s.notifyRun(msg.RunID, "approval", "Approval needed", "An agent is waiting for your approval.")
 			}
 		}
+	case "run.usage":
+		if msg.Usage != nil {
+			if err := s.store.UpsertRunUsage(msg.RunID, *msg.Usage); err != nil {
+				s.log.Debug("cannot store run usage", "run_id", msg.RunID, "error", err)
+				break
+			}
+			usage := *msg.Usage
+			s.broadcast(protocol.ServerEnvelope{Type: "run.usage", RunID: msg.RunID, Usage: &usage})
+		}
 	case "run.exit":
 		state := protocol.StateExited
 		if msg.Code != 0 {

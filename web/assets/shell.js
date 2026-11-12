@@ -15,6 +15,7 @@ export const navItems = [
   ['#/', 'Home', 'home', 'overview'],
   ['#/projects', 'Projects', 'projects', 'projects'],
   ['#/sessions', 'Sessions', 'sessions', 'sessions'],
+  ['#/usage', 'Usage', 'usage', 'usage'],
   ['#/runs', 'Active', 'runs', 'runs'],
   ['#/hosts', 'Hosts', 'hosts', 'hosts'],
   ['#/settings', 'Settings', 'settings', 'settings'],

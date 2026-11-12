@@ -191,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/runs/{id}/queue/{itemID}", s.requireAuth(s.handleDeletePromptQueue))
 	mux.HandleFunc("PUT /api/v1/runs/{id}/queue/order", s.requireAuth(s.handleReorderPromptQueue))
 	mux.HandleFunc("POST /api/v1/runs/{id}/queue/pause", s.requireAuth(s.handlePausePromptQueue))
+	mux.HandleFunc("GET /api/v1/usage", s.requireAuth(s.handleUsage))
 
 	mux.HandleFunc("GET /api/v1/ws", s.requireAuth(s.handleClientWS))
 	mux.HandleFunc("GET /v1/host/connect", s.handleHostWS)

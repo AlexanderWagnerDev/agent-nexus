@@ -92,6 +92,13 @@ vendor documentation above:
   `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
   the installed Gemini version. The path is implemented and fake-tested, not
   real-tested; see the status labels in §6.
+- **Usage metadata:** Codex reports `thread/tokenUsage/updated` with cumulative
+  input, cached input, output and reasoning tokens; OpenCode emits
+  `session.usage.recorded` with per-call tokens and USD cost; ACP prompt
+  responses carry cumulative session `usage`, and `usage_update` can add a USD
+  cost. The hub stores only these numeric fields. No token counts or prices are
+  estimated, non-USD ACP costs are not converted, and runs without a report are
+  shown as unavailable.
 - **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
   concurrency guards have unit tests. Real Codex and OpenCode runs were
   exercised on Windows 11; real Claude and Gemini sessions were not available.

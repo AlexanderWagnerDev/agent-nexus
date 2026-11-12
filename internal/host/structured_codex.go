@@ -555,6 +555,34 @@ func (r *CodexRun) currentState() string {
 	return r.state
 }
 
+func int64Number(v any) int64 {
+	switch n := v.(type) {
+	case float64:
+		return int64(n)
+	case int64:
+		return n
+	case json.Number:
+		value, _ := n.Int64()
+		return value
+	default:
+		return 0
+	}
+}
+
+func floatNumber(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int64:
+		return float64(n)
+	case json.Number:
+		value, _ := n.Float64()
+		return value
+	default:
+		return 0
+	}
+}
+
 func (r *CodexRun) handleNotification(method string, params json.RawMessage) {
 	r.daemon.log.Debug("codex event", "run_id", r.id, "type", method)
 	var p map[string]any
@@ -580,6 +608,20 @@ func (r *CodexRun) handleNotification(method string, params json.RawMessage) {
 				send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
 			case "idle":
 				send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
+			}
+		}
+	case "thread/tokenUsage/updated":
+		if usage, ok := p["tokenUsage"].(map[string]any); ok {
+			if total, ok := usage["total"].(map[string]any); ok {
+				u := protocol.Usage{
+					InputTokens:      int64Number(total["inputTokens"]),
+					OutputTokens:     int64Number(total["outputTokens"]),
+					CacheReadTokens:  int64Number(total["cachedInputTokens"]),
+					CacheWriteTokens: int64Number(total["cacheWriteInputTokens"]),
+					Source:           "agent",
+					UpdatedAt:        time.Now().UTC(),
+				}
+				_ = r.daemon.send(protocol.Envelope{Type: "run.usage", RunID: r.id, Usage: &u})
 			}
 		}
 	case "item/agentMessage/delta":

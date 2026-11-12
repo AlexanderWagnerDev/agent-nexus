@@ -98,6 +98,21 @@ measured after that. Cold files (outside the newest 200) are detected by the
 30-second full scan. Adapters without a watch path still rely on the periodic
 delta refresh.
 
+### B3: usage metadata (2026-11-12)
+
+Structured runs report token usage to the hub when the agent runtime exposes
+it: Codex `thread/tokenUsage/updated`, OpenCode `session.usage.recorded`, and
+ACP prompt responses or `usage_update` notifications. The hub stores only
+numeric metadata and an optional USD cost, never prompt or transcript text.
+The Usage page aggregates by run, session, agent, host, project and day with
+7/30/90/365-day filters. Values the runtime does not report are counted as
+unavailable; there is no token estimation, no invented price table and no
+currency conversion. Historical sessions without a structured run have no
+usage row, and OpenCode 2.x structured mode remains disabled by its version
+band, so its live usage path is not exercised here. Verified by API tests with
+synthetic usage; real Codex/ACP usage output was not available in this
+environment.
+
 ### B2: persistent prompt queue (2026-11-12)
 
 Structured runs have a per-run SQLite prompt queue. Items can be scheduled,
