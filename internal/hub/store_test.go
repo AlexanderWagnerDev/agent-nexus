@@ -3,6 +3,8 @@ package hub
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -41,6 +43,34 @@ func TestCreateFirstUserIsAtomic(t *testing.T) {
 	}
 	if n, err := s.UserCount(); err != nil || n != 1 {
 		t.Fatalf("user count = %d, %v", n, err)
+	}
+}
+
+func TestHubRestartClearsStaleSessionState(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "restart-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "codex", NativeID: "restart-session", Title: "Restart", Cwd: "/work/restart",
+		State: protocol.StateRunning, ActiveElsewhere: true, CreatedAt: now, UpdatedAt: now,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second Server on the same store simulates a hub restart before any
+	// host reconnects.
+	restarted := NewServer(Config{}, hub.store, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	list, err := restarted.store.ListSessions(owner.ID, hostID, "", "", "", "", 10, 0, true)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("sessions after restart: %+v %v", list, err)
+	}
+	if list[0].State != protocol.StateIdle || list[0].ActiveElsewhere {
+		t.Fatalf("stale live state survived the restart: %+v", list[0])
 	}
 }
 

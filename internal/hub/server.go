@@ -110,6 +110,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	store.RecoverPromptQueue()
 	store.ReconcileTasks()
 	store.PurgeExpiredSessions()
+	store.ResetTransientSessionStates()
 	if queued, _ := store.HasQueuedPrompts(); queued {
 		s.kickQueue()
 	}

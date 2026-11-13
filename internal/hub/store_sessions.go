@@ -424,4 +424,14 @@ func (s *Store) SetSessionState(id, state string) {
 	s.db.Exec(`UPDATE sessions SET state=? WHERE id=?`, state, id)
 }
 
+// ResetTransientSessionStates clears live states left behind by a hub crash.
+// No run survives a hub restart without a host reconnect, and the host's next
+// discovery snapshot reports the real state again.
+func (s *Store) ResetTransientSessionStates() {
+	s.db.Exec(`UPDATE sessions SET state=?, active_elsewhere=0
+		WHERE state IN (?,?,?,?)`,
+		protocol.StateIdle, protocol.StateRunning, protocol.StateWaiting,
+		protocol.StateStarting, protocol.StateStopping)
+}
+
 // ---- runs ----
