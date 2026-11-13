@@ -1,6 +1,7 @@
 // Capture README screenshots from the synthetic demo hub. Every value in these
 // images comes from cmd/nexus-demo fixtures, never from a real user profile.
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from '../launch.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -10,7 +11,7 @@ const password = process.env.DEMO_PASSWORD || 'demo-alpha-only';
 const outDir = path.resolve(process.env.SHOT_DIR || 'docs/screenshots');
 fs.mkdirSync(outDir, { recursive: true });
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(chromiumLaunchOptions());
 const errors = [];
 
 async function setTheme(page, theme) {
@@ -75,7 +76,6 @@ for (const theme of ['dark', 'light']) {
   await page.goto(base + '/#/sessions', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(900);
   await shot(page, `sessions-${theme}.png`);
-  if (theme === 'dark') await shot(page, 'sessions-repos-dark.png');
 
   await page.goto(base + '/#/runs', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(900);
@@ -91,6 +91,16 @@ for (const theme of ['dark', 'light']) {
     await page.waitForSelector('.turn-assistant', { timeout: 15000 });
     await page.waitForTimeout(700);
     await shot(page, `chat-${theme}.png`);
+    const waitingRun = runs.find((run) => run.state === 'waiting_for_input');
+    if (theme === 'dark' && waitingRun) {
+      await page.goto(`${base}/#/runs/${waitingRun.id}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.approval-card', { timeout: 15000 });
+      await page.waitForTimeout(500);
+      await shot(page, 'chat-approval-dark.png');
+      await page.goto(`${base}/#/runs/${chatRun.id}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.turn-assistant', { timeout: 15000 });
+      await page.waitForTimeout(500);
+    }
     if (theme === 'dark') {
       const tool = page.locator('.tool-card').first();
       if (await tool.count()) {

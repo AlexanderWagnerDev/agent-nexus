@@ -44,11 +44,31 @@ but serves fixtures from `cmd/nexus-demo`; it never reads a real agent store.
 make build demo
 node web/e2e/demo/seed.mjs      # starts a throwaway hub on :8790
 node web/e2e/demo/shots.mjs     # writes docs/screenshots
+cd web && npm run e2e:demo-ui   # DOM regression checks against the demo
+cd web && E2E_SPAWN_DEMO=1 npm run e2e:visual
 ```
 
 Login for the demo hub is `demo` / `demo-alpha-only`. The data directory lives
 under the OS temp folder and is deleted on the next seed. Never point the demo
 at a real hub or reuse real sessions. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
+### Browser executable
+
+The Playwright scripts use the Chromium revision pinned by
+`web/package-lock.json`. If that browser is not installed, point the scripts at
+an existing Chromium/Chrome binary:
+
+```bash
+# Windows PowerShell
+$env:PLAYWRIGHT_CHROMIUM_EXECUTABLE = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+# macOS / Linux
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium
+```
+
+The value is passed to `chromium.launch({ executablePath })` by `smoke`,
+`a11y`, `live`, `virtual`, `shots` and `visual`. `E2E_CHROME` remains an alias
+for older local scripts. Do not edit a baseline because a different browser
+renders fonts differently; refresh baselines only for intentional UI changes.
 
 ## License
 

@@ -4,6 +4,7 @@
 // Optional RUN_ID scans a structured chat page.
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from './launch.mjs';
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve('axe-core/axe.min.js');
@@ -43,7 +44,7 @@ async function scan(page, label) {
   return violations;
 }
 
-const browser = await chromium.launch(process.env.E2E_CHROME ? { executablePath: process.env.E2E_CHROME } : {});
+const browser = await chromium.launch(chromiumLaunchOptions());
 async function newContext(options) {
   const context = await browser.newContext(options);
   if (lang) await context.addInitScript((value) => localStorage.setItem('nexus-lang', value), lang);
@@ -51,21 +52,24 @@ async function newContext(options) {
 }
 let failures = 0;
 try {
-  const desktop = await newContext({ viewport: { width: 1440, height: 900 } });
-  const page = await desktop.newPage();
-  await login(page);
-  const routes = [
-    ['#/', 'home'], ['#/projects', 'projects'], ['#/sessions', 'sessions'],
-    ['#/usage', 'usage'], ['#/fanout', 'fanout'], ['#/runs', 'runs'], ['#/hosts', 'hosts'], ['#/settings', 'settings'],
-  ];
-  if (runID) routes.push([`#/runs/${runID}`, 'chat']);
-  for (const [route, label] of routes) {
-    await page.goto(`${baseURL}/${route}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(800);
-    const violations = await scan(page, `desktop:${label}`);
-    failures += violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').length;
+  for (const theme of ['dark', 'light']) {
+    const desktop = await newContext({ viewport: { width: 1440, height: 900 } });
+    await desktop.addInitScript((value) => localStorage.setItem('nexus-theme', value), theme);
+    const page = await desktop.newPage();
+    await login(page);
+    const routes = [
+      ['#/', 'home'], ['#/projects', 'projects'], ['#/sessions', 'sessions'],
+      ['#/usage', 'usage'], ['#/fanout', 'fanout'], ['#/runs', 'runs'], ['#/hosts', 'hosts'], ['#/settings', 'settings'],
+    ];
+    if (runID) routes.push([`#/runs/${runID}`, 'chat']);
+    for (const [route, label] of routes) {
+      await page.goto(`${baseURL}/${route}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(800);
+      const violations = await scan(page, `${theme}:${label}`);
+      failures += violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').length;
+    }
+    await desktop.close();
   }
-  await desktop.close();
 
   const mobile = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const phone = await mobile.newPage();

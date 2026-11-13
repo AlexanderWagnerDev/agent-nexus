@@ -6,6 +6,7 @@
 // Optional: E2E_USER, E2E_PASSWORD, LIVE_PROMPT, LIVE_EXPECT.
 // This sends one real prompt to the agent and is intentionally not part of CI.
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from './launch.mjs';
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8788';
 const runID = process.env.RUN_ID || '';
@@ -19,7 +20,7 @@ if (!runID) {
   process.exit(2);
 }
 
-const browser = await chromium.launch(process.env.E2E_CHROME ? { executablePath: process.env.E2E_CHROME } : {});
+const browser = await chromium.launch(chromiumLaunchOptions());
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const errors = [];

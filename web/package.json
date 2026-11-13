@@ -9,6 +9,8 @@
     "test": "node --test test/*.test.mjs",
     "e2e:visual": "node e2e/demo/visual.mjs",
     "e2e:visual:update": "node e2e/demo/visual.mjs --update",
+    "e2e:soak": "node e2e/demo/soak.mjs",
+    "e2e:demo-ui": "node e2e/demo/ui.mjs",
     "e2e:virtual": "node e2e/virtual.mjs"
   },
   "devDependencies": {

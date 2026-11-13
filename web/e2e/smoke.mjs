@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from './launch.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -75,7 +76,7 @@ async function themeOf(page) {
 async function run() {
   await startHub();
   await ensureSetup();
-  const browser = await chromium.launch(process.env.E2E_CHROME ? { executablePath: process.env.E2E_CHROME } : {});
+  const browser = await chromium.launch(chromiumLaunchOptions());
   try {
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await desktop.newPage();
@@ -105,23 +106,42 @@ async function run() {
     }
 
     await page.goto(`${baseURL}/#/`, { waitUntil: 'networkidle' });
+    await page.focus('#command-trigger');
     await page.keyboard.press('Control+K');
     await page.waitForSelector('#palette-input');
     assert((await page.locator('.palette-row').count()) > 0, 'command palette has no actions');
+    assert(await page.evaluate(() => document.activeElement?.id === 'palette-input'), 'command palette did not take focus');
     await page.fill('#palette-input', 'settings');
     await page.waitForTimeout(500);
     assert((await page.locator('.palette-row').count()) > 0, 'command palette search returned nothing');
     await page.keyboard.press('Escape');
     assert(await page.locator('#palette-input').count() === 0, 'command palette did not close');
+    assert(await page.evaluate(() => document.activeElement?.id === 'command-trigger'), 'command palette did not return focus');
 
     await page.click('#sidebar-toggle');
     assert(await page.locator('#layout.sidebar-collapsed').count() === 1, 'sidebar did not collapse');
     await page.click('#sidebar-toggle');
 
     assert(await page.locator('#notif-toggle').count() === 1, 'notification button missing');
+    const bell = await page.evaluate(() => {
+      const svg = document.querySelector('#notif-toggle svg');
+      const badge = document.getElementById('notif-badge');
+      badge.textContent = '3';
+      badge.classList.add('visible');
+      const icon = svg.getBoundingClientRect();
+      const dot = badge.getBoundingClientRect();
+      const centerX = icon.left + icon.width / 2;
+      const centerY = icon.top + icon.height / 2;
+      const centerCovered = centerX >= dot.left && centerX <= dot.right && centerY >= dot.top && centerY <= dot.bottom;
+      return { iconWidth: icon.width, iconHeight: icon.height, centerCovered, badgeWidth: dot.width };
+    });
+    assert(bell.iconWidth >= 18 && bell.iconHeight >= 18, `bell icon is too small: ${JSON.stringify(bell)}`);
+    assert(!bell.centerCovered, 'notification badge covers the bell icon');
     await page.click('#notif-toggle');
     await page.waitForSelector('#notif-panel:not([hidden])');
+    assert(await page.evaluate(() => document.activeElement?.id === 'notif-panel'), 'notification panel did not take focus');
     await page.keyboard.press('Escape');
+    assert(await page.evaluate(() => document.activeElement?.id === 'notif-toggle'), 'notification panel did not return focus');
 
     // The conflict dialog is reproduced without a real host: a synthetic
     // session reports active_elsewhere and the run endpoint answers 409.
@@ -204,12 +224,23 @@ async function run() {
     await phone.waitForSelector('[data-theme-choice=light]');
     const overflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert(!overflow, 'mobile layout has horizontal overflow');
-    assert(await phone.locator('.nav a[href="#/settings"]').isVisible(), 'settings navigation is not visible on mobile');
     assert(await phone.locator('.nav a[href="#/hosts"]').isVisible(), 'hosts navigation is not visible on mobile');
+    assert(await phone.locator('.nav a[href="#/settings"]').isHidden(), 'settings should live behind the More menu on mobile');
+    await phone.click('#mobile-more');
+    await phone.waitForSelector('.mobile-more-list');
+    assert(await phone.locator('.mobile-more-list a[href="#/settings"]').isVisible(), 'settings link missing from More menu');
+    await phone.keyboard.press('Escape');
     await phone.goto(`${baseURL}/#/projects`, { waitUntil: 'networkidle' });
     assert(await phone.locator('#view').count(), 'projects view missing on mobile');
     await phone.goto(`${baseURL}/#/workspace`, { waitUntil: 'networkidle' });
     assert(await phone.locator('#view').count(), 'workspace view missing on mobile');
+    const topbar = await phone.evaluate(() => {
+      const style = getComputedStyle(document.querySelector('.topbar'));
+      return { position: style.position, background: style.backgroundColor };
+    });
+    assert(topbar.position === 'sticky', `mobile header is not sticky: ${topbar.position}`);
+    const alpha = /rgba\([^)]*,\s*([0-9.]+)\)/.exec(topbar.background);
+    assert(!alpha || Number(alpha[1]) === 1, `mobile header is see-through: ${topbar.background}`);
     const workspaceOverflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert(!workspaceOverflow, 'workspace has horizontal overflow on mobile');
     await desktop.close();

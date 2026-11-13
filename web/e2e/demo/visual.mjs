@@ -10,6 +10,7 @@ import path from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from '../launch.mjs';
 
 const here = import.meta.dirname;
 const repoRoot = path.resolve(here, '..', '..', '..');
@@ -99,7 +100,7 @@ async function freezeClock(context) {
 }
 
 async function capture() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const shots = new Map();
   try {
     const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });

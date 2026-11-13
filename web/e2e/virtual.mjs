@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from './launch.mjs';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 const port = process.env.E2E_VIRTUAL_PORT || '18789';
@@ -84,7 +85,7 @@ function assert(condition, message) {
 async function run() {
   await startHub();
   await ensureSetup();
-  const browser = await chromium.launch(process.env.E2E_CHROME ? { executablePath: process.env.E2E_CHROME } : {});
+  const browser = await chromium.launch(chromiumLaunchOptions());
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
