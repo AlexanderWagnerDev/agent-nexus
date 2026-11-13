@@ -6,9 +6,8 @@ machines with coding agents installed.
 
 ## 1. Run the hub with Docker Compose
 
-The repository is public during alpha. Clone it with Git or the GitHub CLI;
-authentication is only needed for restricted development artifacts, not
-work here.
+The repository is public during alpha. Clone it with Git or the GitHub CLI.
+Authentication is not required to read or clone the source repository.
 
 ```bash
 gh repo clone AlexanderWagnerDev/agent-nexus

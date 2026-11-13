@@ -21,7 +21,7 @@ This document is the single source of truth for **what** AgentNexus must do (req
   (CI; the local Windows shell had no cgo toolchain), `gofmt`, staticcheck, JavaScript unit
   tests, the browser smoke test, an axe-core WCAG scan on desktop and
   mobile in English and German, cross-compilation for six targets, CodeQL
-  (SARIF artifact because the private repository has no GHAS), Windows Task
+  (SARIF artifact), Windows Task
   Scheduler install/status/uninstall on Windows 11, live Codex `app-server` and
   OpenCode `serve`/ACP runs on Windows 11, OpenCode/Codex option discovery,
   OpenCode and Codex image attachment round-trips, offline/reconnect replay,

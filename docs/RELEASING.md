@@ -2,7 +2,7 @@
 
 AgentNexus is in alpha. **There is no official version.** Do not create a tag,
 publish a release or push a `latest` container tag until the maintainer has
-explicitly approved the first public version.
+explicitly approved the first official version.
 
 ## Current policy
 
