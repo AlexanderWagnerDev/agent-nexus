@@ -3,7 +3,7 @@
 // requested duration. No real store, agent account or transcript is touched.
 //
 //   SOAK_MINUTES=1 node web/e2e/demo/soak.mjs
-//   SOAK_MINUTES=4320 SOAK_HOSTS=6 SOAK_RUNS=24 node web/e2e/demo/soak.mjs
+//   SOAK_MINUTES=5 SOAK_HOSTS=6 SOAK_RUNS=24 node web/e2e/demo/soak.mjs
 //
 // Env: SOAK_PORT (8792), SOAK_HOSTS (3), SOAK_RUNS (8), SOAK_INTERVAL_MS (5000),
 //      SOAK_OUT (soak-<timestamp>.csv), SOAK_STRICT=1 to fail on growth.

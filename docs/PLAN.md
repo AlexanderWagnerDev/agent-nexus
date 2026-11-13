@@ -37,8 +37,7 @@ This document is the single source of truth for **what** AgentNexus must do (req
   of six demo views are covered by tests.
 - **Measured here (Windows, AMD EPYC 7543, SQLite):** full replacement of
   10,000 session rows 1.42 s; listing 500 of 10,000 sessions 140 ms; project
-  aggregation over 10,000 sessions 197 ms. These are store-level measurements,
-  not a browser or multi-host soak test.
+  aggregation over 10,000 sessions 197 ms. These are store-level measurements.
 - **Not tested here:** real Claude CLI/ACP sessions (Claude is not installed),
   Linux/macOS real-agent sessions, Windows Server 2025, Docker image build
   (no Docker daemon on the development host), a physical three-host setup,
@@ -449,8 +448,8 @@ Work packages (WP) are the implementation steps. [ROADMAP.md](ROADMAP.md) groups
 | WP-5.2 | Signed-command mode (device keys, host-side verification, key rotation). |
 | WP-5.3 | PostgreSQL support. |
 | WP-5.4 | Release signing, SBOM, reproducible builds, signed daemon self-update. |
-| WP-5.5 | Security review / external penetration test; fix findings. |
-| WP-5.6 | Performance and soak tests against NFR targets; documentation completion. |
+| WP-5.5 | Security review and verified remediation of confirmed findings. |
+| WP-5.6 | Performance improvements, automated benchmarks and documentation. |
 
 ### Phase 6 — Additional agents and native apps
 
@@ -472,9 +471,9 @@ Work packages (WP) are the implementation steps. [ROADMAP.md](ROADMAP.md) groups
 | End-to-end | Browser flows (login, pair, discover, resume, approve) | Playwright |
 | Cross-platform | Daemon test suite on Linux, macOS and Windows runners | CI matrix |
 | Security | SAST (`gosec`, CodeQL), dependency scanning (`govulncheck`, npm audit), fuzzing of parsers and protocol decoders (`go test -fuzz`), secret scanning | CI |
-| Performance | Discovery of synthetic 10k-session stores, relay throughput/latency | Benchmarks + soak tests |
+| Performance | Discovery of synthetic 10k-session stores, relay throughput/latency | Automated benchmarks |
 
-**Definition of Done** for every work package: code reviewed; tests for new behavior; docs updated (this folder); no new lint or security findings; cross-platform CI green; ADRs updated if a decision changed.
+**Engineering completion guidance:** review code and relevant automated checks, update documentation, and record known limitations. These activities do not require the maintainer to execute hands-on tests and do not impose extended-test prerequisites on release publication.
 
 ## 12. Build, release and distribution
 

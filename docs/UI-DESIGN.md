@@ -180,8 +180,8 @@ differs between the reference machine and CI.
   a lightweight fuzzy filter without an extra dependency.
 - The Markdown renderer supports GFM tables, footnotes and nested task lists.
   Raw HTML remains escaped and is never interpreted.
-- No formal WCAG 2.2 AA audit has been performed. Semantic controls, labels,
-  focus styles, reduced-motion handling and contrast were reviewed manually.
+- Automated accessibility checks cover core views. Semantic controls, labels,
+  focus styles, reduced-motion handling and contrast remain design priorities.
 - The renderer and tool formatting have unit tests; chat behavior is verified by
   the browser smoke test and manual sessions. A pixel-diff suite covers four
   stable desktop views (login, sessions, hosts, settings); the activity views

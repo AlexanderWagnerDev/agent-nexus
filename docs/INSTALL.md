@@ -6,8 +6,8 @@ machines with coding agents installed.
 
 ## 1. Run the hub with Docker Compose
 
-The repository is private during alpha. Clone it with an authenticated Git
-client or the GitHub CLI; the raw download URLs used by public projects do not
+The repository is public during alpha. Clone it with Git or the GitHub CLI;
+authentication is only needed for restricted development artifacts, not
 work here.
 
 ```bash

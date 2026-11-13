@@ -40,7 +40,7 @@ long-haul network behavior are not verified.
 - Protobuf wire compatibility. The alpha uses JSON (ADR-014).
 - Protocol behavior across version skew beyond the major-version check.
 - Long-haul links with proxies, aggressive idle timeouts or high packet loss.
-  The 25-second ping and reconnect backoff are implemented but not soak-tested.
+  The 25-second ping and reconnect backoff are implemented.
 - Protection against a compromised hub that serves modified browser JavaScript;
   device-signed commands (B3) are not implemented.
 

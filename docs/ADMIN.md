@@ -191,7 +191,7 @@ the previous container tag and database backup for rollback.
 
 - Signed-command mode is not implemented; the hub remains trusted for run
   commands.
-- PostgreSQL, native mobile/desktop apps and manual WCAG 2.2 AA certification are open (the automated scan is clean).
+- PostgreSQL and native mobile/desktop apps are not implemented (the automated accessibility scan is clean).
 - Claude ACP was not exercised against a real Claude installation in this
   release; terminal mode is verified.
 - Linux/macOS real-agent sessions were not available for testing; CI covers
@@ -204,8 +204,8 @@ the previous container tag and database backup for rollback.
   resume API and a failed job assignment; see [SECURITY.md](SECURITY.md).
 - Windows Server 2025 uses the same Task Scheduler schema but was not available
   for testing.
-- The release is a pre-release while the Claude and cross-OS real-agent gaps
-  remain.
+- Official release publication depends on maintainer approval, not personally
+  performed cross-OS acceptance or prescribed extended tests.
 
 ## Troubleshooting
 

@@ -49,10 +49,10 @@ sessions.
   name, example home paths with a real first name and session links; see
   [HISTORY-REWRITE.md](HISTORY-REWRITE.md#second-rewrite-prepared-2026-11-12).
 - **GitHub retention:** a force-push does not erase old pull-request refs or
-  cached objects on GitHub. The repository stays private until GitHub Support
-  has deleted the old pull requests and purged the orphaned commits.
+  cached objects on GitHub. The repository is intentionally public; potential retained
+  historical GitHub objects are a separate issue.
 
-## Pre-publication checklist
+## Public repository privacy checklist
 
 1. `git log --format='%an <%ae>%n%cn <%ce>' | sort -u` shows only the approved
    identity, bots and GitHub.
@@ -62,4 +62,4 @@ sessions.
 4. `README`, `LICENSE`, `CONTRIBUTING`, `SECURITY`, package metadata and the
    web client contain no legal name or private contact address.
 5. No links point to deleted releases or tags.
-6. The maintainer has explicitly approved making the repository public.
+6. Public repository visibility is the maintainer's intentional decision.

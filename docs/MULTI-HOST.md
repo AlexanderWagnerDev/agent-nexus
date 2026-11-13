@@ -63,8 +63,8 @@ Do not open firewall ports on the hosts. `nexusd` only dials out to the hub.
 
 ### Optional update token
 
-The release repository is private. For update checks, create a fine-grained
-GitHub token with **Contents: read** and set it in the user environment before
+The repository is public. Tokens may still be needed for authenticated API
+requests or restricted development artifacts; if used, set them before
 starting the task:
 
 ```powershell
