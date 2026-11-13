@@ -71,7 +71,9 @@ func (s *Server) signingRequired(deviceID string) bool {
 		return true
 	}
 	_, _, err := s.store.DevicePublicKey(deviceID)
-	return err == nil
+	// Fail closed on a database error: an operator who registered keys must not
+	// lose enforcement because the lookup was temporarily unavailable.
+	return err == nil || !errors.Is(err, sql.ErrNoRows)
 }
 
 func canonicalDigest(value string) string {

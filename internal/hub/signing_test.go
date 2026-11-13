@@ -30,6 +30,16 @@ func registerTestDeviceKey(t *testing.T, hub *apiTestHub, deviceID string) ed255
 	return private
 }
 
+func TestSigningRequirementFailsClosedOnStoreError(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	if err := hub.store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !hub.server.signingRequired("missing-device") {
+		t.Fatal("store errors must not disable signature enforcement")
+	}
+}
+
 func TestDeviceSignedStopAndReplayProtection(t *testing.T) {
 	hub := newSetupHub(t)
 	me, body := hub.do(nil, http.MethodGet, "/api/v1/me", nil, nil)
