@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed host update staging, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
 **No releases or tags are published during alpha.** All earlier pre-release
 tags and GitHub releases were withdrawn before the first official version was
@@ -68,7 +68,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline/disabled, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, rename, disable/enable, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active; mtime fingerprint of agent stores with a 500 ms debounce and a 15 s fallback (new sessions normally appear within 2-3 s) |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key | Client/device-signed commands remain open |
-| **Host updates** | `nexusd update` checks GitHub releases directly, verifies SHA-256 and optional cosign, stages, installs when idle with rollback, and keeps identity/config/agent stores | No public release feed during alpha; CI development builds are installed through authenticated installer scripts |
+| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | No public release feed during alpha; CI development builds remain an explicit installer fallback |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -91,7 +91,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Split workspace** | Two independent live chats side by side or stacked, resizable and persisted, with per-pane approvals and mobile stacking |
 | **Chat** | Streaming text, Markdown/GFM tables, footnotes, nested task lists, highlighted code blocks with copy, tool summaries, reasoning, approvals, a resizable context panel and unified/side-by-side diffs with line numbers and file navigation |
 | **Composer** | Auto-growing input, persistent per-run drafts, Enter/Shift+Enter behavior, interrupt, a searchable model picker with favorites/recent models, live reasoning/agent selectors and bounded attachments gated by real capabilities; ACP agents expose only what they advertise; optional Web Speech dictation follows the UI language, inserts editable text and never sends automatically |
-| **Terminal client** | `nexus login`, `sessions`, `attach` and `approve`; revocable device session stored with mode 0600, WebSocket attach and controller lease, line-mode input, Windows/Linux/macOS builds |
+| **Terminal client** | `nexus login`, `sessions`, `attach`, `approve` and a checksum/signature-verified `nexus update` that never replaces the daemon; revocable device session stored with mode 0600, WebSocket attach and controller lease, line-mode input, Windows/Linux/macOS builds |
 | **Read-only MCP** | Stateless `/mcp` JSON-RPC endpoint with scoped bearer tokens and rate limiting; tools list hosts/sessions, search transcripts, read transcript pages and Git status without any write path |
 | **Notification channels** | Optional ntfy, Gotify, Telegram, Discord, Slack and generic webhook delivery for the same content-free events as Web Push; configurations are AES-GCM encrypted, private/loopback SSRF targets are blocked, sends have timeouts, one bounded retry and a test action |
 | **Templates** | Saved prompt snippets with `{{branch}}`, `{{project}}` and `{{selection}}` variables, search, insert, edit and delete; admins can share a template with every user, and `/tpl <name>` expands one in the composer |
@@ -138,13 +138,15 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 
 ### Install a host client (no Go toolchain)
 
-CI builds the daemon for Windows, Linux and macOS on every push to `main` and
-uploads it as an authenticated workflow artifact. Clone the repository,
-then run the installer; it downloads, checksum-verifies and installs `nexusd`:
+The installers use official GitHub releases by default: they download the
+platform archive, verify its SHA-256 (and the cosign bundle when cosign is
+installed) and install both `nexusd` and `nexus`. No GitHub CLI is required for
+a public release.
 
 ```powershell
-# Windows, in an authenticated gh session
-powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 `
+  -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
 ```
 
 ```bash
@@ -152,10 +154,13 @@ powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 -Hub https://n
 ./scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-A source build still works when Go 1.26.11+ is available:
+During alpha there is no public release yet. Use `-Development` (PowerShell) or
+`--development` (shell) to install the newest CI build as an explicit fallback;
+that path requires `gh auth login`. A source build still works when Go 1.26.11+
+is available:
 
 ```bash
-make build          # produces bin/nexus-hub and bin/nexusd
+make build          # produces bin/nexus-hub, bin/nexusd and bin/nexus
 ```
 
 Container builds from `main` are published as development images only:
@@ -201,6 +206,47 @@ docker compose up -d --build
 ```
 
 Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`) and Docker Hub (`alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+
+## Host updates
+
+Each `nexusd` installation checks the official release feed directly (never
+through the hub) at startup and every six hours with jitter, ETag caching and
+exponential backoff. On the `stable` channel only non-prerelease releases are
+accepted. Updates are staged, SHA-256 verified and cosign-verified before
+installation; checksum-only is an explicit local setting, not a silent fallback.
+
+The default local policy is:
+
+```json
+{
+  "updates": {
+    "channel": "stable",
+    "check_interval_minutes": 360,
+    "install_when_idle": true,
+    "require_signature": true,
+    "allow_remote_install": false
+  }
+}
+```
+
+Automatic installation waits until no terminal, structured or ACP run is active,
+blocks new runs during the replacement, restarts the per-user service and
+verifies the new version. Repeated failed starts roll back to
+`nexusd.previous`, and the failed version is blocked until an operator removes
+it. The hub can display the state and, only when `allow_remote_install` is
+enabled locally, request installation; it cannot change the channel, signature
+policy or trusted source.
+
+```bash
+nexusd update --status
+nexusd update --check
+nexusd update --configure --channel stable --auto on --install-when-idle on
+nexusd update --configure --checksum-only   # explicit weaker trust mode
+nexusd update --rollback
+```
+
+See [docs/INSTALL.md](docs/INSTALL.md#host-updates) and
+[docs/OPERATIONS.md](docs/OPERATIONS.md#host-updates).
 
 ## Security
 
@@ -274,7 +320,8 @@ The host link carries JSON envelopes in this build; see [ADR-014](docs/PLAN.md#a
 
 ```text
 cmd/nexus-hub/        hub entrypoint
-cmd/nexusd/           host daemon entrypoint (pair, run, doctor, discover, service)
+cmd/nexusd/           host daemon entrypoint (pair, run, doctor, discover, update, service)
+cmd/nexus/            terminal client entrypoint
 internal/protocol/    shared wire types
 internal/hub/         API, auth, host registry, session index, run relay, audit
 internal/host/        discovery adapters, policy, PTY run manager, hub link

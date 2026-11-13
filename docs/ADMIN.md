@@ -166,14 +166,24 @@ Docker volume commands.
 
 ## Updates and rollback
 
-1. Back up the database.
+1. Back up `hub.db`, `secret.key` and `hub-signing.key`.
 2. Pull the new `NEXUS_TAG` and restart the hub.
-3. Replace `nexusd` on hosts and rerun `nexusd service install`.
+3. Host daemons update themselves on their local channel when idle. Check
+   `nexusd update --status`; a manual `nexusd update --install` is optional.
 4. Verify `/healthz`, `/readyz`, `nexusd doctor`, a terminal run and a structured
    run.
 
+The host page shows the installed and available versions, channel, automatic
+update and signature mode, current phase and last error. A blocked host version
+can be retried only on that host (`nexusd update --configure --unblock <version>`).
+The hub may request installation only when the host has
+`updates.allow_remote_install=true`; it cannot alter the release source or
+signature policy.
+
 Database migrations run automatically. There is no automatic downgrade; keep
-the previous container tag and database backup for rollback.
+the previous container tag, host `nexusd.previous` binary and database backup
+for rollback. Do not update a hub container across a schema change without a
+backup.
 
 ## Security checklist
 

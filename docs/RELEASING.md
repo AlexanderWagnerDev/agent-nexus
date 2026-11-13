@@ -12,11 +12,22 @@ explicitly approved the first official version.
   release workflow is `workflow_dispatch` only and refuses to run unless the
   operator types `PUBLISH` and names an existing tag.
 - `goreleaser` is configured with `release.draft: true`, so even a manual run
-  produces a draft that must be published by hand.
+  produces a draft that must be published by hand. `release.prerelease: auto`
+  keeps stable tags stable and only marks a `-rc`/`-beta`/`-alpha` tag as a
+  prerelease.
+- Release archives contain `nexus-hub`, `nexusd` and the `nexus` terminal
+  client for Windows, Linux and macOS on `amd64` and `arm64`, plus
+  `checksums.txt`, per-archive SBOMs and the cosign bundle
+  `checksums.txt.sigstore.json`.
 - Container builds on `main` publish only `alpha` (moving) and `sha-<short>`
-  (pinned) tags. There is no `latest` and no semver tag.
-- The hub and daemon report their version as `alpha` unless a build sets a
-  version through `-ldflags`.
+  (pinned) tags. There is no `latest` and no semver tag. A version tag is
+  published only through an explicit **Container** workflow dispatch with the
+  `release_tag` input; the `latest` tag additionally requires
+  `publish_latest=true`.
+- The hub, daemon and terminal client report their version as `alpha` unless a
+  build sets a version through `-ldflags`. Development builds use
+  `alpha-<short-sha>`; official builds use the semantic version without the
+  leading `v`.
 
 ## Release decision
 
@@ -36,10 +47,14 @@ accurately without turning optional testing into release blockers.
 2. In GitHub Actions, run **Release (manual, locked)** for that tag with
    `confirm=PUBLISH`.
 3. Wait for the draft release. Review assets, checksums, SBOMs and the cosign
-   bundle.
+   bundle. The archive names are
+   `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
+   exactly what the host updater expects.
 4. Publish the draft manually and mark it as the first official release.
-5. Only then may the container workflow be extended with a semver tag, and the
-   `latest` tag may be introduced.
+5. Then run **Container** with `release_tag=v0.1.0` (and `publish_latest=true`
+   only after a deliberate decision). Ordinary `main` builds keep publishing
+   `alpha`/`sha-*` and can never overwrite the version tags.
+6. Verify a host update on a disposable installation before announcing it.
 
 ## Leftover artifacts from removed releases
 

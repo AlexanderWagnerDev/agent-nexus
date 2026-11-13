@@ -469,15 +469,17 @@ External dependencies: availability and stability of the agents' interfaces list
 **Depends on:** M4.
 
 > **alpha implementation:** roles (`owner`, `admin`, `member`, `viewer`) and
-> per-host grants are implemented. Signed commands, PostgreSQL, signed release
-> artifacts remain in progress.
+> per-host grants are implemented. Hub-signed commands and checksum/cosign
+> verified host auto-updates with idle gating and rollback are implemented.
+> PostgreSQL, host-side verification of device-signed commands and native
+> code-signing/notarization remain in progress.
 
 **Acceptance criteria (M5):**
 
 - [ ] RBAC roles and per-host grants enforced in API and UI; permission matrix covered by tests.
 - [ ] Signed-command mode: with `require_signed_commands = true`, a hub-forged command (simulated compromised hub) is rejected by the host; device keys require local approval on the host; replayed commands are rejected.
 - [ ] PostgreSQL backend passes the same test suite as SQLite.
-- [ ] Release artifacts are signed, have SBOMs and checksums; `nexusd` self-update verifies signatures; macOS and Windows binaries are signed (subject to Q-03).
+- [ ] Release artifacts have SBOMs, SHA-256 checksums and cosign signatures; `nexusd` auto-update verifies them, waits for idle work and rolls back on failure. Apple notarization and Windows Authenticode signing remain future work (Q-03).
 - [ ] Confirmed high/critical vulnerabilities are prioritized; security limitations are documented without imposing a third-party audit as a release gate.
 - [ ] Daemon idle footprint meets NFR-06; optional automated benchmarks can verify performance goals.
 - [ ] Documentation complete: installation per OS, deployment topologies, hardening checklist, upgrade guide, supported agent version matrix.

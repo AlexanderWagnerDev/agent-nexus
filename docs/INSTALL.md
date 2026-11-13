@@ -61,8 +61,17 @@ enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 The stack includes WUD labels. There is no official release yet: `alpha`
 tracks `main` and `sha-<short>` pins a commit. Digest watching is enabled by
 default so WUD notices new `alpha` builds; set `WUD_WATCH_DIGEST=false` when you
-pin a `sha-` tag. WUD only reports updates; it does not apply them. Never let an
-update cross a hub schema change without a backup.
+pin a `sha-` tag or a fixed version tag. The default `WUD_TAG_INCLUDE` watches
+`alpha` and immutable semver tags, not `sha-` pins. After an approved release,
+set `NEXUS_TAG=v0.1.0` (or `0.1.0`) and keep digest watching off for that
+immutable tag.
+
+WUD only reports updates; it does not apply them. This is separate from the
+host updater: WUD watches the hub container, while `nexusd` updates itself on
+each Windows/Linux/macOS host. Never let a hub container update cross a schema
+change without a backup. A deliberate, opt-in hub update strategy is to watch
+only the stable version tag, take a backup, and then pull the new tag manually;
+no automatic database migration without a backup is provided.
 
 If you use a bind mount for `/data`, make it writable by UID `65532`:
 
@@ -85,20 +94,24 @@ IP address is not a valid WebAuthn origin).
 
 ## 3. Install and pair a host client
 
-There are no published release archives during alpha. The daemon is built for
-`windows/amd64`, `windows/arm64`, `linux/amd64`, `linux/arm64`,
-`darwin/amd64` and `darwin/arm64` by the **Dev host binaries** workflow and
-uploaded as authenticated GitHub Actions artifacts (30-day retention). The
-installer scripts download the newest successful build from `main`, verify its
-SHA-256 and place it in the per-user install directory. They need the GitHub
-CLI (`gh auth login`) with read access to the repository, but no Go
-toolchain.
+The installer scripts support `windows/amd64`, `windows/arm64`, `linux/amd64`,
+`linux/arm64`, `darwin/amd64` and `darwin/arm64`. Official GitHub releases are
+the default source: the archive contains `nexusd` and the `nexus` terminal
+client. The script verifies the archive SHA-256, verifies the cosign bundle when
+`cosign` is installed, checks the downloaded binary's version, preserves an
+existing host identity and installs the per-user service. No GitHub CLI and no
+Go toolchain are required for a public release.
+
+During alpha there is no public release yet. The development workflow builds
+remain available as an explicit fallback (`-Development` / `--development`);
+that path uses the GitHub CLI and authenticated Actions artifacts and should
+not be mixed with release installations on the same host.
 
 Clone the repository once on the machine that runs the installer so the script
 is available locally:
 
 ```bash
-gh repo clone AlexanderWagnerDev/agent-nexus
+git clone https://github.com/AlexanderWagnerDev/agent-nexus
 ```
 
 If you prefer a source build, `go build -trimpath -o nexusd ./cmd/nexusd`
@@ -107,14 +120,22 @@ still works. Go 1.26.11 or newer is required.
 ### Windows (including Windows Server 2025)
 
 ```powershell
-gh repo clone AlexanderWagnerDev/agent-nexus C:\AgentNexus
+git clone https://github.com/AlexanderWagnerDev/agent-nexus C:\AgentNexus
 powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `
   -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
 ```
 
-The daemon prints a **Pairing SAS** (for example `123-456`). In the hub, open
-**Hosts**, compare the SAS and click **Confirm host**. The host stays blocked
-until this confirmation.
+Official release (after the first approved version):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `
+  -Hub https://nexus.example.com -Name my-laptop -Channel stable
+```
+
+During alpha, add `-Development` to install the newest authenticated workflow
+build. Upgrades run without `-Code`; an existing pairing is kept. The daemon
+prints a **Pairing SAS** (for example `123-456`) on first pairing. In the hub,
+open **Hosts**, compare the SAS and click **Confirm host**.
 
 The installer also installs and starts the per-user background task. Check it
 with:
@@ -128,79 +149,127 @@ duplicate instances and restarts up to three times after a crash. It uses the
 same Windows profile as your coding agents, so their logins, models, skills and
 MCP configuration are available. It needs no administrator rights and no WSL.
 
-To remove it:
+Uninstall the binaries while keeping the host config and pairing:
 
 ```powershell
-& "$env:LOCALAPPDATA\AgentNexus\nexusd.exe" service uninstall
+powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 -Uninstall
 ```
+
+Add `-PurgeConfig` only when the AgentNexus host config should be removed too.
+Native agent data is never touched.
 
 ### Linux
 
 ```bash
-gh repo clone AlexanderWagnerDev/agent-nexus
+git clone https://github.com/AlexanderWagnerDev/agent-nexus
 ./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-The script installs to `~/.local/bin/nexusd` and writes the systemd **user**
-unit to `~/.config/systemd/user/agentnexus.service`. To run it without an
-interactive login, enable lingering once:
+During alpha: `--development`. Upgrades omit `--code`.
+
+The script installs `~/.local/bin/nexusd` and `~/.local/bin/nexus` and writes
+the systemd **user** unit to `~/.config/systemd/user/agentnexus.service`. To run
+it without an interactive login, enable lingering once:
 
 ```bash
 loginctl enable-linger "$USER"
 ```
 
-Uninstall with `nexusd service uninstall`.
+Uninstall with `./scripts/install-host.sh --uninstall` (add
+`--purge-config` to remove the host config as well) or
+`nexusd service uninstall`.
 
 ### macOS
 
 ```bash
-gh repo clone AlexanderWagnerDev/agent-nexus
+git clone https://github.com/AlexanderWagnerDev/agent-nexus
 ./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name macbook
 ```
 
-The LaunchAgent starts at login and is kept alive. Grant Full Disk Access /
-Files and Folders permission if your projects live under `~/Documents`,
-`~/Desktop` or iCloud Drive.
+During alpha: `--development`. The LaunchAgent starts at login and is kept
+alive. Grant Full Disk Access / Files and Folders permission if your projects
+live under `~/Documents`, `~/Desktop` or iCloud Drive. Downloaded binaries are
+not notarized in the alpha; if Gatekeeper blocks one, inspect and remove the
+quarantine attribute explicitly (`xattr -d com.apple.quarantine <path>`) only
+after verifying the release checksum and cosign bundle.
 
 ## 3.1 Host updates
 
-`nexusd` can check and stage releases without any hub involvement. This keeps a
-compromised hub out of the binary trust path.
+The host updates itself; the hub never serves or selects a binary. The trusted
+source is the official GitHub release feed configured locally on the host.
 
-During alpha there is no public release feed, so `update --check` reports that no
-release exists. The staging, verification, rollback and active-run guards remain
-implemented and are exercised against local release fixtures in the test suite.
-A private test feed can be pointed at with `NEXUS_UPDATE_API` and
-`NEXUS_UPDATE_REPO`.
+Default policy for an official installation:
 
-```bash
-nexusd update --check --channel prerelease
-nexusd update --stage --channel prerelease
-nexusd update --install          # refuses while active runs are reported
-nexusd update --install --force  # explicit override
-nexusd update --rollback         # restore nexusd.previous
+```json
+{
+  "updates": {
+    "channel": "stable",
+    "check_interval_minutes": 360,
+    "install_when_idle": true,
+    "require_signature": true,
+    "allow_remote_install": false
+  }
+}
 ```
 
-- A private release feed needs a fine-grained read-only GitHub token with
-  **Contents: read**, exported as `NEXUS_GITHUB_TOKEN` on the host.
-- Every archive is verified against the release `checksums.txt` (SHA-256).
-  If `cosign` is installed, the signed checksum bundle is also verified against
-  the release workflow identity. `--allow-checksum-only` is the explicit
-  fallback for hosts without cosign.
-- `--install` requires the per-user service and keeps `nexusd.previous` for
-  rollback. It reads `runtime.json` and refuses to restart while active runs
-  are reported; `--force` is an explicit override.
-- Windows update logs are written to `%APPDATA%\AgentNexus\update.log`; the
-  helper stops and restarts the Task Scheduler task. Linux uses the systemd
-  user unit and macOS the LaunchAgent.
-- The host identity, config, native agent stores and credentials are not
+- `stable` accepts only non-prerelease releases. `prerelease` also accepts
+  explicitly published prereleases. `development` uses the prerelease feed;
+  development workflow artifacts are installed only through the installer.
+- Checks run at startup and about every six hours (configurable, 15 minutes to
+  seven days) with jitter, ETag caching and exponential backoff on errors. A
+  successful hub reconnect triggers an early check; the hub is not required for
+  update detection.
+- Downloads are limited to GitHub; redirects may not downgrade HTTPS and the
+  GitHub token is only sent to GitHub hosts. Archives are size-bounded and only
+  the expected binary is extracted (no path traversal or symlink following).
+- SHA-256 is always verified. With the default `require_signature: true`, a
+  valid cosign keyless bundle for this repository's release workflow is
+  required; a missing or invalid signature never falls back silently.
+  Checksum-only is an explicit weaker mode:
+
+  ```bash
+  nexusd update --configure --checksum-only
+  ```
+
+- Installation waits until no terminal, structured or ACP run is active and
+  new runs are rejected during the replacement. It requires the per-user
+  service. `nexusd.previous` is kept for rollback; repeated failed starts roll
+  back automatically and block that version until an operator clears it.
+- The host identity, `nexusd.json`, native agent stores and credentials are not
   touched.
 
-A safe automatic maintenance window can run `nexusd update --install` from the
-OS scheduler. It will no-op when up to date and refuse while runs are active.
-On Windows create a weekly task; on Linux/macOS use a systemd user timer or a
-LaunchAgent. Set `NEXUS_GITHUB_TOKEN` in that task's environment. Do not enable
-`--force` in an automatic task.
+Commands:
+
+```bash
+nexusd update --status
+nexusd update --check
+nexusd update --stage
+nexusd update --install          # refuses while active runs are reported
+nexusd update --install --force  # explicit operator override
+nexusd update --rollback         # restore nexusd.previous
+nexusd update --configure --channel stable --auto on --install-when-idle on
+nexusd update --configure --require-signature
+nexusd update --configure --allow-remote-install on
+nexusd update --configure --unblock 0.1.1
+```
+
+Automatic installation can be disabled locally with
+`nexusd update --configure --auto off`. A private mirror or test feed can be
+selected with `NEXUS_UPDATE_API` and `NEXUS_UPDATE_REPO`; a private repository
+needs a read-only `NEXUS_GITHUB_TOKEN` with **Contents: read**. `NEXUS_AUTO_UPDATE=0`
+is an emergency environment override for the current process.
+
+The hub shows the host version, available update, channel, auto-update and
+signature mode, last check, last success, current state and the last error. A
+manager may request installation from the host page, but the host performs it
+only when `allow_remote_install` is enabled locally. A blocked version must be
+unblocked on the host.
+
+Windows update logs are written to `%APPDATA%\AgentNexus\update.log`. The
+detached helper stops the Task Scheduler task, replaces the executable, starts
+the task and checks that the expected version reports from `runtime.json`; it
+restores the previous binary when that check fails. Linux uses the systemd user
+unit and macOS the LaunchAgent.
 
 ## 4. Start using existing chats
 
@@ -244,19 +313,22 @@ WebSocket path through the proxy.
 
 ## Updating
 
-1. Back up `hub.db` (see [OPERATIONS.md](OPERATIONS.md)).
+1. Back up `hub.db`, `secret.key` and `hub-signing.key`
+   (see [OPERATIONS.md](OPERATIONS.md)).
 2. Change `NEXUS_TAG` to the new image tag and run `docker compose up -d`.
-3. Update `nexusd` on each host with the installer again
-   (`install-host.ps1` or `install-host.sh`). The installer requires the
-   artifact SHA-256, runs the downloaded binary's version check, and refuses to
-   replace a daemon that reports active agent runs. `-Force` (PowerShell) or
-   `--force` (shell) still asks for an explicit `FORCE` confirmation. It keeps
-   `nexusd.previous` and restores it if service installation fails.
-4. Check `nexusd doctor`, `/healthz` and `/readyz`.
+3. Host daemons update themselves on the configured channel when idle. Check
+   `nexusd update --status` and `nexusd doctor` afterwards. To update a specific
+   host immediately, run `nexusd update --install`; it refuses while agent runs
+   are active unless `--force` is used after a deliberate check.
+4. Re-running the installer is an alternative and also verifies the release
+   archive. It keeps `nexusd.previous`, preserves the host identity and restores
+   the previous binary if service installation fails.
+5. Check `/healthz` and `/readyz` on the hub.
 
-For a release-independent update on a host, the same installer can be re-run
-at any time. The signed `nexusd update` command remains the path for a future
-release feed; it is not usable until the first version is approved.
+Upgrade the hub before hosts when a release changes the host protocol. New
+hosts negotiate capabilities, so older hosts keep working with features they
+support; the hub shows unsupported capabilities instead of silently enabling
+them.
 
 ## Uninstalling a host
 

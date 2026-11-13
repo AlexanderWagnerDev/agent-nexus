@@ -378,18 +378,35 @@ sessions and fork enabled, and the forbidden-argument list above.
 
 ## Host update trust chain
 
-- The hub never serves or selects `nexusd` binaries. The host queries GitHub
-  releases and downloads the archive and `checksums.txt` directly.
-- Every archive is matched against the release checksum; the checksum bundle is
-  verified with cosign keyless verification (release workflow identity) when
-  cosign is available. `--allow-checksum-only` is an explicit operator choice.
-- The daemon publishes `runtime.json` with its active-run count. The updater
-  refuses to restart the service while runs are active unless `--force` is
-  used. It keeps `nexusd.previous` for rollback and preserves host identity and
-  agent configuration.
+- The hub never serves or selects `nexusd` binaries. The host queries the
+  official GitHub release feed configured locally and downloads the archive and
+  `checksums.txt` directly. Local settings can only be changed on the host;
+  `updates.allow_remote_install` defaults to `false`.
+- Every archive is matched against the release checksum (SHA-256). With the
+  default `updates.require_signature: true`, the checksum file must also verify
+  with cosign keyless verification against this repository's release workflow
+  identity. A missing or invalid signature fails the update; it never falls
+  back silently. `nexusd update --configure --checksum-only` is an explicit
+  weaker mode and is shown as such in the UI.
+- Downloads accept only GitHub hosts for token forwarding, reject HTTPS-to-HTTP
+  redirects, are size-bounded, and extract only the expected regular file.
+  The GitHub token is never sent to a lookalike host.
+- The daemon publishes `runtime.json` with an active-run count and a 30-second
+  heartbeat, and rejects new runs while an installation is in progress. The
+  updater waits for all terminal, structured and ACP runs to finish unless an
+  operator explicitly forces it.
+- The staged binary must report the expected version before replacement.
+  `nexusd.previous` is preserved; the Windows helper verifies that the new
+  process reports the expected version and restores the previous binary when it
+  does not. Unix uses a detached watchdog and the daemon's post-start
+  verification; repeated failures block the version instead of looping.
+- The host identity, configuration, native agent stores and credentials are
+  never part of an update.
 - A compromised hub cannot inject an executable into this path. A compromised
-  GitHub repository/account or a host without cosign (and with
-  `--allow-checksum-only`) remains a residual risk.
+  GitHub repository/account, a compromised host account, or an operator who
+  explicitly selects checksum-only verification remains a residual risk.
+- macOS notarization and Windows Authenticode signing are not available in the
+  alpha. SHA-256 and cosign verification are the current release trust chain.
 
 ## Signed-command mode (Phase 5)
 
@@ -448,7 +465,7 @@ non-repudiation but not protection against a compromised hub.
 - Dependencies pinned via `go.sum` and the web lockfile; changes reviewed; automated vulnerability scanning (`govulncheck`, `npm audit`/OSV) and license checks in CI.
 - Releases built in CI from tagged commits, with SBOM (SPDX/CycloneDX), checksums and cosign signatures; reproducible build goal.
 - macOS notarization and Windows Authenticode signing for `nexusd` (Q-03).
-- Optional self-update of `nexusd` verifies signatures before replacing the binary; updates are never forced by the hub.
+- Host auto-updates verify checksums and signatures before replacing the binary, wait for idle work, verify the started version and roll back on failure; updates are never forced by the hub.
 - AgentNexus never downloads or executes agent binaries (including ACP registry entries) automatically; agents are installed by the user.
 
 ## 18. Deployment hardening checklist

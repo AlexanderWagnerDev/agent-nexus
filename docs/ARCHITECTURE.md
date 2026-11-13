@@ -215,10 +215,30 @@ flowchart TB
 | Approval broker | Receives approval requests from structured drivers, applies policy (auto-deny forbidden actions), forwards to hub, enforces timeouts (default 10 min → deny). |
 | Search service | Answers federated search queries from the host-local FTS5 index, with a tolerant linear adapter scan while the index is building. |
 | PTY layer | Cross-platform PTY with resize, UTF-8 handling, signal delivery and process-tree termination (process groups on Unix, Job Objects on Windows; the child starts suspended and is assigned before it can spawn descendants). |
+| Updater | Host-local auto-update loop: cached release checks, channel policy, signature/checksum verification, staged binary version check, idle gate, service restart, post-start verification and rollback. Reports metadata only to the hub. |
 
 ### 4.1 Process model
 
 `nexusd` is a single long-lived process per user per host (ADR-012). Every run spawns the agent as a child process (terminal mode: inside a PTY; structured mode: stdio pipes or a loopback HTTP server). Children inherit a **scrubbed environment**: the user's normal login environment plus agent-specific variables, minus AgentNexus secrets. If `nexusd` restarts, structured-mode children are stopped gracefully (their sessions are already persisted natively by the agent); terminal-mode children are also stopped — a later version may hand PTYs to a small supervisor to survive daemon upgrades.
+
+### 4.2 Host update flow
+
+1. The updater checks the official GitHub release feed with an ETag and applies
+   the locally configured channel (`stable`, `prerelease`, `development`).
+2. A new release is downloaded to a temporary directory, bounded in size and
+   verified against `checksums.txt` (SHA-256) and, by default, the cosign
+   keyless bundle.
+3. Only `nexusd` is extracted from the archive; the staged executable must
+   report the release version.
+4. The updater sets a local update gate, waits until all run maps are empty and
+   rejects new runs while the gate is active.
+5. The current executable is kept as `nexusd.previous`; the new binary replaces
+   it. Windows uses a detached Task Scheduler helper that verifies the started
+   version. Unix restarts the systemd user unit or launchd agent and starts a
+   detached watchdog copy of the previous binary.
+6. `update-state.json` records the phase. Repeated failed starts roll back and
+   block the version. The host reports the metadata to the hub; the hub cannot
+   change the channel, trust mode or source.
 
 ## 5. Agent adapter model
 

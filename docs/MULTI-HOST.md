@@ -45,11 +45,12 @@ The per-user service inherits that profile, so OpenCode logins, models, skills
 and MCP config are available.
 
 ```powershell
-# 1. Install or update the daemon from an authenticated development build.
-#    The installer verifies the artifact checksum and executable, refuses while
+# 1. Install or update from the official release archive. During alpha add
+#    -Development to use the authenticated workflow build instead.
+#    The installer verifies the archive checksum and executable, refuses while
 #    runs are active, and only interrupts them after -Force plus typing FORCE.
-#    No Go toolchain and no release archive are required.
-gh repo clone AlexanderWagnerDev/agent-nexus C:\AgentNexus
+#    No Go toolchain and no GitHub CLI are required for a release.
+git clone https://github.com/AlexanderWagnerDev/agent-nexus C:\AgentNexus
 powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `
   -Hub https://nexus.example.com -Code XXXX-XXXX -Name win-1
 
@@ -72,12 +73,12 @@ setx NEXUS_GITHUB_TOKEN "github_pat_..."
 ```
 
 Restart the task once (`schtasks /End /TN "AgentNexus Host"` and `/Run`) so the
-new environment is visible. Without the token, pairing and normal operation
-work; only update checks are unavailable.
+new environment is visible. The public repository needs no token for normal
+release checks.
 
-Install cosign on hosts that should verify the signed checksum bundle
-automatically. Without cosign, updates require
-`nexusd update --install --allow-checksum-only` and are an explicit decision.
+Install cosign on hosts that should verify the signed checksum bundle. The
+default local policy requires signature verification; checksum-only is an
+explicit decision (`nexusd update --configure --checksum-only`).
 
 ## 3. Native OpenCode sessions
 
@@ -132,25 +133,33 @@ daemon versions and the observed result for each line in
 
 ## 5. Updates and rollback
 
-On a host, when no runs are active:
+Each host checks at startup and every six hours on the configured channel and
+installs an update automatically when no agent run is active. The host page
+shows the current phase, channel, signature mode and last error. Manual
+commands when needed:
 
 ```powershell
 cd C:\AgentNexus
-.\nexusd.exe update --check --channel prerelease
+.\nexusd.exe update --status
+.\nexusd.exe update --check
 .\nexusd.exe update --install
-```
-
-The updater verifies the archive checksum and, when cosign is installed, the
-signed bundle; it preserves the host identity and keeps
-`nexusd.exe.previous`. If the update fails, the Windows helper rolls back
-automatically and logs to `%APPDATA%\AgentNexus\update.log`. Manual rollback:
-
-```powershell
 .\nexusd.exe update --rollback
 ```
 
-Run these from an OS maintenance task if desired; without `--force` the updater
-refuses while active runs are reported.
+The updater verifies the archive checksum and, with the default policy, the
+cosign bundle; it preserves the host identity and keeps `nexusd.exe.previous`.
+The Windows helper verifies that the expected version starts before it reports
+success, and restores the previous binary when it does not. Logs are written to
+`%APPDATA%\AgentNexus\update.log`. A failed version is blocked after repeated
+attempts:
+
+```powershell
+.\nexusd.exe update --configure --unblock 0.1.1
+```
+
+`allow_remote_install` is off by default; the hub can request an installation
+only after it is enabled locally. The hub can never change the channel,
+signature policy or release source.
 
 ## 6. Troubleshooting
 

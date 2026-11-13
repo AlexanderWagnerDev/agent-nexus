@@ -13,6 +13,8 @@ and what has actually been tested, not the 1.0 target.
 | Hub web assets | embedded in `nexus-hub` |
 | Host config and key | `<config-dir>/AgentNexus/nexusd.json` (mode `0600` where the OS supports it) |
 | Host audit log | `<config-dir>/AgentNexus/audit.log` (JSONL) |
+| Host updater state | `<config-dir>/AgentNexus/update-state.json` (metadata only, mode `0600`) |
+| Host update log | `<config-dir>/AgentNexus/update.log` (Windows helper) |
 | Host session cache | in memory; rebuilt from the native agent stores on restart |
 | Hub audit log | `audit` table in `hub.db` (hash-chained) |
 
@@ -125,57 +127,92 @@ needs no backup beyond `nexusd.json`; native sessions are owned by the agents.
 
 ## Host updates
 
-The host can self-update without a hub-managed binary feed:
+The host updates itself without a hub-managed binary feed. Downloads come from
+the official GitHub release repository configured locally; the hub never
+selects or serves an executable.
 
 ```bash
-nexusd update --check --channel prerelease
-nexusd update --install
+nexusd update --status
+nexusd update --check
+nexusd update --stage
+nexusd update --install          # refuses while agent runs are active
 nexusd update --rollback
 ```
 
-Downloads come from GitHub releases, not the hub. There is no release feed
-during alpha, so `--check` reports that no release exists until the maintainer
-publishes the first approved version. A private test feed can be selected with
-`NEXUS_UPDATE_API` and `NEXUS_UPDATE_REPO`. The archive SHA-256 is verified
-against `checksums.txt`; the cosign bundle is verified when `cosign` is
-installed. Hosts without cosign must explicitly pass `--allow-checksum-only`.
-A private release repository needs a read-only `NEXUS_GITHUB_TOKEN` with
-Contents access.
+The daemon checks at startup and every six hours (configurable, with jitter,
+ETag caching and exponential backoff) and reports `update.status` to the hub.
+A hub reconnect wakes the check early. The check works while the hub is offline.
+There is no release feed during alpha, so `--check` reports that no release
+exists until the first approved version. A private test feed can be selected
+with `NEXUS_UPDATE_API` and `NEXUS_UPDATE_REPO`; a private repository needs a
+read-only `NEXUS_GITHUB_TOKEN` with Contents access.
 
-`--install` is refused while `runtime.json` reports active runs. It requires an
-installed service, keeps `nexusd.previous`, and restarts the service. Windows
-logs to `%APPDATA%\AgentNexus\update.log`. A forced update is an explicit
-operator decision and can interrupt runs.
+### Channels and local settings
 
-For an unattended maintenance window, schedule `nexusd update --install`
-without `--force`; it is a no-op when current and refuses during active work.
-Keep the hub and host protocol major versions compatible, and upgrade the hub
+```bash
+nexusd update --configure --channel stable
+nexusd update --configure --channel prerelease
+nexusd update --configure --channel development
+nexusd update --configure --auto on
+nexusd update --configure --install-when-idle on
+nexusd update --configure --allow-remote-install off
+nexusd update --configure --require-signature
+nexusd update --configure --checksum-only
+```
+
+`stable` accepts only non-prerelease releases. `prerelease` also accepts
+explicitly published prereleases. `development` uses the prerelease feed;
+workflow artifacts are installed only through the installer. Settings are
+stored in `nexusd.json` and are never changed by the hub. `NEXUS_UPDATE_CHANNEL`
+is a process-level override; `NEXUS_AUTO_UPDATE=0` disables checking for the
+current process.
+
+### Verification and installation
+
+- SHA-256 is always verified against `checksums.txt`.
+- `updates.require_signature` defaults to `true`: a cosign keyless bundle for
+  this repository's release workflow must verify. A missing/invalid signature
+  is an error, never a silent downgrade. Checksum-only is an explicit local
+  decision and is shown as a weaker mode in the UI.
+- Download URLs are restricted to GitHub hosts for token forwarding, HTTPS
+  downgrades are rejected, downloads are size-limited and only the expected
+  binary is extracted (no path traversal or symlink following).
+- The staged binary must report the expected `nexusd` version before it can
+  replace a working installation.
+- Installation requires the per-user service and waits until no terminal,
+  structured or ACP run is active. New runs are rejected during replacement.
+  `nexusd.previous` is kept; Windows keeps an update log at
+  `%APPDATA%\AgentNexus\update.log`.
+- A new version must publish its runtime status. Repeated restarts inside the
+  verification window, or a failed Windows start check, restore
+  `nexusd.previous`. The failed version is blocked after three failures; clear
+  it with `nexusd update --configure --unblock <version>`.
+- The host identity, config, native agent stores and credentials are preserved.
+
+A forced update (`--force`) is an explicit operator decision and can interrupt
+runs. Do not use it in an automatic maintenance task.
+
+**Hosts** shows the installed and latest versions, channel, auto-update and
+signature mode, last check, last success, update state and any error. A manager
+can request installation from the host page only when `allow_remote_install` is
+enabled locally; the host still applies its own channel, signature and idle
+policy. Keep the hub and host protocol majors compatible and upgrade the hub
 before the hosts.
-
-The daemon also checks the release feed at startup and every six hours and
-reports `update.status` to the hub. **Hosts** shows an update badge and the
-installed/latest versions; **Hosts -> host -> Check for updates** triggers an
-immediate signed check. This only reports availability: applying an update
-remains a host CLI action. Set `NEXUS_UPDATE_CHANNEL=prerelease` on the host
-service to include prereleases, and provide `NEXUS_GITHUB_TOKEN` there so the
-background check can read the private release feed. If the feed is
-unreachable, the host detail shows the check error instead of a false
-"up to date".
 
 ## Upgrade
 
 
-1. Back up `hub.db` and `secret.key` (see above).
+1. Back up `hub.db`, `secret.key` and `hub-signing.key` (see above).
 2. Pull the new image / replace `nexus-hub` and restart. Migrations run
    automatically on start.
-3. Replace `nexusd` on each host and restart the per-user service:
-   `nexusd service install` (or restart the existing systemd user unit/launch
-   agent/Task Scheduler task).
+3. Hosts update themselves on the configured channel when idle. To update one
+   immediately, run `nexusd update --install` (without `--force` while agents
+   are active).
 4. Verify `nexusd doctor`, `GET /healthz` and `GET /readyz`.
 
 If a release changes the host-link protocol major version, update hosts before
 or together with the hub; the hub refuses mismatched majors with an upgrade
-hint.
+hint. Older hosts are not silently given features they cannot execute.
 
 ## Windows background service
 

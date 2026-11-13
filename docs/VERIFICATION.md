@@ -1,6 +1,6 @@
 # Verification status
 
-Last updated: 2026-11-13. This file records what was actually executed in the
+Last updated: 2026-11-14. This file records what was actually executed in the
 development environment. It is an evidence record, not a release gate or a
 request for the maintainer to perform tests personally.
 
@@ -9,10 +9,11 @@ request for the maintainer to perform tests personally.
 | Area | Evidence |
 | --- | --- |
 | Go unit/integration | `gofmt -l .`, `go vet ./...`, `go test ./...` pass locally (Windows); CI runs Linux, macOS and Windows plus `go test -race` |
-| Static analysis | `staticcheck` passes; `govulncheck` reports no vulnerabilities |
+| Static analysis | `staticcheck` v0.8.2 passes; `govulncheck` v1.9.0 reports no vulnerabilities; `actionlint` v1.7.12 passes on all workflows |
 | Browser unit tests | `node web/scripts/check-syntax.mjs`, `npm test` pass |
 | Browser smoke | `npm run e2e` passes, including bell badge geometry, focus return for palette/notifications and the five-entry mobile bar with a More menu |
 | Browser UI regressions | `npm run e2e:demo-ui` (with `E2E_SPAWN_DEMO=1`) covers tab dedupe, cross-host project grouping, the bell badge, host overflow actions, the Git diffstat list and the mobile sticky header |
+| Installer syntax | `bash -n scripts/install-host.sh` and the PowerShell parser accept the reworked installers; Docker Compose and both Portainer stacks validate with `docker compose config` when their required variables are set |
 | Virtualized 10k sessions | `node e2e/virtual.mjs`: ~20 rows initially, 33 after 1,400 sessions, 222/252 DOM nodes, no duplicates |
 | Accessibility | axe-core scan passes desktop (dark and light) and mobile for home, projects, sessions, usage, fan-out, runs, hosts, settings and a structured chat; no critical/serious violations |
 | Visual regression | Four stable demo views compare at 0 px; activity views are excluded because elapsed times are live |
@@ -20,6 +21,7 @@ request for the maintainer to perform tests personally.
 | Device signing | Ed25519 and P-256/P1363 signature tests, unsigned-write rejection, per-device nonce replay rejection, step-up key registration and the stop/prompt/approval/input paths |
 | Multi-host simulation | Three fake hosts, six sessions, three parallel structured runs, host-disconnect isolation and hub-restart metadata persistence |
 | Installer/update | Active-run refusal, stale runtime snapshot, checksum and version checks, rollback path, fake-host tests |
+| Auto-update | Unit tests for stable/prerelease channel selection, ETag/304 handling, asset naming, interval clamping, exponential backoff, blocked versions, persisted update state, tar extraction of the expected regular file (symlinks ignored), run gating during installation and missing staged binaries. The complete install/restart/rollback path is exercised only against fixtures, not a real service replacement. |
 | Prompt queue | Store/API tests for order, schedule, pause, atomic claim, lease mismatch, crash recovery, duplicate prevention |
 | Tasks | API tests for creation, ownership isolation, dependency blocking, transitive cycle rejection, readiness propagation, delegation prompt delivery, run/approval lifecycle sync and hub-restart reconciliation |
 | Host health/detail | Unit tests for every health branch and an API test for health, recent sessions, audit access and favorites |
@@ -53,9 +55,14 @@ request for the maintainer to perform tests personally.
 - Real MCP clients (Claude Desktop, Cursor) and real microphone dictation.
 - PostgreSQL backend (not implemented).
 - Container/Portainer runtime in this environment.
-- A live service binary replacement and rollback: the rollback no longer
-  overwrites `nexusd.previous` with the installed binary, but no real Windows
-  Task Scheduler or systemd service was replaced in this environment.
+- A live service binary replacement and rollback on a real Windows Task
+  Scheduler, systemd user unit or launchd agent. The code paths are covered by
+  unit/fixture tests, but no real service was replaced in this environment.
+- A real public release feed: no release exists during alpha. Channel
+  selection, ETag handling and signature/checksum failure paths are covered by
+  local fake release servers.
+- macOS notarization and Windows Authenticode signing: neither exists in the
+  alpha. The installers rely on SHA-256 and cosign keyless verification.
 
 ## Release policy
 

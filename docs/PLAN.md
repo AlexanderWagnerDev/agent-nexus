@@ -14,9 +14,10 @@ This document is the single source of truth for **what** AgentNexus must do (req
   two-pane split workspace, live model/reasoning/agent selection, bounded
   attachments, cross-host repository identity, review-grade diffs, searchable
   model picker, incremental session sync, encrypted hub secrets, signed
-  hub-to-host commands with replay protection, verified host self-updates with
-  rollback, hardened IPv6/proxy Portainer stacks, online backups and per-user
-  services on Linux/macOS/Windows.
+  hub-to-host commands with replay protection, checksum/cosign verified host
+  auto-updates with channel policy, idle gating and rollback, hardened
+  IPv6/proxy Portainer stacks, online backups and per-user services on
+  Linux/macOS/Windows.
 - **Tested on this build:** `go test ./...`, `go vet ./...`, `go test -race`
   (CI; the local Windows shell had no cgo toolchain), `gofmt`, staticcheck, JavaScript unit
   tests, the browser smoke test, an axe-core WCAG scan on desktop and
