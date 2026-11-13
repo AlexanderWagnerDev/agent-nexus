@@ -3,9 +3,9 @@ import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { agentGlyph, badge, stateBadge } from '../ui.js';
 import { newSessionPicker } from '../components/new-session.js';
-import { t } from '../i18n.js';
+import { t, pluralNoun } from '../i18n.js';
 import { svgIcon } from '../icons.js';
-import { countLabel, cwdKey, esc, fmtDuration, fmtRelative, projectName } from '../ui-format.js';
+import { countLabel, cwdKey, esc, fmtDuration, fmtRelative, groupProjects, projectName } from '../ui-format.js';
 
 export async function pageOverview() {
   const pageGen = state.pageGen;
@@ -22,7 +22,8 @@ export async function pageOverview() {
   if (pageGen !== state.pageGen) return;
   document.getElementById('overview-new').addEventListener('click', newSessionPicker);
   const online = hosts.filter((h) => h.status === 'online');
-  const totalSessions = projects.reduce((sum, project) => sum + project.sessions, 0);
+  const projectGroups = groupProjects(projects);
+  const totalSessions = projectGroups.reduce((sum, project) => sum + project.sessions, 0);
   const agents = new Set();
   hosts.forEach((h) => (h.agents || []).forEach((a) => agents.add(a.name)));
   const activeRuns = runs.slice(0, 6);
@@ -36,8 +37,8 @@ export async function pageOverview() {
         <p class="home-sub">${online.length ? `${countLabel(online.length, 'machine', 'machines')} ${t('online')}` : t('No machine online')} · ${countLabel(openWorktrees, 'worktree', 'worktrees')} ${t('with open runs')} · ${countLabel(agents.size, 'agent type', 'agent types')}</p>
       </div>
       <div class="home-stats">
-        <span><strong>${totalSessions}</strong> ${t(totalSessions === 1 ? 'session' : 'sessions')}</span>
-        <span><strong>${projects.length}</strong> ${t(projects.length === 1 ? 'project' : 'projects')}</span>
+        <span><strong>${totalSessions}</strong> ${pluralNoun(totalSessions, 'session', 'sessions')}</span>
+        <span><strong>${projectGroups.length}</strong> ${pluralNoun(projectGroups.length, 'project', 'projects')}</span>
         <span><strong>${liveRuns.length}</strong> ${t('working')}</span>
         <span><strong>${openTasks.length}</strong> ${t('open tasks')}</span>
       </div>
@@ -51,7 +52,7 @@ export async function pageOverview() {
     <div class="home-columns">
       <section>
         <div class="section-head"><h2>${t('Projects')}</h2><a class="small" href="#/projects">${t('All projects')}</a></div>
-        ${projects.length ? `<div class="project-list">${projects.slice(0, 7).map(projectRow).join('')}</div>` : `<div class="card empty"><strong>${t('No projects yet')}</strong>${t('Pair a host and native sessions will be discovered automatically.')}</div>`}
+        ${projectGroups.length ? `<div class="project-list">${projectGroups.slice(0, 7).map(projectRow).join('')}</div>` : `<div class="card empty"><strong>${t('No projects yet')}</strong>${t('Pair a host and native sessions will be discovered automatically.')}</div>`}
       </section>
       <section>
         <div class="section-head"><h2>${t('Recent sessions')}</h2><a class="small" href="#/sessions">${t('All sessions')}</a></div>
@@ -79,12 +80,18 @@ export function runCard(run) {
   </a>`;
 }
 
-export function projectRow(p) {
-  return `<a class="project-row" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">
+export function projectRow(group) {
+  const first = group.projects[0];
+  const href = group.url
+    ? `#/sessions?repo=${encodeURIComponent(group.url)}`
+    : `#/sessions?project=${encodeURIComponent(first.cwd)}&host=${encodeURIComponent(first.host_id)}`;
+  const hostNames = group.hosts.map((host) => host.name).join(', ');
+  const sameRepo = group.hosts.length > 1;
+  return `<a class="project-row" href="${href}">
     <span class="project-row-icon">${svgIcon('folder', 17)}</span>
-    <span class="project-row-main"><strong>${esc(p.name)}</strong><small>${esc(p.host_name)}${p.branch ? ` · ${esc(p.branch)}` : ''} · ${countLabel(p.sessions, 'session', 'sessions')}</small></span>
-    <span class="project-row-agents">${(p.agents || []).slice(0, 3).map((agent) => agentGlyph(agent, 'tiny')).join('')}${p.active ? `<span class="active-pill">${t('{n} active', { n: p.active })}</span>` : ''}</span>
-    <span class="project-row-time">${esc(fmtRelative(p.last_at))}</span>
+    <span class="project-row-main"><strong>${esc(group.name)}</strong><small>${esc(hostNames)}${group.branches[0] ? ` · ${esc(group.branches[0])}` : ''} · ${countLabel(group.sessions, 'session', 'sessions')}${sameRepo ? ` · ${countLabel(group.hosts.length, 'host', 'hosts')}` : ''}</small></span>
+    <span class="project-row-agents">${group.agents.slice(0, 3).map((agent) => agentGlyph(agent, 'tiny')).join('')}${group.active ? `<span class="active-pill">${t('{n} active', { n: group.active })}</span>` : ''}</span>
+    <span class="project-row-time">${esc(fmtRelative(group.lastAt))}</span>
   </a>`;
 }
 

@@ -1,6 +1,6 @@
 /* Formatting and agent metadata helpers shared by the browser views. */
 
-import { t, getLang } from './i18n.js';
+import { t, getLang, tp } from './i18n.js';
 import { svgIcon } from './icons.js';
 
 export function esc(value) {
@@ -54,7 +54,7 @@ export function shortId(id) {
 }
 
 export function countLabel(count, singular, plural) {
-  return `${count} ${t(count === 1 ? singular : plural)}`;
+  return tp(count, singular, plural);
 }
 
 export const AGENTS = {
@@ -85,6 +85,46 @@ export function projectName(cwd) {
 
 export function cwdKey(cwd) {
   return String(cwd || '').replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
+}
+
+/** Lowercase a git remote so the same repository on several hosts collapses. */
+export function normalizeRepoURL(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  return value.replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+}
+
+/**
+ * Group project rows by normalized remote URL. Worktrees without a remote fall
+ * back to host + path, so unrelated local projects never merge. Used by Home,
+ * the sidebar and the Projects page so all three show one row per repository.
+ */
+export function groupProjects(projects) {
+  const groups = new Map();
+  for (const project of projects || []) {
+    const remote = normalizeRepoURL(project.repo_url);
+    const key = remote ? `url:${remote}` : `path:${project.host_id}:${cwdKey(project.cwd)}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        key, url: project.repo_url || '', name: projectName(project.cwd),
+        cwd: project.cwd, host_id: project.host_id,
+        projects: [], hosts: [], branches: [], agents: [],
+        sessions: 0, active: 0, lastAt: project.last_at,
+      };
+      groups.set(key, group);
+    }
+    group.projects.push(project);
+    if (!group.hosts.some((host) => host.id === project.host_id)) {
+      group.hosts.push({ id: project.host_id, name: project.host_name || project.host_id });
+    }
+    if (project.branch && !group.branches.includes(project.branch)) group.branches.push(project.branch);
+    for (const agent of project.agents || []) if (!group.agents.includes(agent)) group.agents.push(agent);
+    group.sessions += project.sessions || 0;
+    group.active += project.active || 0;
+    if (new Date(project.last_at) > new Date(group.lastAt)) group.lastAt = project.last_at;
+  }
+  return [...groups.values()].sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
 
 // The host detects a native terminal session by scanning running process

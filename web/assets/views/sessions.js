@@ -47,7 +47,7 @@ function groupSessions(sessions) {
 function groupHead(group) {
   return `<div class="session-group-head virtual-group">
     <span>${svgIcon('folder', 14)}<strong>${esc(group.name)}</strong><code>${esc(group.cwd)}</code></span>
-    <span>${[...group.branches].slice(0, 3).map((b) => `<span class="branch-chip">${svgIcon('branch', 12)}${esc(b)}</span>`).join('')}${group.roots.size > 1 ? `<span class="muted">${t('{n} worktrees', { n: group.roots.size })}</span>` : ''}<span class="muted">${esc([...group.hosts].join(', '))} &middot; ${group.rows.length}</span></span>
+    <span>${[...group.branches].slice(0, 3).map((b) => `<span class="branch-chip">${svgIcon('branch', 12)}${esc(b)}</span>`).join('')}${group.roots.size > 1 ? `<span class="muted">${countLabel(group.roots.size, 'worktree', 'worktrees')}</span>` : ''}<span class="muted">${esc([...group.hosts].join(', '))} &middot; ${countLabel(group.rows.length, 'session', 'sessions')}</span></span>
   </div>`;
 }
 
@@ -71,6 +71,7 @@ export async function pageSessions() {
   const tags = tagData.tags || [];
   const activityProject = params.get('project') || '';
   const activityHost = params.get('host') || '';
+  const repo = params.get('repo') || '';
   const view = setPage(t('Sessions'), t('Discovered natively from each host; nothing is copied or rewritten.'), `${activityProject ? `<button class="btn small" id="session-activity">${t('Activity')}</button>` : ''}<button class="btn primary small" id="sessions-new">${t('New session')}</button>`);
   const period = params.get('period') || 'any';
   view.innerHTML = `
@@ -110,13 +111,13 @@ export async function pageSessions() {
       const pad = (n) => String(n).padStart(2, '0');
       const localDate = (value) => `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
       modal(`
-        <div class="split"><h2>${t('Project activity')}</h2><span class="muted small">${t('{n} sessions · {runs} runs', { n: data.sessions || 0, runs: data.runs || 0 })}</span></div>
+        <div class="split"><h2>${t('Project activity')}</h2><span class="muted small">${countLabel(data.sessions || 0, 'session', 'sessions')} · ${countLabel(data.runs || 0, 'run', 'runs')}</span></div>
         <p class="hint">${t('Click a day to open its sessions.')}</p>
         <div class="activity-heatmap" role="group" aria-label="${t('90-day activity heatmap')}">
           ${(data.days || []).map((day) => {
             const total = day.sessions + day.runs;
             const level = total === 0 ? 0 : Math.min(4, 1 + Math.floor((total / max) * 3));
-            return `<button class="activity-cell level-${level}" type="button" data-activity-date="${esc(day.date)}" title="${esc(day.date)} · ${t('{n} sessions', { n: day.sessions })} · ${t('{n} runs', { n: day.runs })}"></button>`;
+            return `<button class="activity-cell level-${level}" type="button" data-activity-date="${esc(day.date)}" title="${esc(day.date)} · ${countLabel(day.sessions, 'session', 'sessions')} · ${countLabel(day.runs, 'run', 'runs')}"></button>`;
           }).join('')}
         </div>
         <div class="split activity-legend"><span class="muted small">${esc(data.days?.[0]?.date || '')}</span><span class="muted small">${esc(data.days?.[data.days.length - 1]?.date || '')}</span></div>
@@ -153,8 +154,12 @@ export async function pageSessions() {
   const clearProject = () => {
     const node = document.getElementById('project-filter');
     if (!node) return;
-    node.hidden = !project;
-    node.innerHTML = project ? `<span>${svgIcon('folder', 13)}${esc(projectName(project))}</span><code>${esc(project)}</code><button class="icon-btn" id="clear-project" type="button" aria-label="${t('Clear project filter')}">${svgIcon('x', 13)}</button>` : '';
+    const active = project || repo;
+    node.hidden = !active;
+    const label = repo
+      ? `<span>${svgIcon('git', 13)}${esc(repo)}</span>`
+      : `<span>${svgIcon('folder', 13)}${esc(projectName(project))}</span><code>${esc(project)}</code>`;
+    node.innerHTML = active ? `${label}<button class="icon-btn" id="clear-project" type="button" aria-label="${t('Clear project filter')}">${svgIcon('x', 13)}</button>` : '';
     document.getElementById('clear-project')?.addEventListener('click', () => {
       const url = new URL(location.href);
       url.hash = '#/sessions';
@@ -295,6 +300,7 @@ export async function pageSessions() {
       const tag = document.getElementById('filter-tag').value;
       if (tag) q.set('tag', tag);
       if (project) q.set('project', project);
+      if (repo) q.set('repo', repo);
       const period = document.getElementById('filter-period').value;
       if (period === '24h') q.set('since', isoDaysAgo(1));
       if (period === '7d') q.set('since', isoDaysAgo(7));

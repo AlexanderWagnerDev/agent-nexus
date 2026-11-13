@@ -8,7 +8,7 @@ import { countLabel, esc, projectName } from '../ui-format.js';
 
 export async function pageWorkspace() {
   const pageGen = state.pageGen;
-  renderShell('runs');
+  renderShell('workspace');
   const view = setPage(t('Workspace'), t('Side-by-side agent sessions from any host.'), `<button class="btn small" id="workspace-add">${t('Add session')}</button><a class="btn small" href="#/runs">${t('Control room')}</a>`);
   const { runs } = await api('/runs');
   if (pageGen !== state.pageGen) return;

@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { agentMeta, esc, fmtStamp, projectName } from '../ui-format.js';
+import { agentMeta, countLabel, esc, fmtStamp, projectName } from '../ui-format.js';
 import { badge, toast } from '../ui.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
@@ -73,7 +73,7 @@ export async function pageFanout() {
     </section>
     <section class="card">
       <h2 class="mt-0">${t('Recent fan-outs')}</h2>
-      ${(fanouts || []).length ? `<div class="fanout-history">${fanouts.map((item) => `<button class="fanout-history-row" type="button" data-fanout="${esc(item.id)}"><span>${esc(item.prompt)}</span><small>${esc(fmtStamp(item.created_at))} · ${t('{n} runs', { n: item.runs.length })}</small></button>`).join('')}</div>` : `<p class="muted">${t('No fan-outs yet.')}</p>`}
+      ${(fanouts || []).length ? `<div class="fanout-history">${fanouts.map((item) => `<button class="fanout-history-row" type="button" data-fanout="${esc(item.id)}"><span>${esc(item.prompt)}</span><small>${esc(fmtStamp(item.created_at))} · ${countLabel(item.runs.length, 'run', 'runs')}</small></button>`).join('')}</div>` : `<p class="muted">${t('No fan-outs yet.')}</p>`}
     </section>`;
 
   const targetsEl = document.getElementById('fanout-targets');

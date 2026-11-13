@@ -9,7 +9,7 @@ import { connectWS } from './ws.js';
 import { applyDiffMode } from './components/transcript.js';
 import { t } from './i18n.js';
 import { svgIcon } from './icons.js';
-import { countLabel, cwdKey, esc } from './ui-format.js';
+import { countLabel, cwdKey, esc, groupProjects } from './ui-format.js';
 
 export const navItems = [
   ['#/', 'Home', 'home', 'overview'],
@@ -19,9 +19,22 @@ export const navItems = [
   ['#/usage', 'Usage', 'usage', 'usage'],
   ['#/fanout', 'Fan-out', 'branch', 'fanout'],
   ['#/runs', 'Active', 'runs', 'runs'],
+  ['#/workspace', 'Workspace', 'panelRight', 'workspace'],
   ['#/hosts', 'Hosts', 'hosts', 'hosts'],
   ['#/settings', 'Settings', 'settings', 'settings'],
 ];
+
+const mobilePrimary = new Set(['overview', 'projects', 'sessions', 'runs', 'hosts']);
+
+function mobileMoreDialog() {
+  const secondary = navItems.filter(([, , , key]) => !mobilePrimary.has(key));
+  modal(`<h2>${t('More')}</h2>
+    <nav class="mobile-more-list" aria-label="${t('More navigation')}">
+      ${secondary.map(([href, label, icon]) => `<a class="mobile-more-row" href="${href}">${svgIcon(icon)}<span>${t(label)}</span></a>`).join('')}
+    </nav>
+    <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Close')}</button></div>`);
+  modalRoot.querySelectorAll('.mobile-more-row').forEach((link) => link.addEventListener('click', closeModal));
+}
 
 export function renderShell(active = 'overview') {
   const initials = (state.me?.username || '?').slice(0, 1).toUpperCase();
@@ -40,9 +53,12 @@ export function renderShell(active = 'overview') {
         </div>
         <nav class="nav" aria-label="${t('Main navigation')}">
           ${navItems.map(([href, label, icon, key]) => `
-            <a href="${href}" class="${key === active ? 'active' : ''}" title="${t(label)}">
+            <a href="${href}" class="${key === active ? 'active' : ''} ${mobilePrimary.has(key) ? 'nav-primary' : 'nav-secondary'}" title="${t(label)}">
               <span class="icon" aria-hidden="true">${svgIcon(icon)}</span><span class="nav-label">${t(label)}</span>
             </a>`).join('')}
+          <button class="nav-more" id="mobile-more" type="button" aria-label="${t('More navigation')}" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">${svgIcon('menu')}</span><span class="nav-label">${t('More')}</span>
+          </button>
         </nav>
         <div class="sidebar-extra" id="sidebar-extra"><div class="side-loading"><span class="spinner"></span></div></div>
         <div class="sidebar-foot">
@@ -72,7 +88,7 @@ export function renderShell(active = 'overview') {
         </header>
         <div class="tabs-bar" id="tabs-bar"></div>
         <div class="view" id="view"></div>
-        <div class="notif-popover" id="notif-panel" hidden></div>
+        <div class="notif-popover" id="notif-panel" tabindex="-1" hidden></div>
       </main>
     </div>`;
   document.getElementById('logout').addEventListener('click', logout);
@@ -80,6 +96,7 @@ export function renderShell(active = 'overview') {
   document.getElementById('sidebar-toggle')?.addEventListener('click', toggleSidebar);
   document.getElementById('command-trigger')?.addEventListener('click', openPalette);
   document.getElementById('notif-toggle')?.addEventListener('click', toggleNotifications);
+  document.getElementById('mobile-more')?.addEventListener('click', mobileMoreDialog);
   document.getElementById('theme-toggle')?.addEventListener('click', async () => {
     const order = ['system', 'dark', 'light'];
     const current = state.settings.theme || 'system';
@@ -152,17 +169,24 @@ export async function loadSidebar() {
     const active = sessions.filter((s) => s.state === 'running' || s.state === 'waiting_for_input').slice(0, 5);
     const recent = sessions.slice(0, 6);
     const pinned = favorites.sessions || [];
-    const projectGroups = (projects || []).slice(0, 6).map((p) => {
-      const items = sessions.filter((s) => s.host_id === p.host_id && cwdKey(s.cwd) === cwdKey(p.cwd)).slice(0, 3);
-      return `<details class="side-project" ${p.active ? 'open' : ''}>
-        <summary title="${esc(p.cwd)}">
-          <span class="side-project-name">${svgIcon('folder')}<span class="truncate">${esc(p.name)}</span></span>
-          ${p.active ? `<span class="count active">${p.active}</span>` : `<span class="count">${p.sessions}</span>`}
+    const projectGroups = groupProjects(projects).slice(0, 6).map((group) => {
+      const first = group.projects[0];
+      const items = sessions.filter((s) => group.projects.some((p) => s.host_id === p.host_id && cwdKey(s.cwd) === cwdKey(p.cwd))).slice(0, 3);
+      const href = group.url
+        ? `#/sessions?repo=${encodeURIComponent(group.url)}`
+        : `#/sessions?project=${encodeURIComponent(first.cwd)}&host=${encodeURIComponent(first.host_id)}`;
+      const meta = group.hosts.length > 1
+        ? `${group.hosts.length} ${t('hosts')}`
+        : esc(group.hosts[0]?.name || group.host_id);
+      return `<details class="side-project" ${group.active ? 'open' : ''}>
+        <summary title="${esc(first.cwd)}">
+          <span class="side-project-name">${svgIcon('folder')}<span class="truncate">${esc(group.name)}</span></span>
+          ${group.active ? `<span class="count active">${group.active}</span>` : `<span class="count">${group.sessions}</span>`}
           ${svgIcon('chevronRight')}
         </summary>
-        <div class="side-project-meta">${esc(p.host_name)}${p.branch ? ` · ${esc(p.branch)}` : ''}</div>
+        <div class="side-project-meta">${meta}${group.branches[0] ? ` · ${esc(group.branches[0])}` : ''}</div>
         ${items.map(sidebarSession).join('')}
-        <a class="side-more" href="#/sessions?project=${encodeURIComponent(p.cwd)}&host=${encodeURIComponent(p.host_id)}">${t('All')} ${countLabel(p.sessions, 'session', 'sessions')}</a>
+        <a class="side-more" href="${href}">${t('All')} ${countLabel(group.sessions, 'session', 'sessions')}</a>
       </details>`;
     }).join('');
     const hostRows = [...hosts].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name)).slice(0, 5).map((h) => `<a class="side-row" href="#/hosts/${encodeURIComponent(h.id)}" title="${esc(h.name)}"><span class="side-state ${h.status === 'online' ? 'online' : ''}"></span><span class="truncate">${h.favorite ? '★ ' : ''}${esc(h.name)}</span><span class="side-meta">${(h.agents || []).length}</span></a>`).join('');
@@ -257,7 +281,10 @@ export function installGlobalUi() {
       if (state.palette) closePalette();
       if (modalRoot.firstElementChild) { closeModal(); return; }
       const panel = document.getElementById('notif-panel');
-      if (panel) panel.hidden = true;
+      if (panel && !panel.hidden) {
+        panel.hidden = true;
+        document.getElementById('notif-toggle')?.focus();
+      }
       document.getElementById('layout')?.classList.remove('mobile-sidebar-open');
       const chatPage = document.getElementById('chat-page');
       if (chatPage?.classList.contains('context-open')) {
@@ -317,6 +344,9 @@ export function installGlobalUi() {
     const panel = document.getElementById('notif-panel');
     const toggle = document.getElementById('notif-toggle');
     if (panel && !panel.hidden && !panel.contains(event.target) && !toggle?.contains(event.target)) panel.hidden = true;
+    document.querySelectorAll('details.action-menu[open]').forEach((menu) => {
+      if (!menu.contains(event.target)) menu.removeAttribute('open');
+    });
   });
   document.addEventListener('click', (event) => {
     const button = event.target.closest('.md-copy');

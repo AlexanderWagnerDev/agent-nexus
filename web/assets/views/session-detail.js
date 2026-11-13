@@ -31,7 +31,7 @@ export async function pageSession(id) {
     structuredAllowed = Boolean(info?.capabilities?.includes('structured'));
   } catch { /* keep the previous capability assumption */ }
   if (pageGen !== state.pageGen) return;
-  openTab({ id: s.id, key: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.local_title || s.title || 'Untitled session', agent: s.agent });
+  openTab({ id: s.id, key: s.id, session_id: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.local_title || s.title || 'Untitled session', agent: s.agent });
   rememberRecent({ id: s.id, title: s.local_title || s.title || 'Untitled session', agent: s.agent, hint: `${agent.label} · ${s.host_name} · ${projectName(s.cwd)}`, href: `#/sessions/${s.id}` });
   const title = s.local_title || s.title || 'Session';
   setPage(title, `${projectName(s.cwd)} · ${agent.label} · ${s.host_name}`, `
@@ -169,7 +169,7 @@ export async function pageSession(id) {
       const shown = s.local_title || s.title || 'Session';
       const titleNode = document.getElementById('page-title');
       if (titleNode) titleNode.textContent = shown;
-      openTab({ id: s.id, key: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: shown, agent: s.agent });
+      openTab({ id: s.id, key: s.id, session_id: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: shown, agent: s.agent });
       toast(t('Local title saved'));
     } catch (err) { toast(err.message, true); }
   });

@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { state, storeGet, storeSet } from './state.js';
-import { modal, modalRoot } from './ui.js';
+import { modal, modalRoot, trapTabKey } from './ui.js';
 import { newSessionPicker } from './components/new-session.js';
 import { t } from './i18n.js';
 import { svgIcon } from './icons.js';
@@ -57,10 +57,15 @@ export function renderPaletteResults(items) {
 export function closePalette() {
   modalRoot.innerHTML = '';
   state.palette = null;
+  if (paletteReturnFocus?.isConnected) paletteReturnFocus.focus();
+  paletteReturnFocus = null;
 }
+
+let paletteReturnFocus = null;
 
 export async function openPalette() {
   if (state.palette) return;
+  paletteReturnFocus = document.activeElement;
   state.palette = { index: 0, items: [], timer: null };
   const actions = paletteActions();
   const recent = storeGet('nexus-recent', []).map((entry) => ({
@@ -81,6 +86,7 @@ export async function openPalette() {
   const input = document.getElementById('palette-input');
   const backdrop = modalRoot.querySelector('[data-palette-backdrop]');
   backdrop.addEventListener('click', (event) => { if (event.target === backdrop) closePalette(); });
+  backdrop.addEventListener('keydown', (event) => trapTabKey(event, backdrop));
   input.addEventListener('input', () => {
     clearTimeout(state.palette.timer);
     const query = input.value.trim();

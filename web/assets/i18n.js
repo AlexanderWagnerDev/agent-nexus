@@ -12,7 +12,12 @@ const de = {
   Pinned: 'Angeheftet',
   Recent: 'Zuletzt',
   Latest: 'Neueste',
-  All: 'Alle',
+  'All': 'Alle',
+  'More': 'Mehr',
+  'More navigation': 'Weitere Navigation',
+  'More actions': 'Weitere Aktionen',
+  'More host actions': 'Weitere Host-Aktionen',
+  'Group projects by': 'Projekte gruppieren nach',
   Manage: 'Verwalten',
   'Active now': 'Jetzt aktiv',
   'Search or jump to…': 'Suchen oder springen…',
@@ -81,7 +86,29 @@ const de = {
   'Pair a host and native sessions will be discovered automatically.':
     'Koppel einen Host; native Sessions werden automatisch erkannt.',
   sessions: 'Sessions',
+  session: 'Session',
   projects: 'Projekte',
+  project: 'Projekt',
+  hosts: 'Hosts',
+  host: 'Host',
+  runs: 'Runs',
+  run: 'Run',
+  'open runs': 'offene Runs',
+  'open run': 'offener Run',
+  worktrees: 'Worktrees',
+  worktree: 'Worktree',
+  repositories: 'Repositories',
+  repository: 'Repository',
+  files: 'Dateien',
+  file: 'Datei',
+  'changed files': 'geänderte Dateien',
+  'changed file': 'geänderte Datei',
+  messages: 'Nachrichten',
+  message: 'Nachricht',
+  machines: 'Rechner',
+  machine: 'Rechner',
+  'visible sessions': 'sichtbare Sessions',
+  'visible session': 'sichtbare Session',
   working: 'in Arbeit',
   'machine online': 'Rechner online',
   'machines online': 'Rechner online',
@@ -1096,6 +1123,22 @@ export function t(text, vars) {
   return out.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
 }
 
-export function tn(count, singular, plural) {
-  return `${count} ${t(count === 1 ? singular : plural)}`;
+const pluralRules = new Map();
+
+/** Intl.PluralRules category ('one', 'other', …) for the active UI language. */
+export function pluralCategory(count) {
+  const value = Number(count);
+  if (!Number.isFinite(value)) return 'other';
+  if (!pluralRules.has(lang)) pluralRules.set(lang, new Intl.PluralRules(lang));
+  return pluralRules.get(lang).select(value);
+}
+
+/** Plural-aware noun only (`1 host`, `2 hosts`) for split number/label layouts. */
+export function pluralNoun(count, singular, plural) {
+  return t(pluralCategory(count) === 'one' ? singular : plural);
+}
+
+/** Plural-aware labelled count. Intl.PluralRules handles 0 and locale rules. */
+export function tp(count, singular, plural, vars) {
+  return `${count} ${t(pluralCategory(count) === 'one' ? singular : plural, { ...(vars || {}), n: count })}`;
 }

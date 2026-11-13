@@ -3,7 +3,7 @@ import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { agentGlyph, stateBadge, toast } from '../ui.js';
 import { newSessionPicker } from '../components/new-session.js';
-import { t } from '../i18n.js';
+import { t, pluralNoun } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { countLabel, cwdKey, esc, fmtDuration, projectName } from '../ui-format.js';
 
@@ -32,10 +32,10 @@ export async function pageRuns() {
     const running = runs.filter((r) => r.state === 'running' || r.state === 'starting').length;
     const waiting = runs.filter((r) => r.state === 'waiting_for_input').length;
     document.getElementById('run-summary').innerHTML = `
-      <div><strong>${runs.length}</strong><span>${t('open runs')}</span></div>
+      <div><strong>${runs.length}</strong><span>${pluralNoun(runs.length, 'open run', 'open runs')}</span></div>
       <div><strong>${running}</strong><span>${t('working')}</span></div>
       <div><strong class="${waiting ? 'warn' : ''}">${waiting}</strong><span>${t('waiting for you')}</span></div>
-      <div><strong>${new Set(runs.map((r) => r.host_id)).size}</strong><span>${t('hosts')}</span></div>`;
+      <div><strong>${new Set(runs.map((r) => r.host_id)).size}</strong><span>${pluralNoun(new Set(runs.map((r) => r.host_id)).size, 'host', 'hosts')}</span></div>`;
     document.getElementById('run-count').textContent = countLabel(runs.length, 'open run', 'open runs');
     const visible = runs.filter((r) => filter === 'all' || (filter === 'running' ? (r.state === 'running' || r.state === 'starting') : r.state === filter));
     if (!visible.length) {

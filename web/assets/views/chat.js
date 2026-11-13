@@ -7,11 +7,11 @@ import { agentGlyph, badge, closeModal, modal, toast } from '../ui.js';
 import { wsSend } from '../ws.js';
 import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, toolCardHtml, workingHtml } from '../components/transcript.js';
 import { startRun } from './session-detail.js';
-import { describeTool } from '../chat-format.js';
+import { describeTool, parseDiffStat } from '../chat-format.js';
 import { getLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
-import { agentMeta, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
+import { agentMeta, countLabel, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
 
 export async function pageStructuredRun(id, run) {
   const pageGen = state.pageGen;
@@ -36,9 +36,16 @@ export async function pageStructuredRun(id, run) {
   setPage(title, `${projectName(cwd)} · ${agent.label} · ${host}`, `
     <button class="btn small ghost icon-mobile" id="chat-context-toggle" title="${t('Toggle session details')}" aria-label="${t('Toggle session details')}">${svgIcon('panelRight')} <span>${t('Details')}</span></button>
     <button class="btn small danger icon-mobile" id="stop-run" title="${t('Stop this run')}" aria-label="${t('Stop this run')}">${svgIcon('stop')} <span>${t('Stop')}</span></button>
-    <a class="btn small ghost icon-mobile" href="#/workspace?pane=${encodeURIComponent(id)}" title="${t('Open split workspace')}" aria-label="${t('Open split workspace')}">${svgIcon('panelRight')} <span>${t('Split')}</span></a>
-    <a class="btn small ghost icon-mobile" href="#/sessions" title="${t('All sessions')}" aria-label="${t('All sessions')}">${svgIcon('sessions')} <span>${t('Sessions')}</span></a>`);
-  openTab({ id, key: session?.id || id, kind: 'run', href: `#/runs/${id}`, title, agent: run.agent || session?.agent });
+    <a class="btn small ghost icon-mobile chat-secondary" href="#/workspace?pane=${encodeURIComponent(id)}" title="${t('Open split workspace')}" aria-label="${t('Open split workspace')}">${svgIcon('panelRight')} <span>${t('Split')}</span></a>
+    <a class="btn small ghost icon-mobile chat-secondary" href="#/sessions" title="${t('All sessions')}" aria-label="${t('All sessions')}">${svgIcon('sessions')} <span>${t('Sessions')}</span></a>
+    <details class="action-menu chat-topbar-menu">
+      <summary class="btn small ghost icon-mobile" aria-label="${t('More actions')}" title="${t('More actions')}">${svgIcon('menu')}</summary>
+      <div class="action-menu-panel">
+        <a href="#/workspace?pane=${encodeURIComponent(id)}">${svgIcon('panelRight', 14)}${t('Open split workspace')}</a>
+        <a href="#/sessions">${svgIcon('sessions', 14)}${t('All sessions')}</a>
+      </div>
+    </details>`);
+  openTab({ id, key: session?.id || id, session_id: session?.id || run.session_id || '', kind: 'run', href: `#/runs/${id}`, title, agent: run.agent || session?.agent });
   rememberRecent({ id, title, agent: run.agent || session?.agent, hint: `${agent.label} · ${host} · ${projectName(cwd)}`, href: `#/runs/${id}` });
   const view = document.getElementById('view');
   view.className = 'view chat-view';
@@ -46,19 +53,19 @@ export async function pageStructuredRun(id, run) {
     <div class="chat-page ${contextDefault ? 'context-open' : ''}" id="chat-page">
       <section class="chat-main">
         <div class="chat-statusbar">
-          <span class="badge running" id="chat-state">${esc(t((run.state || 'starting').replaceAll('_', ' ')))}</span>
+          <span class="badge running" id="chat-state" role="status" aria-live="polite">${esc(t((run.state || 'starting').replaceAll('_', ' ')))}</span>
           <span class="chat-agent">${agentGlyph(run.agent || session?.agent)}${esc(agent.label)}</span>
           <span class="chat-sep">·</span>
           <span class="chat-host">${esc(host)}</span>
           ${nativeActivityBadge(session?.active_elsewhere, true)}
           ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
           <button class="icon-btn chat-inline-context" id="chat-inline-context" type="button" title="${t('Toggle session details')}" aria-label="${t('Toggle session details')}">${svgIcon('panelRight')}</button>
-          <span class="chat-connection" id="run-note"><span class="connection-dot"></span>Connecting…</span>
+          <span class="chat-connection" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>Connecting…</span>
         </div>
         <div class="chat-scroll" id="chat">
           <div class="chat-inner">
             <div id="history-top"></div>
-            <div id="messages" class="messages"></div>
+            <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
             <div id="working-slot"></div>
           </div>
         </div>
@@ -429,6 +436,7 @@ export async function pageStructuredRun(id, run) {
   const setContext = (open) => {
     chatPage.classList.toggle('context-open', open);
     storeSet('nexus-context-open', open);
+    if (open) loadGit(true).catch(() => {});
   };
   document.getElementById('chat-context-toggle').addEventListener('click', () => setContext(!chatPage.classList.contains('context-open')));
   document.getElementById('chat-inline-context').addEventListener('click', () => setContext(!chatPage.classList.contains('context-open')));
@@ -1121,13 +1129,15 @@ export async function pageStructuredRun(id, run) {
       const signature = [g.branch, g.root, g.status, g.stat, g.diff, g.file_count, g.diff_truncated].join('\u0000');
       if (silent && signature === lastGitSignature) return;
       lastGitSignature = signature;
+      const stat = parseDiffStat(g.stat);
+      const statTotals = stat ? stat.rows.reduce((sum, row) => ({ add: sum.add + row.additions, del: sum.del + row.deletions }), { add: 0, del: 0 }) : null;
       const truncated = g.status_truncated || g.stat_truncated || g.diff_truncated;
       box.innerHTML = `
-        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtTime(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
+        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtStamp(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
         ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
         ${g.file_count ? `<div class="muted small">${esc(countLabel(g.file_count, 'changed file', 'changed files'))}</div>` : ''}
         <pre class="git-status">${esc(g.status?.trim() || t('Clean working tree'))}</pre>
-        ${g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : ''}
+        ${stat ? `<ul class="git-stat-list">${stat.rows.map((row) => `<li><span class="git-stat-file">${esc(row.file)}</span><span class="git-stat-add">+${row.additions}</span><span class="git-stat-del">-${row.deletions}</span></li>`).join('')}${stat.rows.length ? `<li class="git-stat-total">${countLabel(stat.rows.length, 'file', 'files')} · +${statTotals.add} −${statTotals.del}</li>` : (stat.summary ? `<li class="git-stat-total">${esc(stat.summary)}</li>` : '')}</ul>` : (g.stat ? `<pre class="git-stat-small">${esc(g.stat)}</pre>` : '')}
         ${truncated ? `<p class="hint">${t('The host truncated this output. Open the changes view for the complete diff.')}</p>` : ''}
         ${g.diff ? `<details class="git-diff" open><summary>${t('Uncommitted changes')}</summary>${renderDiffBlock(g.diff)}</details>` : ''}`;
     } catch (err) {
@@ -1156,9 +1166,11 @@ export async function pageStructuredRun(id, run) {
     }, 5000);
   };
   scheduleGitRefresh();
+  if (contextDefault) loadGit().catch(() => {});
 
   sendSubscribe();
   await loadHistory().catch(() => {});
+  if (run.pending_approval) showApproval(run.pending_approval);
   loadRunOptions().catch(() => {});
   const timer = setInterval(() => {
     if (!state.me) { clearInterval(timer); return; }
@@ -1177,5 +1189,5 @@ export async function pageStructuredRun(id, run) {
     document.removeEventListener('keydown', shortcutHandler);
     state.wsHandlers.delete(handler);
   };
-  textarea.focus();
+  if (!state.embed && window.innerWidth > 900) textarea.focus();
 }

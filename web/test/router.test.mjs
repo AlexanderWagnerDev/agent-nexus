@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRoute } from '../assets/routes.js';
+import { activeFromHash, parseRoute } from '../assets/routes.js';
+
+test('workspace has its own active navigation state', () => {
+  const original = globalThis.location;
+  globalThis.location = { hash: '#/workspace?pane=a&pane=b' };
+  assert.equal(activeFromHash(), 'workspace');
+  globalThis.location = { hash: '#/runs' };
+  assert.equal(activeFromHash(), 'runs');
+  globalThis.location = original;
+});
 
 test('routes the home and section pages', () => {
   assert.equal(parseRoute('#/').page, 'overview');

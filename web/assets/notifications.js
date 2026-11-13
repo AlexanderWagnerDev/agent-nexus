@@ -90,8 +90,13 @@ export function renderNotificationPanel() {
 export async function toggleNotifications() {
   const panel = document.getElementById('notif-panel');
   if (!panel) return;
-  if (!panel.hidden) { panel.hidden = true; return; }
+  if (!panel.hidden) {
+    panel.hidden = true;
+    document.getElementById('notif-toggle')?.focus();
+    return;
+  }
   panel.hidden = false;
   renderNotificationPanel();
+  panel.focus();
   try { await loadNotifications(); } catch { /* keep cached list */ }
 }

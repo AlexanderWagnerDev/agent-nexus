@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { agentMeta, esc, fmtStamp } from '../ui-format.js';
+import { agentMeta, countLabel, esc, fmtStamp } from '../ui-format.js';
 import { t } from '../i18n.js';
 
 function money(value, runs) {
@@ -65,7 +65,7 @@ export async function pageUsage() {
       </select></label>
       <label class="label-inline">${t('Host')}<select class="select" id="usage-host"><option value="">${t('All hosts')}</option>${(hosts || []).map((host) => `<option value="${esc(host.id)}" ${hostFilter === host.id ? 'selected' : ''}>${esc(host.name)}</option>`).join('')}</select></label>
       <label class="label-inline">${t('Agent')}<select class="select" id="usage-agent"><option value="">${t('All agents')}</option>${agentOptions.filter(Boolean).map((agent) => `<option value="${agent}" ${agentFilter === agent ? 'selected' : ''}>${agentMeta(agent).label}</option>`).join('')}</select></label>
-      <span class="filter-count">${t('{n} runs', { n: summary.runs || 0 })}</span>
+      <span class="filter-count">${countLabel(summary.runs || 0, 'run', 'runs')}</span>
     </div>
     <div class="usage-cards">
       ${cards.map(([label, value]) => `<div class="card usage-card"><span class="aside-label">${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}
@@ -76,7 +76,7 @@ export async function pageUsage() {
       ${hasDailyTokens ? `<div class="usage-chart" role="img" aria-label="${t('Daily token usage')}">${daily.map((day) => {
         const total = (day.input_tokens || 0) + (day.output_tokens || 0);
         const height = Math.max(2, Math.round((total / maxDaily) * 100));
-        return `<div class="usage-bar" title="${esc(day.date)}: ${tokens(total)} tokens · ${t('{n} runs', { n: day.runs })}"><span style="height:${height}%"></span><small>${esc(day.date.slice(5))}</small></div>`;
+        return `<div class="usage-bar" title="${esc(day.date)}: ${tokens(total)} tokens · ${countLabel(day.runs, 'run', 'runs')}"><span style="height:${height}%"></span><small>${esc(day.date.slice(5))}</small></div>`;
       }).join('')}</div>` : `<p class="muted">${t('No usage data for this period.')}</p>`}
     </section>
     <div class="grid cols-2">

@@ -12,11 +12,26 @@ export function saveTabs() {
   renderTabs();
 }
 
-export function openTab(entry) {
-  if (!entry?.id) return;
+/**
+ * A tab is unique per native session, not per URL. Run and session views for
+ * the same session therefore share one tab instead of adding a second label.
+ * Pure so the dedupe rule is covered by unit tests.
+ */
+export function mergeTabs(tabs, entry) {
   const key = entry.key || entry.id;
-  entry.key = key;
-  state.openTabs = [entry, ...state.openTabs.filter((tab) => (tab.key || tab.id) !== key)].slice(0, 8);
+  const sessionKey = entry.session_id || (entry.kind === 'session' ? entry.id : '');
+  const next = { ...entry, key };
+  const kept = tabs.filter((tab) => {
+    if ((tab.key || tab.id) === key) return false;
+    if (sessionKey && (tab.session_id === sessionKey || (tab.kind === 'session' && tab.id === sessionKey))) return false;
+    return true;
+  });
+  return [next, ...kept].slice(0, 8);
+}
+
+export function openTab(entry) {
+  if (!entry?.id || state.embed) return;
+  state.openTabs = mergeTabs(state.openTabs, entry);
   saveTabs();
 }
 
@@ -34,11 +49,11 @@ export function renderTabs() {
     return;
   }
   bar.hidden = false;
-  const seenHrefs = new Set();
+  const seen = new Set();
   const tabs = state.openTabs.filter((tab) => {
-    const href = tab.href || (tab.kind === 'session' ? `#/sessions/${tab.id}` : `#/runs/${tab.id}`);
-    if (seenHrefs.has(href)) return false;
-    seenHrefs.add(href);
+    const key = tab.session_id || tab.key || tab.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
   bar.innerHTML = `<div class="tabs-scroll">${tabs.map((tab) => {

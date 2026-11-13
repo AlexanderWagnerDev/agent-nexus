@@ -32,7 +32,8 @@ export function activeFromHash() {
   if (h.startsWith('#/tasks')) return 'tasks';
   if (h.startsWith('#/usage')) return 'usage';
   if (h.startsWith('#/fanout')) return 'fanout';
-  if (h.startsWith('#/runs') || h.startsWith('#/workspace')) return 'runs';
+  if (h.startsWith('#/runs')) return 'runs';
+  if (h.startsWith('#/workspace')) return 'workspace';
   if (h.startsWith('#/search')) return 'search';
   if (h.startsWith('#/settings')) return 'settings';
   if (h.startsWith('#/devices') || h.startsWith('#/users') || h.startsWith('#/audit')) return 'settings';

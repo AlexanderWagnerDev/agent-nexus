@@ -46,11 +46,16 @@ export async function pageHosts() {
       <div class="host-actions">
         <button class="icon-btn ${h.favorite ? 'active' : ''}" data-fav-host="${esc(h.id)}" type="button" title="${h.favorite ? t('Unpin host') : t('Pin host')}" aria-label="${h.favorite ? t('Unpin host') : t('Pin host')}">${svgIcon('star', 14)}</button>
         <a class="btn small ghost" href="#/hosts/${encodeURIComponent(h.id)}">${t('Details')}</a>
-        <button class="btn small" data-rename-host="${esc(h.id)}">${t('Rename host')}</button>
-        <button class="btn small ${h.disabled ? '' : 'danger'}" data-toggle-host="${esc(h.id)}">${h.disabled ? t('Enable host') : t('Disable host')}</button>
         <button class="btn small" data-new-session="${esc(h.id)}" ${h.status !== 'online' || h.disabled ? 'disabled' : ''}>${t('New session')}</button>
-        <button class="btn small" data-share-host="${esc(h.id)}">${t('Share')}</button>
-        <button class="btn small danger" data-revoke-host="${esc(h.id)}">${t('Revoke')}</button>
+        <details class="action-menu">
+          <summary class="icon-btn" aria-label="${t('More host actions')}" title="${t('More host actions')}">${svgIcon('menu', 16)}</summary>
+          <div class="action-menu-panel">
+            <button type="button" data-rename-host="${esc(h.id)}">${svgIcon('edit', 14)}${t('Rename host')}</button>
+            <button type="button" data-toggle-host="${esc(h.id)}" class="${h.disabled ? '' : 'danger'}">${svgIcon(h.disabled ? 'check' : 'stop', 14)}${h.disabled ? t('Enable host') : t('Disable host')}</button>
+            <button type="button" data-share-host="${esc(h.id)}">${svgIcon('external', 14)}${t('Share')}</button>
+            <button type="button" class="danger" data-revoke-host="${esc(h.id)}">${svgIcon('x', 14)}${t('Revoke')}</button>
+          </div>
+        </details>
       </div>
       ${h.disabled ? `<div class="notice info small mt-1">${t('A host must be enabled before it can run agents again.')}</div>` : ''}
       ${h.pending ? `<div class="host-pending"><span>${t('Compare SAS with the daemon.')}</span><span class="secret">${esc(h.sas)}</span><button class="btn primary small" data-confirm-host="${esc(h.id)}">${t('Confirm host')}</button></div>` : ''}

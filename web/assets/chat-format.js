@@ -139,3 +139,31 @@ export function toolStatusLabel(status) {
   if (status === 'error') return t('Failed');
   return t('Done');
 }
+
+/**
+ * Parse `git diff --stat` into rows so narrow panels can render a list instead
+ * of wrapping the monospace block. Returns null when nothing parseable remains.
+ */
+export function parseDiffStat(text) {
+  const rows = [];
+  let summary = '';
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/files? changed|insertions?\(\+\)|deletions?\(-\)/.test(line)) {
+      summary = line;
+      continue;
+    }
+    const match = line.match(/^(.*?)\s*\|\s*(\d+)\s*([+\-]+)?$/);
+    if (!match) continue;
+    const marks = match[3] || '';
+    rows.push({
+      file: match[1].trim(),
+      changes: Number(match[2]),
+      additions: (marks.match(/\+/g) || []).length,
+      deletions: (marks.match(/-/g) || []).length,
+    });
+  }
+  if (!rows.length && !summary) return null;
+  return { rows, summary };
+}
