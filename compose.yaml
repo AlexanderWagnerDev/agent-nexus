@@ -4,6 +4,10 @@ services:
     build: .
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
     cap_drop:

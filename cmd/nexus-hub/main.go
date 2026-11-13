@@ -53,8 +53,13 @@ func main() {
 		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
 		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
 		backup      = flag.String("backup", "", "write a consistent database snapshot to this file and exit")
+		showVersion = flag.Bool("version", false, "print the hub version and exit")
 	)
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("nexus-hub " + hub.Version)
+		return
+	}
 	if *healthcheck {
 		os.Exit(runHealthcheck(*addr))
 	}

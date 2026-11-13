@@ -46,6 +46,8 @@ func main() {
 		attachCmd(os.Args[2:])
 	case "approve":
 		approveCmd(os.Args[2:])
+	case "update":
+		updateCmd(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Println("nexus " + host.Version)
 	case "help", "--help", "-h":
@@ -67,6 +69,8 @@ Usage:
   nexus sessions [--json] [--host <id>] [--agent <name>]
   nexus attach <run-id>
   nexus approve <run-id> <approval-id> <once|reject>
+  nexus update --check|--install [--channel stable|prerelease|development]
+               [--allow-checksum-only]
 
 Pairing tokens are created in the web app under Devices & passkeys. The
 session cookie is stored in the per-user config directory with mode 0600 and
@@ -395,6 +399,51 @@ func approveCmd(args []string) {
 	_, _, _ = conn.Read(readCtx)
 	readCancel()
 	fmt.Println("Approval sent.")
+}
+
+// updateCmd updates only the standalone terminal client. It never replaces
+// the nexusd daemon, restarts a service or changes a host pairing.
+func updateCmd(args []string) {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	check := fs.Bool("check", false, "check the release feed without installing")
+	install := fs.Bool("install", false, "download, verify and replace the nexus client")
+	channel := fs.String("channel", "stable", "stable, prerelease or development")
+	allowChecksumOnly := fs.Bool("allow-checksum-only", false, "accept checksum-only verification (weaker)")
+	_ = fs.Parse(args)
+	if !*check && !*install {
+		*check = true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	info, err := host.CheckForUpdate(ctx, host.Version, *channel)
+	if err != nil {
+		fail(err)
+	}
+	fmt.Printf("current: %s\nlatest:  %s\nasset:   %s\n", info.Current, info.Latest, info.AssetName)
+	if !info.Available {
+		fmt.Println("status:  up to date")
+		return
+	}
+	if !*install {
+		fmt.Println("status:  update available")
+		return
+	}
+	dir, err := host.ConfigDir()
+	if err != nil {
+		fail(err)
+	}
+	stagedDir := filepath.Join(dir, "updates", "nexus-"+info.Latest)
+	staged, _, err := host.StageUpdateNamed(ctx, info, stagedDir, "nexus", !*allowChecksumOnly)
+	if err != nil {
+		fail(err)
+	}
+	if err := host.VerifyStagedBinaryNamed(ctx, staged, "nexus", info.Latest); err != nil {
+		fail(err)
+	}
+	if err := host.InstallOwnUpdate(staged); err != nil {
+		fail(err)
+	}
+	fmt.Println("nexus client updated; the daemon and host config were not touched")
 }
 
 func truncate(value string, limit int) string {

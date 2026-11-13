@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional official version tag to publish, for example v0.1.0 (creates 0.1.0 and 0.1 tags)'
+        required: false
+        type: string
+      publish_latest:
+        description: 'Also publish the latest tag (only after explicit release approval)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  image:
+  ghcr:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,30 +40,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Docker Hub needs the repository secrets DOCKERHUB_USERNAME and
-      # DOCKERHUB_TOKEN (a Docker Hub access token with read/write scope).
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            docker.io/alexanderwagnerdev/agent-nexus
-          # Alpha-only labels. Deliberately no semver and no "latest": there is
-          # no official version and ordinary commits must not look like a
-          # release. The moving "alpha" tag is for development testing only.
+          images: ghcr.io/${{ github.repository }}
+          # Normal main builds remain development images only. Official
+          # version tags require an explicit workflow dispatch with the
+          # release_tag input; no commit can overwrite them.
           tags: |
             type=raw,value=alpha,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' && github.event.inputs.release_tag != '' }}
           labels: |
-            org.opencontainers.image.title=AgentNexus (alpha)
-            org.opencontainers.image.description=Self-hosted control plane for native coding-agent sessions. Alpha development build; not an official release.
+            org.opencontainers.image.title=AgentNexus
+            org.opencontainers.image.description=Self-hosted control plane for native coding-agent sessions.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
@@ -62,8 +65,63 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=alpha-${{ github.sha }}
+            VERSION=${{ github.event.inputs.release_tag != '' && github.event.inputs.release_tag || format('alpha-{0}', github.sha) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+  dockerhub:
+    # Docker Hub is optional. A missing secret must not invalidate the GHCR
+    # image or any other successful result, so failures here are isolated.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Check Docker Hub configuration
+        id: check
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Docker Hub secrets DOCKERHUB_USERNAME/DOCKERHUB_TOKEN are not configured; skipping Docker Hub." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Log in to Docker Hub
+        if: steps.check.outputs.enabled == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+      - id: meta
+        if: steps.check.outputs.enabled == 'true'
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: docker.io/alexanderwagnerdev/agent-nexus
+          tags: |
+            type=raw,value=alpha,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' && github.event.inputs.release_tag != '' }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v6,linux/arm/v7,linux/ppc64le,linux/s390x,linux/riscv64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.event.inputs.release_tag != '' && github.event.inputs.release_tag || format('alpha-{0}', github.sha) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

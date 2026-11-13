@@ -57,7 +57,10 @@ services:
     labels:
       wud.watch: "true"
       wud.watch.digest: "${WUD_WATCH_DIGEST:-true}"
-      wud.tag.include: "^${NEXUS_TAG:-alpha}$$"
+      # Default watches the development alpha tag and immutable semver tags,
+      # but not sha- tags (a pin must not produce false update hints). Override
+      # WUD_TAG_INCLUDE when a different tag scheme is used.
+      wud.tag.include: "${WUD_TAG_INCLUDE:-^(alpha|v?[0-9]+\\.[0-9]+\\.[0-9]+)}"
       wud.display.name: "AgentNexus Hub"
       wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"
 

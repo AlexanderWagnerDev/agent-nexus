@@ -2,7 +2,7 @@ name: Dev host binaries
 
 # Development builds only. These artifacts are not releases: no tag, no GitHub
 # release and no "latest" image is created. Downloading them needs an
-# authenticated GitHub session with read access to this private repository.
+# authenticated GitHub session with read access to the public repository.
 
 on:
   push:
@@ -48,7 +48,8 @@ jobs:
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           out="nexusd-$GOOS-$GOARCH$ext"
-          go build -trimpath -ldflags="-s -w" -o "dist/$out" ./cmd/nexusd
+          version="alpha-${GITHUB_SHA::7}"
+          go build -trimpath -ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version=$version" -o "dist/$out" ./cmd/nexusd
           (cd dist && sha256sum "$out" > "$out.sha256")
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

@@ -23,6 +23,16 @@ builds:
     ldflags:
       - -s -w
       - -X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version={{ .Version }}
+  - id: nexus-cli
+    main: ./cmd/nexus
+    binary: nexus
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version={{ .Version }}
 
 archives:
   - id: archives
@@ -31,6 +41,9 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
 
 checksum:
   name_template: checksums.txt
@@ -53,7 +66,10 @@ release:
   # Shift-left safety net: even a manual dispatch produces a draft. Publishing
   # remains a separate, human decision in the GitHub UI.
   draft: true
-  prerelease: true
+  # A stable tag (v0.1.0) must produce a normal release; a tag with a
+  # prerelease suffix (v0.1.0-rc.1) stays a prerelease. "auto" prevents the old
+  # behaviour that marked every future release as a prerelease.
+  prerelease: auto
 
 changelog:
   sort: asc

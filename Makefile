@@ -1,9 +1,14 @@
 .PHONY: build demo test test-race lint vuln run-hub run-daemon docker
 
+VERSION ?= alpha-$(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+LDFLAGS := -s -w \
+	-X github.com/AlexanderWagnerDev/agent-nexus/internal/hub.Version=$(VERSION) \
+	-X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version=$(VERSION)
+
 build:
-	CGO_ENABLED=0 go build -trimpath -o bin/nexus-hub ./cmd/nexus-hub
-	CGO_ENABLED=0 go build -trimpath -o bin/nexusd ./cmd/nexusd
-	CGO_ENABLED=0 go build -trimpath -o bin/nexus ./cmd/nexus
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$(LDFLAGS)" -o bin/nexus-hub ./cmd/nexus-hub
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$(LDFLAGS)" -o bin/nexusd ./cmd/nexusd
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$(LDFLAGS)" -o bin/nexus ./cmd/nexus
 
 # Synthetic host for screenshots and UI development. Never shipped in releases.
 demo:

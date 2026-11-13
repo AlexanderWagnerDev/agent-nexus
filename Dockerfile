@@ -21,9 +21,11 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     -o /out/nexus-hub ./cmd/nexus-hub
 
 FROM alexanderwagnerdev/alpine:latest
+ARG VERSION=dev
 LABEL org.opencontainers.image.title="AgentNexus" \
       org.opencontainers.image.description="Self-hosted control plane for coding-agent sessions" \
       org.opencontainers.image.source="https://github.com/AlexanderWagnerDev/agent-nexus" \
+      org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="MIT"
 # ca-certificates is required for outbound HTTPS (web push). The nonroot UID
 # 65532 matches the previous distroless image (BusyBox adduser rejects UIDs
