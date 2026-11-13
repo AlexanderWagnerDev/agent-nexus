@@ -6,6 +6,9 @@ FROM --platform=$BUILDPLATFORM alexanderwagnerdev/alpine:builder AS build
 # in go.mod, Go downloads the pinned toolchain itself (GOTOOLCHAIN=auto).
 # ca-certificates is needed for the HTTPS module and toolchain downloads.
 RUN apk add --no-cache go ca-certificates
+# Alpine's Go package forces GOTOOLCHAIN=local. Re-enable the standard
+# toolchain switch so the exact version from go.mod is used.
+ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
