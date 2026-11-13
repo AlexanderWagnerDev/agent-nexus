@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -179,6 +180,9 @@ func (a *ClaudeAdapter) scanMetadata(path, nativeID, _ string) (protocol.Session
 }
 
 func (a *ClaudeAdapter) Transcript(ctx context.Context, nativeID string, offset, limit int) (protocol.Transcript, error) {
+	if !validNativeID(nativeID) {
+		return protocol.Transcript{}, errors.New("invalid native session id")
+	}
 	path, err := a.findFile(nativeID)
 	if err != nil {
 		return protocol.Transcript{}, err

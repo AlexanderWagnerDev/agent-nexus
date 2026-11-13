@@ -276,15 +276,18 @@ func (r *CodexRun) readLoop(reader io.Reader) {
 			continue
 		}
 		if ev.ID != nil {
+			// Server-initiated requests use their own id namespace, separate
+			// from client request ids. A request with a method must never be
+			// mistaken for the response to a pending client call.
+			if ev.Method != "" {
+				r.handleServerRequest(*ev.ID, ev.Method, ev.Params)
+				continue
+			}
 			r.mu.Lock()
 			ch := r.pending[*ev.ID]
 			r.mu.Unlock()
 			if ch != nil {
 				ch <- ev.Result
-				continue
-			}
-			if ev.Method != "" {
-				r.handleServerRequest(*ev.ID, ev.Method, ev.Params)
 			}
 			continue
 		}

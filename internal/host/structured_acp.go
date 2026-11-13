@@ -384,21 +384,27 @@ func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
 		if err == nil && resp.Usage != nil {
 			r.reportACPUsage(resp.Usage, nil)
 		}
-		r.mu.Lock()
-		thought := r.thought.String()
-		r.thought.Reset()
-		r.active = false
-		r.mu.Unlock()
-		if thought != "" {
-			r.send(protocol.RunEvent{Type: "reasoning", Text: thought})
-		}
-		if err != nil {
-			r.send(protocol.RunEvent{Type: "run.error", Error: err.Error()})
-			return
-		}
-		r.send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
+		r.finishPrompt(err)
 	}()
 	return nil
+}
+
+// finishPrompt settles one ACP turn. The adapter session stays open after a
+// failed turn, so the run returns to idle and remains ready for the next
+// prompt instead of looking busy forever.
+func (r *ACPRun) finishPrompt(promptErr error) {
+	r.mu.Lock()
+	thought := r.thought.String()
+	r.thought.Reset()
+	r.active = false
+	r.mu.Unlock()
+	if thought != "" {
+		r.send(protocol.RunEvent{Type: "reasoning", Text: thought})
+	}
+	if promptErr != nil {
+		r.send(protocol.RunEvent{Type: "run.error", Error: promptErr.Error()})
+	}
+	r.send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
 }
 
 // Options returns only what the agent actually advertised: config options
@@ -589,6 +595,7 @@ func (r *ACPRun) RequestPermission(ctx context.Context, params acp.RequestPermis
 		r.send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: id, Decision: "reject", Text: "approval timed out"})
 	case <-ctx.Done():
 		decision = "reject"
+		r.send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: id, Decision: "reject", Text: "approval cancelled"})
 	}
 	r.mu.Lock()
 	delete(r.approvals, id)

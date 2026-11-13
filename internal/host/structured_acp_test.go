@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -216,6 +217,70 @@ func TestACPRequestPermissionApprovedAndCancelled(t *testing.T) {
 	}
 	if resp.Outcome.Cancelled == nil {
 		t.Fatalf("cancelled outcome: %+v", resp.Outcome)
+	}
+}
+
+func TestACPFailedPromptReturnsToIdle(t *testing.T) {
+	events := make(chan protocol.RunEvent, 8)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+		for {
+			_, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var envelope protocol.Envelope
+			if json.Unmarshal(data, &envelope) == nil && envelope.Event != nil {
+				events <- *envelope.Event
+			}
+		}
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close(websocket.StatusNormalClosure, "done")
+
+	run := newACPRunForTest(func(r *ACPRun) {
+		r.daemon = &Daemon{ws: ws, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	})
+	run.mu.Lock()
+	run.active = true
+	run.state = protocol.StateRunning
+	run.mu.Unlock()
+
+	run.finishPrompt(errors.New("prompt failed"))
+
+	var got []protocol.RunEvent
+	for len(got) < 2 {
+		select {
+		case ev := <-events:
+			got = append(got, ev)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("events = %+v, want run.error then run.state idle", got)
+		}
+	}
+	if got[0].Type != "run.error" || got[0].Error == "" {
+		t.Fatalf("first event = %+v", got[0])
+	}
+	if got[1].Type != "run.state" || got[1].State != protocol.StateIdle {
+		t.Fatalf("second event = %+v", got[1])
+	}
+	if run.currentState() != protocol.StateIdle {
+		t.Fatalf("state = %q, want idle", run.currentState())
+	}
+	run.mu.Lock()
+	active := run.active
+	run.mu.Unlock()
+	if active {
+		t.Fatal("run stayed busy after a failed prompt")
 	}
 }
 

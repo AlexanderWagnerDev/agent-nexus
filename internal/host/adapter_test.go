@@ -49,6 +49,9 @@ func TestClaudeAdapter(t *testing.T) {
 	if !strings.Contains(strings.Join(cmd.Args, " "), "--resume abc-123") {
 		t.Fatalf("unexpected command: %+v", cmd)
 	}
+	if _, err := a.Transcript(context.Background(), "../../../etc/passwd", 0, 10); err == nil {
+		t.Fatal("path traversal in a native session id was accepted")
+	}
 }
 
 func TestCodexAdapter(t *testing.T) {
@@ -82,6 +85,12 @@ func TestCodexAdapter(t *testing.T) {
 	}
 	if tr.Total != 3 || tr.Messages[0].Text != "Fix the failing test" {
 		t.Fatalf("unexpected transcript: %+v", tr)
+	}
+	if _, err := a.Transcript(context.Background(), "", 0, 10); err == nil {
+		t.Fatal("an empty native session id selected the first rollout")
+	}
+	if _, err := a.Transcript(context.Background(), "../escape", 0, 10); err == nil {
+		t.Fatal("path traversal in a native session id was accepted")
 	}
 	cmd, err := a.BuildCommand(Action{Kind: protocol.ActionResume, NativeID: "codex-1", Cwd: "/tmp/project"})
 	if err != nil {

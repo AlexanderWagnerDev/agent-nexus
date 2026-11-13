@@ -147,7 +147,7 @@ func (x *SearchIndex) Refresh(ctx context.Context, adapters []Adapter, policy Po
 }
 
 func (x *SearchIndex) build(ctx context.Context, adapters []Adapter, policy Policy, log *slog.Logger, rebuild bool) error {
-	corpus := collectIndexSessions(ctx, adapters, policy)
+	corpus, complete := collectIndexSessions(ctx, adapters, policy)
 	x.setStatus(0, len(corpus), "building", "")
 	for i, sess := range corpus {
 		if ctx.Err() != nil {
@@ -166,19 +166,69 @@ func (x *SearchIndex) build(ctx context.Context, adapters []Adapter, policy Poli
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
+	// Only prune when every adapter answered. A temporarily unreadable store
+	// must not make its sessions look deleted and empty the search index.
+	if !rebuild && complete {
+		if err := x.pruneMissing(corpus); err != nil {
+			return err
+		}
+	}
 	x.setStatus(len(corpus), len(corpus), "ready", "")
 	x.chmod()
 	return nil
 }
 
-func collectIndexSessions(ctx context.Context, adapters []Adapter, policy Policy) []indexedSession {
+// pruneMissing removes documents for sessions that no longer exist. Refresh is
+// incremental and normally only touches changed sessions, so deletions in the
+// agent store would otherwise stay searchable forever.
+func (x *SearchIndex) pruneMissing(corpus []indexedSession) error {
+	keep := make(map[string]bool, len(corpus))
+	for _, sess := range corpus {
+		keep[sess.agent+"\x00"+sess.nativeID] = true
+	}
+	rows, err := x.db.Query(`SELECT id,agent,native_id FROM documents`)
+	if err != nil {
+		return err
+	}
+	var stale []int64
+	for rows.Next() {
+		var id int64
+		var agent, nativeID string
+		if err := rows.Scan(&id, &agent, &nativeID); err != nil {
+			rows.Close()
+			return err
+		}
+		if !keep[agent+"\x00"+nativeID] {
+			stale = append(stale, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range stale {
+		if _, err := x.db.Exec(`DELETE FROM documents_fts WHERE rowid=?`, id); err != nil {
+			return err
+		}
+		if _, err := x.db.Exec(`DELETE FROM documents WHERE id=?`, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func collectIndexSessions(ctx context.Context, adapters []Adapter, policy Policy) ([]indexedSession, bool) {
 	var out []indexedSession
+	complete := true
 	for _, a := range adapters {
 		if !policy.AgentAllowed(a.Name()) {
 			continue
 		}
 		sessions, err := a.ListSessions(ctx)
 		if err != nil {
+			// Keep the previous documents for this adapter; its store may be
+			// temporarily locked or unreadable.
+			complete = false
 			continue
 		}
 		for _, s := range sessions {
@@ -191,7 +241,7 @@ func collectIndexSessions(ctx context.Context, adapters []Adapter, policy Policy
 			})
 		}
 	}
-	return out
+	return out, complete
 }
 
 func (x *SearchIndex) indexOne(ctx context.Context, adapters []Adapter, sess indexedSession, rebuild bool) error {

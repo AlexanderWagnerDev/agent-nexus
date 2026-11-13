@@ -37,6 +37,40 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+func TestGitHubTokenOnlyForGitHubHosts(t *testing.T) {
+	cases := []struct {
+		url  string
+		want bool
+	}{
+		{"https://api.github.com/repos/o/r/releases/assets/1", true},
+		{"https://github.com/o/r/releases/download/v1/a.zip", true},
+		{"https://objects.githubusercontent.com/asset", true},
+		{"https://evil.example/github.com/a.zip", false},
+		{"https://github.com.evil.example/a.zip", false},
+		{"https://notgithub.com/a.zip", false},
+		{"http://github.com/o/r/a.zip", false},
+		{"not a url", false},
+	}
+	for _, tc := range cases {
+		if got := githubTokenHost(tc.url); got != tc.want {
+			t.Errorf("githubTokenHost(%q) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+}
+
+func TestGitHubTokenForConfiguredReleaseMirror(t *testing.T) {
+	t.Setenv("NEXUS_UPDATE_API", "https://ghe.example/api/v3")
+	if !githubTokenHost("https://ghe.example/releases/download/a.zip") {
+		t.Fatal("configured release mirror did not receive the token")
+	}
+	if githubTokenHost("https://ghe.example.evil/releases/a.zip") {
+		t.Fatal("lookalike host received the token")
+	}
+	if githubTokenHost("http://ghe.example/releases/a.zip") {
+		t.Fatal("token would be sent over plain HTTP to the mirror")
+	}
+}
+
 func TestCheckForUpdateAndStage(t *testing.T) {
 	binary := []byte("fake-nexusd-binary")
 	var archive bytes.Buffer

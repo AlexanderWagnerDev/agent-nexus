@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -301,13 +302,35 @@ func StageUpdate(ctx context.Context, info UpdateInfo, stagedDir string, require
 	return target, nil
 }
 
-func downloadFile(ctx context.Context, url, path string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// githubTokenHost reports whether a download URL may receive the GitHub token.
+// Matching the parsed hostname prevents a crafted asset URL such as
+// https://evil.example/github.com from receiving the credential. A custom
+// release API (NEXUS_UPDATE_API) may receive the token on its own host so
+// private mirrors keep working.
+func githubTokenHost(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Hostname() == "" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "github.com" || host == "api.github.com" || strings.HasSuffix(host, ".githubusercontent.com") {
+		return parsed.Scheme == "https"
+	}
+	if base, err := url.Parse(updateAPIBase()); err == nil && base.Hostname() != "" {
+		if strings.EqualFold(host, base.Hostname()) && parsed.Scheme == base.Scheme {
+			return true
+		}
+	}
+	return false
+}
+
+func downloadFile(ctx context.Context, rawURL, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "AgentNexus-Updater")
-	if token := githubToken(); token != "" && strings.Contains(url, "github.com") {
+	if token := githubToken(); token != "" && githubTokenHost(rawURL) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)

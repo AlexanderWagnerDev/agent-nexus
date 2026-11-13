@@ -56,6 +56,9 @@ func RollbackUpdate(force bool) error {
 			return fmt.Errorf("refusing rollback: %d active agent run(s); wait until idle or pass --force", status.ActiveRuns)
 		}
 	}
+	if !serviceInstalled() {
+		return errors.New("the host service is not installed; install it with: nexusd service install")
+	}
 	target, err := os.Executable()
 	if err != nil {
 		return err
@@ -71,7 +74,16 @@ func RollbackUpdate(force bool) error {
 	if err := copyFile(target, target+".failed", 0o755); err != nil {
 		return err
 	}
-	return InstallStagedUpdate(previous, force)
+	// Do not route through InstallStagedUpdate: it first copies the currently
+	// installed binary over target.previous, which would replace the rollback
+	// binary with the broken one before restoring it.
+	if runtime.GOOS == "windows" {
+		return scheduleWindowsUpdate(previous, target)
+	}
+	if err := copyFile(previous, target, 0o755); err != nil {
+		return err
+	}
+	return restartUnixService()
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {

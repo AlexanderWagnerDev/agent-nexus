@@ -28,7 +28,6 @@ type Run struct {
 	cmd        *pty.Cmd
 	guard      *processGuard
 	grace      time.Duration
-	cols, rows int
 	seq        atomic.Uint64
 	stopped    atomic.Bool
 	closeOnce  sync.Once
@@ -100,7 +99,6 @@ func (r *Run) Resize(cols, rows int) error {
 	if rows < 5 {
 		rows = 5
 	}
-	r.cols, r.rows = cols, rows
 	return r.pty.Resize(cols, rows)
 }
 
@@ -273,7 +271,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		}
 	}
 	r := &Run{id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, pty: p, cmd: c,
-		guard: guard, grace: d.policy.ProcessGrace(), cols: cols, rows: rows,
+		guard: guard, grace: d.policy.ProcessGrace(),
 		buffer: newOutputBuffer(d.cfg.RunBufferBytesOrDefault())}
 	d.runMu.Lock()
 	d.runs[spec.RunID] = r

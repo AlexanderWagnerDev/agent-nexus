@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -15,6 +16,58 @@ import (
 // TestCodexRunJSONRPC drives the Codex app-server client against a scripted
 // JSON-RPC peer. It covers request correlation, options, prompt, interrupt and
 // approval replies without starting the real Codex CLI.
+func TestCodexRunRoutesServerRequestWithCollidingID(t *testing.T) {
+	responseReader, responseWriter := io.Pipe()
+	defer responseWriter.Close()
+	run := &CodexRun{
+		id: "run-collide", threadID: "thread-1", agent: "codex", cwd: t.TempDir(),
+		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{},
+		daemon: &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+	}
+	go run.readLoop(responseReader)
+
+	// Client request 1 is in flight while the server asks for an approval with
+	// the same JSON-RPC id. The approval must not resolve the pending call.
+	pending := make(chan json.RawMessage, 1)
+	run.mu.Lock()
+	run.pending[1] = pending
+	run.mu.Unlock()
+	if _, err := responseWriter.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"session/requestApproval","params":{"reason":"test"}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		run.mu.Lock()
+		_, gotApproval := run.approvals[1]
+		run.mu.Unlock()
+		if gotApproval {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("server request was not handled as an approval")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case got := <-pending:
+		t.Fatalf("server request resolved the pending client call: %s", got)
+	default:
+	}
+
+	// A real response with the same id is still correlated.
+	if _, err := responseWriter.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"ok":true}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-pending:
+		if string(got) != `{"ok":true}` {
+			t.Fatalf("response = %s", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("real response was not correlated")
+	}
+}
+
 func TestCodexRunJSONRPC(t *testing.T) {
 	requestReader, requestWriter := io.Pipe()
 	responseReader, responseWriter := io.Pipe()

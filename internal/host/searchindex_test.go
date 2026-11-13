@@ -18,6 +18,7 @@ import (
 type indexTestAdapter struct {
 	sessions    []protocol.Session
 	transcripts map[string]protocol.Transcript
+	failList    bool
 }
 
 func (a *indexTestAdapter) Name() string { return "opencode" }
@@ -25,6 +26,9 @@ func (a *indexTestAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	return protocol.AgentInfo{Name: "opencode", Supported: true}, nil
 }
 func (a *indexTestAdapter) ListSessions(context.Context) ([]protocol.Session, error) {
+	if a.failList {
+		return nil, fmt.Errorf("store is temporarily locked")
+	}
 	return a.sessions, nil
 }
 func (a *indexTestAdapter) Transcript(_ context.Context, nativeID string, _, _ int) (protocol.Transcript, error) {
@@ -168,6 +172,42 @@ func TestSearchIndexRebuildClearsStaleDocuments(t *testing.T) {
 	}
 	if count, _ := index.Count(); count != 0 {
 		t.Fatalf("stale documents remained: %d", count)
+	}
+}
+
+func TestSearchIndexRefreshRemovesDeletedSessions(t *testing.T) {
+	index, adapter, root := newIndexFixture(t)
+	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"opencode"}}
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, nil); err != nil {
+		t.Fatal(err)
+	}
+	if count, _ := index.Count(); count != 1 {
+		t.Fatalf("initial count: %d", count)
+	}
+	adapter.sessions = nil
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, nil); err != nil {
+		t.Fatal(err)
+	}
+	if count, _ := index.Count(); count != 0 {
+		t.Fatalf("deleted session stayed indexed: %d", count)
+	}
+	if hits, err := index.Search(context.Background(), "retry", 10); err != nil || len(hits) != 0 {
+		t.Fatalf("deleted transcript remained searchable: %+v %v", hits, err)
+	}
+}
+
+func TestSearchIndexRefreshKeepsDocumentsWhenStoreIsUnreadable(t *testing.T) {
+	index, adapter, root := newIndexFixture(t)
+	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"opencode"}}
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, nil); err != nil {
+		t.Fatal(err)
+	}
+	adapter.failList = true
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, nil); err != nil {
+		t.Fatal(err)
+	}
+	if count, _ := index.Count(); count != 1 {
+		t.Fatalf("a locked store emptied the index: %d", count)
 	}
 }
 

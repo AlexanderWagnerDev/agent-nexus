@@ -174,6 +174,9 @@ func (a *CodexAdapter) scanMetadata(path string) (protocol.Session, error) {
 }
 
 func (a *CodexAdapter) Transcript(ctx context.Context, nativeID string, offset, limit int) (protocol.Transcript, error) {
+	if !validNativeID(nativeID) {
+		return protocol.Transcript{}, errors.New("invalid native session id")
+	}
 	path, err := a.findFile(nativeID)
 	if err != nil {
 		return protocol.Transcript{}, err
