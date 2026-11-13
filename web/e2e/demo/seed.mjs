@@ -119,7 +119,7 @@ try {
 
   await new Promise((r) => setTimeout(r, 1200));
   const { sessions } = await api('/api/v1/sessions?limit=50');
-  const wanted = [/upload retries/i, /pagination/i, /flaky checkout/i];
+  const wanted = [/upload retries/i, /pagination/i, /flaky checkout/i, /Dockerfile/i];
   const chosen = wanted
     .map((re) => sessions.find((s) => re.test(s.title)))
     .filter(Boolean);
@@ -135,10 +135,11 @@ try {
   if (process.env.DEMO_VERIFY === '1') {
     let allRuns = [];
     let notifications = [];
-    for (let i = 0; i < 50; i += 1) {
+    for (let i = 0; i < 80; i += 1) {
       allRuns = (await api('/api/v1/runs')).runs || [];
       notifications = (await api('/api/v1/notifications?limit=40')).notifications || [];
-      if (notifications.some((n) => n.kind === 'failed') && allRuns.filter((r) => r.state === 'idle').length >= 2) break;
+      const states = new Set(allRuns.map((r) => r.state));
+      if (notifications.some((n) => n.kind === 'failed') && states.has('running') && states.has('waiting_for_input') && states.has('idle')) break;
       await new Promise((r) => setTimeout(r, 200));
     }
     const { hosts: paired } = await api('/api/v1/hosts');
@@ -150,13 +151,17 @@ try {
     }
     const { sessions: allSessions } = await api('/api/v1/sessions?limit=50');
     if (allSessions.length < 7) throw new Error(`expected at least 7 sessions, got ${allSessions.length}`);
-    if (allRuns.length < 2) throw new Error(`expected at least 2 active demo runs, got ${allRuns.length}`);
+    if (allRuns.length < 3) throw new Error(`expected at least 3 active demo runs, got ${allRuns.length}`);
+    const states = new Set(allRuns.map((r) => r.state));
+    for (const state of ['running', 'waiting_for_input', 'idle']) {
+      if (!states.has(state)) throw new Error(`expected a ${state} demo run, got ${[...states].join(',')}`);
+    }
     if (!notifications.some((n) => n.kind === 'failed')) throw new Error('expected a failed-run notification');
     const sample = allSessions.find((s) => s.repo_url);
     if (!sample) throw new Error('no session with repository metadata');
     const git = await api(`/api/v1/sessions/${sample.id}/git`);
     if (!git.diff || !git.branch) throw new Error('demo git fixture missing');
-    console.log('VERIFY OK 3 hosts, 7+ sessions, 2 active runs, failed-run notification, git fixture');
+    console.log('VERIFY OK 3 hosts, 7+ sessions, working/approval/idle runs, failed-run notification, git fixture');
     for (const { child } of children) child.kill();
     process.exit(0);
   }

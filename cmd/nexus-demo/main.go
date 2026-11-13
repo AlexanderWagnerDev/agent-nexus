@@ -89,7 +89,11 @@ func serveCmd(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d := &demoHost{cfg: cfg, key: key, fixtures: fixturesFor(*scenario)}
+	d := &demoHost{
+		cfg: cfg, key: key, fixtures: fixturesFor(*scenario),
+		runs: map[string]protocol.RunSpec{}, stops: map[string]chan struct{}{},
+		approvals: map[string]chan string{},
+	}
 	for ctx.Err() == nil {
 		if err := d.connect(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("link ended: %v", err)
@@ -103,10 +107,14 @@ func serveCmd(args []string) {
 }
 
 type demoHost struct {
-	cfg      host.Config
-	key      ed25519.PrivateKey
-	fixtures fixtures
-	writeMu  sync.Mutex
+	cfg       host.Config
+	key       ed25519.PrivateKey
+	fixtures  fixtures
+	writeMu   sync.Mutex
+	runMu     sync.Mutex
+	runs      map[string]protocol.RunSpec
+	stops     map[string]chan struct{}
+	approvals map[string]chan string
 }
 
 func (d *demoHost) send(ws *websocket.Conn, msg protocol.Envelope) error {
@@ -216,10 +224,17 @@ func (d *demoHost) connect(ctx context.Context) error {
 			_ = d.send(ws, protocol.Envelope{Type: "result", RequestID: msg.RequestID, OK: true, Result: result})
 		case "run.start":
 			if msg.Run != nil {
-				go d.run(ws, *msg.Run)
+				stop := make(chan struct{})
+				d.runMu.Lock()
+				d.runs[msg.Run.RunID] = *msg.Run
+				d.stops[msg.Run.RunID] = stop
+				d.runMu.Unlock()
+				go d.run(ws, *msg.Run, stop)
 			}
 		case "run.stop":
-			_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: msg.RunID, Code: 0, Reason: "stopped"})
+			d.stopRun(msg.RunID)
+		case "run.approval":
+			d.resolveApproval(msg.RunID, msg.ApprovalID, msg.Decision)
 		}
 	}
 }
@@ -254,25 +269,30 @@ func (d *demoHost) answer(method string, params []byte) ([]byte, error) {
 		}
 		return json.Marshal(out)
 	case "git":
+		var req struct {
+			Cwd string `json:"cwd"`
+		}
+		_ = json.Unmarshal(params, &req)
+		name := req.Cwd
+		if i := strings.LastIndex(strings.ReplaceAll(name, `\`, "/"), "/"); i >= 0 {
+			name = name[i+1:]
+		}
+		if view, ok := d.fixtures.gitByProject[name]; ok {
+			return json.Marshal(view)
+		}
 		return json.Marshal(d.fixtures.git)
 	case "run.options":
-		return json.Marshal(protocol.RunOptions{
-			Models: []protocol.ModelOption{
-				{ID: "claude-sonnet-4-5", Provider: "anthropic", Name: "Claude Sonnet 4.5", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text", "image"}},
-				{ID: "gpt-5.3-codex", Provider: "openai", Name: "GPT-5.3 Codex", Variants: []string{"low", "medium", "high"}, DefaultVariant: "high", Inputs: []string{"text", "image"}},
-				{ID: "grok-code-fast", Provider: "xai", Name: "Grok Code Fast", Inputs: []string{"text"}},
-			},
-			Modes: []protocol.AgentModeOption{
-				{ID: "build", Name: "Build", Description: "Edit files and run commands"},
-				{ID: "plan", Name: "Plan", Description: "Read-only analysis"},
-				{ID: "review", Name: "Review", Description: "Review the working tree"},
-			},
-			CurrentModel:    "claude-sonnet-4-5",
-			CurrentProvider: "anthropic",
-			CurrentVariant:  "medium",
-			CurrentMode:     "build",
-			SupportsFiles:   true,
-		})
+		var req struct {
+			RunID string `json:"run_id"`
+		}
+		_ = json.Unmarshal(params, &req)
+		d.runMu.Lock()
+		spec, ok := d.runs[req.RunID]
+		d.runMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("run %q not found", req.RunID)
+		}
+		return json.Marshal(runOptionsFor(spec.Agent))
 	case "search":
 		return json.Marshal([]protocol.SearchHit{
 			{SessionID: d.fixtures.sessions[0].NativeID, HostID: d.cfg.HostID, HostName: d.cfg.HostName, NativeID: d.fixtures.sessions[0].NativeID, Agent: "opencode", Title: d.fixtures.sessions[0].Title, Snippet: "retry backoff is capped at 30s", At: time.Now().Add(-2 * time.Hour)},
@@ -283,34 +303,166 @@ func (d *demoHost) answer(method string, params []byte) ([]byte, error) {
 	return nil, fmt.Errorf("unsupported method %q", method)
 }
 
-func (d *demoHost) run(ws *websocket.Conn, spec protocol.RunSpec) {
-	send := func(ev protocol.RunEvent) {
+// runOptionsFor mirrors what each real driver advertises: OpenCode exposes its
+// own modes and model catalog, Codex exposes catalog models with reasoning
+// efforts and no agent mode, and Claude over ACP only exposes what the adapter
+// announced. The demo never reuses one agent's options for another.
+func runOptionsFor(agent string) protocol.RunOptions {
+	out := protocol.RunOptions{Models: []protocol.ModelOption{}, Modes: []protocol.AgentModeOption{}}
+	switch agent {
+	case "codex":
+		out.Models = []protocol.ModelOption{
+			{ID: "gpt-5.3-codex", Provider: "openai", Name: "GPT-5.3 Codex", Variants: []string{"low", "medium", "high", "xhigh"}, DefaultVariant: "high", Inputs: []string{"text", "image"}},
+			{ID: "gpt-5.2-codex", Provider: "openai", Name: "GPT-5.2 Codex", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text", "image"}},
+		}
+		out.CurrentModel, out.CurrentProvider, out.CurrentVariant = "gpt-5.3-codex", "openai", "high"
+		out.SupportsFiles = true
+	case "claude":
+		out.Models = []protocol.ModelOption{
+			{ID: "claude-sonnet-4-5", Provider: "anthropic", Name: "Claude Sonnet 4.5", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text", "image"}},
+			{ID: "claude-opus-4-1", Provider: "anthropic", Name: "Claude Opus 4.1", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text", "image"}},
+		}
+		out.CurrentModel, out.CurrentProvider, out.CurrentVariant = "claude-sonnet-4-5", "anthropic", "medium"
+		out.SupportsFiles = true
+	case "opencode":
+		out.Models = []protocol.ModelOption{
+			{ID: "opencode/grok-code", Provider: "opencode", Name: "Grok Code Fast", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text"}},
+			{ID: "openai/gpt-5.3-codex", Provider: "openai", Name: "GPT-5.3 Codex", Variants: []string{"low", "medium", "high"}, DefaultVariant: "high", Inputs: []string{"text", "image"}},
+		}
+		out.Modes = []protocol.AgentModeOption{
+			{ID: "build", Name: "Build", Description: "Edit files and run commands"},
+			{ID: "plan", Name: "Plan", Description: "Read-only analysis"},
+			{ID: "review", Name: "Review", Description: "Review the working tree"},
+		}
+		out.CurrentModel, out.CurrentProvider, out.CurrentVariant, out.CurrentMode = "opencode/grok-code", "opencode", "medium", "build"
+		out.SupportsFiles = true
+	}
+	return out
+}
+
+func (d *demoHost) stopRun(runID string) {
+	d.runMu.Lock()
+	stop := d.stops[runID]
+	delete(d.stops, runID)
+	d.runMu.Unlock()
+	if stop != nil {
+		select {
+		case <-stop:
+		default:
+			close(stop)
+		}
+	}
+}
+
+func (d *demoHost) resolveApproval(runID, approvalID, decision string) {
+	d.runMu.Lock()
+	ch := d.approvals[runID+"|"+approvalID]
+	d.runMu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- decision:
+	default:
+	}
+}
+
+func (d *demoHost) run(ws *websocket.Conn, spec protocol.RunSpec, stop <-chan struct{}) {
+	defer func() {
+		d.runMu.Lock()
+		delete(d.stops, spec.RunID)
+		d.runMu.Unlock()
+	}()
+	wait := func(ms int) bool {
+		select {
+		case <-stop:
+			return false
+		case <-time.After(time.Duration(ms) * time.Millisecond):
+			return true
+		}
+	}
+	send := func(ev protocol.RunEvent) bool {
 		_ = d.send(ws, protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &ev})
-		time.Sleep(120 * time.Millisecond)
+		return wait(120)
 	}
 	_ = d.send(ws, protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured"})
-	send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
+	if !send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning}) {
+		return
+	}
 	send(protocol.RunEvent{Type: "reasoning", MessageID: "m1", Text: "Reading the retry helper and the failing test, then applying the smallest fix."})
 	send(protocol.RunEvent{Type: "message.started", MessageID: "m1"})
 	for _, chunk := range []string{
 		"I found the retry loop in ", "`internal/http/retry.go`. ", "The backoff keeps doubling without a ceiling, ",
 		"so a long outage turns into a multi-minute wait. ", "I'll cap it and add a regression test.",
 	} {
-		send(protocol.RunEvent{Type: "message.delta", MessageID: "m1", Text: chunk})
+		if !send(protocol.RunEvent{Type: "message.delta", MessageID: "m1", Text: chunk}) {
+			return
+		}
 	}
-	send(protocol.RunEvent{Type: "message.completed", MessageID: "m1", Text: "I found the retry loop in `internal/http/retry.go`. The backoff keeps doubling without a ceiling, so a long outage turns into a multi-minute wait. I'll cap it and add a regression test."})
+	if !send(protocol.RunEvent{Type: "message.completed", MessageID: "m1", Text: "I found the retry loop in `internal/http/retry.go`. The backoff keeps doubling without a ceiling, so a long outage turns into a multi-minute wait. I'll cap it and add a regression test."}) {
+		return
+	}
+
+	switch spec.NativeID {
+	case "ses_demo_pagination":
+		// A run that stays in "working" so the Control Room, activity cards and
+		// the agent spinner show a real live state in screenshots.
+		if !send(protocol.RunEvent{Type: "tool.started", CallID: "working-1", ToolName: "shell", ToolInput: `{"command":"go test ./internal/http/ -count=1"}`}) {
+			return
+		}
+		<-stop
+		_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 0, Reason: "stopped"})
+		return
+	case "ses_demo_flaky_test":
+		// A run that blocks on a permission request so the approval UI and the
+		// "waiting for you" counters are populated by real protocol events.
+		if !send(protocol.RunEvent{Type: "message.started", MessageID: "m2"}) {
+			return
+		}
+		send(protocol.RunEvent{Type: "message.completed", MessageID: "m2", Text: "The checkout test still fails intermittently: the fixture clock is shared between parallel cases. I need permission to rerun the suite 20 times."})
+		send(protocol.RunEvent{Type: "run.state", State: protocol.StateWaiting})
+		ch := make(chan string, 1)
+		d.runMu.Lock()
+		d.approvals[spec.RunID+"|approval-1"] = ch
+		d.runMu.Unlock()
+		_ = d.send(ws, protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
+			Type: "approval.requested", ApprovalID: "approval-1", Action: "run tests",
+			Resources: []string{"go test ./checkout -run TestCheckout -count=20"},
+		}})
+		var decision string
+		select {
+		case decision = <-ch:
+		case <-stop:
+			return
+		}
+		d.runMu.Lock()
+		delete(d.approvals, spec.RunID+"|approval-1")
+		d.runMu.Unlock()
+		send(protocol.RunEvent{Type: "approval.resolved", ApprovalID: "approval-1", Decision: decision})
+		if decision == "reject" {
+			_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 1, Reason: "approval rejected"})
+			return
+		}
+		send(protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
+		send(protocol.RunEvent{Type: "tool.started", CallID: "c3", ToolName: "shell", ToolInput: `{"command":"go test ./checkout -run TestCheckout -count=20"}`})
+		send(protocol.RunEvent{Type: "tool.completed", CallID: "c3", Error: "exit status 1: 2 of 20 runs failed"})
+		_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 1, Reason: "test failure"})
+		return
+	case "ses_demo_dockerfile":
+		// A fast failure feeds failure notifications and run-error screenshots.
+		send(protocol.RunEvent{Type: "message.started", MessageID: "m2"})
+		send(protocol.RunEvent{Type: "message.completed", MessageID: "m2", Text: "The hardened image fails its health check because the non-root user cannot read the mounted config."})
+		send(protocol.RunEvent{Type: "tool.started", CallID: "c4", ToolName: "shell", ToolInput: `{"command":"docker build -t example-service:demo ."}`})
+		send(protocol.RunEvent{Type: "tool.completed", CallID: "c4", Error: "exit status 1: health check timed out"})
+		_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 1, Reason: "container health check failed"})
+		return
+	}
+
 	send(protocol.RunEvent{Type: "tool.started", CallID: "c1", ToolName: "shell", ToolInput: `{"command":"go test ./internal/http/ -run Retry"}`})
 	send(protocol.RunEvent{Type: "tool.completed", CallID: "c1", ToolOutput: "ok  \tgithub.com/example/sample-api/internal/http\t0.42s"})
 	send(protocol.RunEvent{Type: "tool.started", CallID: "c2", ToolName: "edit", ToolInput: `{"filePath":"internal/http/retry.go"}`})
 	send(protocol.RunEvent{Type: "tool.completed", CallID: "c2", ToolOutput: "--- a/internal/http/retry.go\n+++ b/internal/http/retry.go\n@@ -18,7 +18,7 @@ func backoff(attempt int) time.Duration {\n-\td := base << attempt\n+\td := min(base<<attempt, 30*time.Second)\n"})
 	send(protocol.RunEvent{Type: "message.started", MessageID: "m2"})
-	if spec.NativeID == "ses_demo_flaky_test" {
-		send(protocol.RunEvent{Type: "message.completed", MessageID: "m2", Text: "The checkout test still fails intermittently: the fixture clock is shared between parallel cases. Suggested next step: isolate the clock per test."})
-		send(protocol.RunEvent{Type: "tool.started", CallID: "c3", ToolName: "shell", ToolInput: `{"command":"go test ./checkout -run TestCheckout -count=20"}`})
-		send(protocol.RunEvent{Type: "tool.completed", CallID: "c3", Error: "exit status 1: 2 of 20 runs failed"})
-		_ = d.send(ws, protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 1, Reason: "test failure"})
-		return
-	}
 	send(protocol.RunEvent{Type: "message.completed", MessageID: "m2", Text: "Retry delays are now capped at 30 seconds. The new test covers attempts 0 through 6 and the suite is green."})
 	send(protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
 }
@@ -362,6 +514,48 @@ index 8a41e77..f2b7c19 100644
 +}
 `
 
+const checkoutDiffFixture = `diff --git a/checkout/clock.go b/checkout/clock.go
+index 3b1c0a2..7d4e9f1 100644
+--- a/checkout/clock.go
++++ b/checkout/clock.go
+@@ -6,6 +6,10 @@ type Clock struct {
+     now func() time.Time
+ }
++func NewTestClock(t time.Time) *Clock {
++    return &Clock{now: func() time.Time { return t }}
++}
++
+ func (c *Clock) Now() time.Time {
+     return c.now()
+ }
+diff --git a/checkout/checkout_test.go b/checkout/checkout_test.go
+index 1a2b3c4..5d6e7f8 100644
+--- a/checkout/checkout_test.go
++++ b/checkout/checkout_test.go
+@@ -12,4 +12,6 @@ func TestCheckout(t *testing.T) {
+     if err := Checkout(ctx); err != nil {
+         t.Fatal(err)
+     }
++    // Each parallel case gets its own clock instead of sharing package state.
++    clock := NewTestClock(time.Unix(0, 0))
++    _ = clock
+ }
+`
+
+const dockerfileDiffFixture = `diff --git a/Dockerfile b/Dockerfile
+index 9a8b7c6..1d2e3f4 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,5 +1,6 @@
+ FROM alpine:3.20
+-RUN adduser -D app
++RUN adduser -D -H -u 10001 app
+ USER app
++RUN chmod 0555 /etc/example
+ COPY --chown=app:app . /app
+ WORKDIR /app
+`
+
 // fixtureNow allows screenshot and visual-regression runs to pin every
 // synthetic timestamp instead of drifting with the wall clock.
 func fixtureNow() time.Time {
@@ -382,6 +576,7 @@ type fixtures struct {
 	transcripts       map[string][]protocol.Message
 	defaultTranscript []protocol.Message
 	git               map[string]any
+	gitByProject      map[string]map[string]any
 }
 
 func fixturesFor(scenario string) fixtures {
@@ -499,6 +694,29 @@ func fixturesFor(scenario string) fixtures {
 			"status": " M internal/http/retry.go\n M internal/http/retry_test.go",
 			"stat":   " internal/http/retry.go      | 7 ++++---\n internal/http/retry_test.go | 8 ++++++++\n 2 files changed, 12 insertions(+), 3 deletions(-)",
 			"diff":   diffFixture,
+		},
+		gitByProject: map[string]map[string]any{
+			"sample-api": {
+				"branch": "feat/upload-retry",
+				"root":   join("sample-api"),
+				"status": " M internal/http/retry.go\n M internal/http/retry_test.go",
+				"stat":   " internal/http/retry.go      | 7 ++++---\n internal/http/retry_test.go | 8 ++++++++\n 2 files changed, 12 insertions(+), 3 deletions(-)",
+				"diff":   diffFixture,
+			},
+			"web-checkout": {
+				"branch": "fix/flaky-checkout",
+				"root":   join("web-checkout"),
+				"status": " M checkout/clock.go\n M checkout/checkout_test.go",
+				"stat":   " checkout/clock.go        | 4 ++++\n checkout/checkout_test.go | 2 ++\n 2 files changed, 6 insertions(+), 0 deletions(-)",
+				"diff":   checkoutDiffFixture,
+			},
+			"example-service": {
+				"branch": "chore/container-hardening",
+				"root":   join("example-service"),
+				"status": " M Dockerfile",
+				"stat":   " Dockerfile | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)",
+				"diff":   dockerfileDiffFixture,
+			},
 		},
 	}
 }
