@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"database/sql"
@@ -352,7 +353,7 @@ func (s *Server) handleSetDeviceKey(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "p256":
-		if x, _ := elliptic.Unmarshal(elliptic.P256(), key); x == nil {
+		if _, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), key); err != nil {
 			writeError(w, http.StatusBadRequest, "p256 public key must be an uncompressed point")
 			return
 		}

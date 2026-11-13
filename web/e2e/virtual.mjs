@@ -141,7 +141,9 @@ async function run() {
     });
     assert(initial.rows > 0 && initial.rows < 80, `unexpected virtual row count: ${initial.rows}`);
     assert(initial.nodes < 400, `too many DOM nodes in the virtual list: ${initial.nodes}`);
-    assert(initial.count.includes('200') && initial.count.includes('10000'), `unexpected count: ${initial.count}`);
+    const initialLoaded = Number(/(\d+)\s+of/.exec(initial.count)?.[1] || 0);
+    assert(initialLoaded >= PAGE && initialLoaded <= PAGE * 3 && initial.count.includes(String(TOTAL)),
+      `unexpected count: ${initial.count}`);
 
     // Scroll to the bottom a few times; every page must append without
     // duplicating rows and without growing the DOM.

@@ -104,7 +104,10 @@ func TestP256SignatureMatchesWebCryptoShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicRaw := elliptic.Marshal(elliptic.P256(), key.X, key.Y)
+	publicRaw, err := key.PublicKey.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
 	canonical := "ws\nprompt\nrun-1\nabc\n1\nn"
 	digest := sha256.Sum256([]byte(canonical))
 	r, s, err := ecdsa.Sign(rand.Reader, key, digest[:])

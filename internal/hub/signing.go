@@ -121,11 +121,10 @@ func verifyDeviceSignature(algorithm, publicKey, signature, canonical string) er
 			return errSignatureInvalid
 		}
 	case "p256":
-		x, y := elliptic.Unmarshal(elliptic.P256(), publicRaw)
-		if x == nil {
+		key, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), publicRaw)
+		if err != nil {
 			return fmt.Errorf("%w: p256 public key", errSignatureInvalid)
 		}
-		key := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 		digest := sha256.Sum256([]byte(canonical))
 		// WebCrypto emits IEEE P1363 (r||s); native clients may emit ASN.1.
 		if !ecdsa.VerifyASN1(key, digest[:], signatureRaw) {
