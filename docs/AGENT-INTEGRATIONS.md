@@ -102,9 +102,10 @@ vendor documentation above:
   estimated, non-USD ACP costs are not converted, and runs without a report are
   shown as unavailable.
 - **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
-  concurrency guards have unit tests. Real Codex and OpenCode runs were
-  exercised on Windows 11; real Claude and Gemini sessions were not available.
-  Linux and macOS are covered by CI build/tests only.
+  concurrency guards have unit tests. Real Codex CLI 0.156.1 and OpenCode 2.2.7
+  stores were exercised on Windows 11; real Claude and Gemini sessions were not
+  available (neither CLI is installed). Linux and macOS are covered by CI
+  build/tests only.
 
 
 ## 2. Common adapter contract

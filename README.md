@@ -2,7 +2,7 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed host update staging, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Client/device-signed commands, PostgreSQL, 72-hour load/soak tests, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open, as do real Claude/Gemini sessions and the real three-host/Portainer drill. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed host update staging, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL, 72-hour load/soak tests, native apps, a manual WCAG 2.2 AA audit (the automated axe-core scan is clean) and an external security audit remain open, as do real Claude/Gemini sessions and the real three-host/Portainer drill. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
 **No releases or tags are published during alpha.** All earlier pre-release
 tags and GitHub releases were withdrawn before the first public version was
@@ -46,8 +46,8 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 [model, reasoning and attachment composer](docs/screenshots/chat-composer-dark.png),
 [side-by-side diff](docs/screenshots/diff-split-dark.png),
 [side-by-side diff in light mode](docs/screenshots/diff-split-light.png),
-[cross-host repository grouping](docs/screenshots/sessions-repos-dark.png),
 [tool-call cards](docs/screenshots/chat-tools-dark.png),
+[approval request](docs/screenshots/chat-approval-dark.png),
 [Git context panel](docs/screenshots/chat-context-dark.png),
 [rendered diff](docs/screenshots/chat-diff-dark.png),
 [notifications](docs/screenshots/notifications-dark.png),
@@ -132,7 +132,7 @@ version outside the band disables structured mode with a visible warning while
 terminal mode keeps working; `allow_untested_agent_versions` overrides this and
 is audited. Unknown versions are warned about but not disabled.
 
-Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex and OpenCode were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
+Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex CLI 0.156.1 and OpenCode 2.2.7 were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
 

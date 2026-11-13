@@ -98,24 +98,37 @@ automatically. Without cosign, updates require
 
 ## 4. Verify the three-host setup
 
-1. **Hosts** shows all three as online with the expected daemon version.
-2. **Sessions** shows sessions from all three even when titles repeat; the
-   project path and host distinguish them.
-3. Open two different sessions on two hosts in **Split workspace**. Both should
-   stream independently and keep separate drafts and approvals.
-4. Start a prompt on a newly discovered session and check that the native
-   OpenCode CLI can reopen the same session afterwards.
-5. Open two different sessions on two hosts in **Split workspace**. Both should
-   stream independently and keep separate drafts and approvals.
-6. Start a prompt on a newly discovered session and check that the native
-   OpenCode CLI can reopen the same session afterwards.
-7. Disable one host in **Hosts**. Its active runs stop and new runs are refused;
-   the sessions remain visible. Enable it again and watch it reconnect.
-8. Disconnect one host (stop the task, not the machine). The hub marks it
-   offline; other hosts stay usable. Restart the task and watch it reconnect.
-9. Restart the hub container. Browsers show a reconnect and the run state
-   resynchronizes; hosts reconnect automatically. Terminal output produced
-   during the outage is replayed from each host's 1 MiB run buffer.
+Use this as a repeatable drill checklist. Record the date, hub image digest,
+daemon versions and the observed result for each line in
+[VERIFICATION.md](VERIFICATION.md) after the drill.
+
+- [ ] **Inventory:** **Hosts** shows all three as online with the expected
+      daemon version and the agents each machine should expose.
+- [ ] **Discovery:** **Sessions** shows sessions from all three even when
+      titles repeat; the project path and host distinguish them.
+- [ ] **Cross-host repository:** open **Projects → Repositories** and confirm a
+      repository that exists on two hosts appears once with both host names.
+- [ ] **Split streaming:** open two different sessions on two hosts in **Split
+      workspace**. Both stream independently and keep separate drafts,
+      approvals and model/reasoning selectors.
+- [ ] **Native continuity:** start a prompt on a newly discovered session and
+      verify the native OpenCode CLI can reopen the same session afterwards.
+- [ ] **Approval round-trip:** trigger a permission request and answer it from
+      the browser; the host continues and the audit log records the decision.
+- [ ] **Disable:** disable one host in **Hosts**. Active runs stop and new runs
+      are refused; sessions remain visible. Enable it again and watch it
+      reconnect.
+- [ ] **Network drop:** stop the daemon task (not the machine). The hub marks it
+      offline; other hosts stay usable. Restart the task and watch it reconnect.
+- [ ] **Hub restart:** restart the hub container. Browsers reconnect, run state
+      resynchronizes, hosts reconnect automatically, and terminal output
+      produced during the outage is replayed from the 1 MiB host buffer.
+- [ ] **Revoke:** revoke one host from the overflow menu after confirmation.
+      Its link closes, further connection attempts fail, and re-pairing is
+      required.
+- [ ] **Evidence:** capture the Hosts page, one split workspace and the audit
+      entry; attach them to the verification record. Do not include real
+      transcript content.
 
 ## 5. Updates and rollback
 

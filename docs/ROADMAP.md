@@ -71,7 +71,7 @@ tested versus what is still open.
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text) with a host-local FTS5 cache, index progress in the UI, `nexusd index rebuild`, best-effort native-process detection, fail-soft parsers | Adapter-driven 10k-session initial-index measurement, per-version fixture matrix |
 | 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test |
 | 4 | ✅ partial | OpenCode 2.2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Manual WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
-| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes | Signed commands, PostgreSQL, actual signing credentials, external pentest, load/soak tests |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes; opt-in device-signed commands with replay protection | PostgreSQL, actual signing credentials, external pentest, 72 h load/soak |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
 ### NFR-06: discovery watcher (2026-11-12)
@@ -148,14 +148,19 @@ refusal and rollback state. Race tests run in CI. Not covered: 72-hour soak,
 50-host/200-viewer load, real network partition chaos, PostgreSQL and an
 external penetration test.
 
-### P0e: client/device-signed commands (2026-11-12)
+### P0e: client/device-signed commands (2026-11-13)
 
-The trust-boundary analysis is documented in
-[DEVICE-SIGNING.md](DEVICE-SIGNING.md). A web UI delivered by the hub cannot
-provide a trustworthy client signature against a compromised hub; the current
-enforced properties remain hub command signing, nonce replay protection,
-revocable device sessions, step-up and host policy. A native client key is a
-future option, not implemented or claimed.
+Device command signing is implemented for native clients. A device can register
+an Ed25519 or P-256 public key with step-up; prompts, approvals, terminal input,
+interrupts and run stops are then rejected unless the canonical request carries
+a valid signature, timestamp and nonce. The hub keeps a per-device nonce window
+and tests replay, unsigned-write, Ed25519 and P-256/P1363 cases. The browser UI
+remains cookie-authenticated because hub-delivered JavaScript cannot protect a
+key against a compromised hub; see [DEVICE-SIGNING.md](DEVICE-SIGNING.md).
+`--require-signed-commands` enforces signatures for every device. This is
+hub-side verification: it protects against stolen cookies and replayed writes,
+not against a compromised hub. Host-side rejection of hub-forged commands
+remains open.
 
 ### P0a: installer/update safety (2026-11-12)
 
