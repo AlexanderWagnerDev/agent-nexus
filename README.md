@@ -245,7 +245,7 @@ nexusd update --configure --checksum-only   # explicit weaker trust mode
 nexusd update --rollback
 ```
 
-See [docs/INSTALL.md](docs/INSTALL.md#host-updates) and
+See [docs/INSTALL.md](docs/INSTALL.md#31-host-updates) and
 [docs/OPERATIONS.md](docs/OPERATIONS.md#host-updates).
 
 ## Security

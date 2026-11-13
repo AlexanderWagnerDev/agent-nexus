@@ -58,6 +58,28 @@ func TestUpdateChannelSelection(t *testing.T) {
 	}
 }
 
+func TestInvalidReleaseTagIsIgnored(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"tag_name": "nightly", "prerelease": false},
+			{"tag_name": "v1.0.0", "prerelease": false, "assets": []map[string]string{
+				{"name": releaseAssetName("1.0.0", runtime.GOOS, runtime.GOARCH), "browser_download_url": "https://example.invalid/a"},
+				{"name": "checksums.txt", "browser_download_url": "https://example.invalid/c"},
+			}},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("NEXUS_UPDATE_API", server.URL)
+	t.Setenv("NEXUS_UPDATE_REPO", "example/repo")
+	info, err := CheckForUpdate(context.Background(), "0.9.0", "stable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Latest != "1.0.0" {
+		t.Fatalf("invalid tag selected: %+v", info)
+	}
+}
+
 func TestCheckForUpdateUsesETag(t *testing.T) {
 	var requests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +212,21 @@ func TestUpdateStatePersistence(t *testing.T) {
 		if info.Mode().Perm()&0o077 != 0 {
 			t.Fatalf("update state is readable by other users: %o", info.Mode().Perm())
 		}
+	}
+}
+
+func TestChecksumMismatchIsRejected(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "release.tar.gz")
+	if err := os.WriteFile(archive, []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checksums := filepath.Join(dir, "checksums.txt")
+	if err := os.WriteFile(checksums, []byte("0000000000000000000000000000000000000000000000000000000000000000  release.tar.gz\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyChecksum(archive, checksums); err == nil {
+		t.Fatal("wrong checksum was accepted")
 	}
 }
 
