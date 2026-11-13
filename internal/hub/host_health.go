@@ -59,8 +59,20 @@ func buildHostHealth(h protocol.HostView, online bool) protocol.HostHealth {
 			add("index_building", "info", "The host-local transcript index is still building.")
 		}
 	}
-	if h.Update != nil && h.Update.Available {
-		add("update_available", "info", fmt.Sprintf("nexusd %s is available on the update channel.", h.Update.Latest))
+	if h.Update != nil {
+		if h.Update.Available {
+			add("update_available", "info", fmt.Sprintf("nexusd %s is available on the update channel.", h.Update.Latest))
+		}
+		switch h.Update.State {
+		case protocol.UpdateStateFailed, protocol.UpdateStateRolledBack, protocol.UpdateStateBlocked:
+			message := h.Update.Message
+			if message == "" {
+				message = h.Update.Error
+			}
+			add("update_problem", "warning", "The last host update did not complete: "+message)
+		case protocol.UpdateStateWaitingIdle:
+			add("update_waiting_idle", "info", "An update is waiting for active agent runs to finish.")
+		}
 	}
 	if h.Policy == nil {
 		add("policy_missing", "warning", "The host did not report a policy summary.")

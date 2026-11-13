@@ -55,6 +55,7 @@ type Server struct {
 	updateMu           sync.Mutex
 	hostUpdates        map[string]protocol.UpdateStatus
 	lastUpdateNotified map[string]string
+	lastUpdatePhase    map[string]string
 
 	indexMu   sync.Mutex
 	hostIndex map[string]protocol.IndexStatus
@@ -97,6 +98,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		passkeySessions:    passkeySessionStore{data: map[string]passkeySession{}},
 		hostUpdates:        map[string]protocol.UpdateStatus{},
 		lastUpdateNotified: map[string]string{},
+		lastUpdatePhase:    map[string]string{},
 		hostIndex:          map[string]protocol.IndexStatus{},
 		epoch:              newID(),
 		metrics:            newMetrics(),
@@ -177,6 +179,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeHost)))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
 	mux.HandleFunc("GET /api/v1/hosts/{id}/update", s.requireAuth(s.handleHostUpdate))
+	mux.HandleFunc("POST /api/v1/hosts/{id}/update/install", s.requireAuth(s.requireStepUp(s.handleHostUpdateInstall)))
 	mux.HandleFunc("GET /api/v1/hosts/{id}/diagnostics", s.requireAuth(s.handleHostDiagnostics))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))
 

@@ -21,6 +21,25 @@ function parseDetails(raw) {
   }
 }
 
+function updateStateLabel(update) {
+  if (!update) return t('No update check recorded yet.');
+  if (update.error === 'no published release') return t('No published release');
+  switch (update.state) {
+    case 'checking': return t('Checking for updates...');
+    case 'downloading': return t('Downloading update...');
+    case 'ready': return t('Update ready');
+    case 'waiting_for_idle': return t('Waiting for active agent runs');
+    case 'installing': return t('Installing update...');
+    case 'verifying': return t('Verifying the new version...');
+    case 'success': return t('Update installed');
+    case 'failed': return t('Update failed');
+    case 'rolled_back': return t('Update rolled back');
+    case 'blocked': return t('Update blocked');
+    case 'disabled': return t('Automatic updates disabled');
+    default: return update.available ? t('update available') : t('up to date');
+  }
+}
+
 export async function pageHostDetail(id) {
   const pageGen = state.pageGen;
   renderShell('hosts');
@@ -151,16 +170,25 @@ export async function pageHostDetail(id) {
         </div>
 
         <div class="section-card">
-          <div class="section-head"><h2>${t('Updates')}</h2></div>
+          <div class="section-head"><h2>${t('Updates')}</h2>${update?.state ? badge(t(update.state), update.state === 'success' ? 'online' : (['failed', 'rolled_back', 'blocked'].includes(update.state) ? 'failed' : 'waiting_for_input')) : ''}</div>
           <div id="host-update-result">
             ${update ? `<div class="meta-list">
               <div><span>${t('Installed')}</span><strong>${esc(update.current || h.version || t('unknown'))}</strong></div>
               <div><span>${t('Latest')}</span><strong>${esc(update.latest || t('unknown'))}</strong></div>
-              <div><span>${t('Status')}</span><strong>${noRelease ? t('No published release') : (update.error ? t('check failed') : (update.available ? t('update available') : t('up to date')))}</strong></div>
+              <div><span>${t('Channel')}</span><strong>${esc(t(update.channel || 'stable'))}</strong></div>
+              <div><span>${t('Auto update')}</span><strong>${update.auto_enabled ? t('on') : t('off')}${update.install_when_idle ? ` · ${t('idle')}` : ''}</strong></div>
+              <div><span>${t('Signature')}</span><strong>${esc(update.signature === 'checksum-only' ? t('checksum-only') : (update.signature === 'cosign' ? 'cosign' : '—'))}</strong></div>
+              <div><span>${t('Status')}</span><strong>${esc(updateStateLabel(update))}</strong></div>
+              <div><span>${t('Last check')}</span><strong>${esc(fmtTime(update.checked_at))}</strong></div>
+              <div><span>${t('Last successful update')}</span><strong>${esc(fmtTime(update.last_success))}</strong></div>
             </div>
+            ${update.message ? `<details class="mt-1"><summary class="aside-note">${t('Technical details')}</summary><p class="aside-note">${esc(update.message)}</p></details>` : ''}
             ${update.error && !noRelease ? `<div class="notice error small mt-1">${esc(update.error)}</div>` : ''}
+            ${update.signature === 'checksum-only' ? `<p class="aside-note mt-1">${t('This is a weaker trust mode.')}</p>` : ''}
             ${noRelease ? `<p class="aside-note mt-1">${t('The alpha has no release feed. Update checks resume after the first approved version.')}</p>` : ''}
-            ${update.available ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div>` : ''}` : `<p class="aside-note">${t('Check the GitHub release feed. Installation stays on the host:')} <code>nexusd update --install</code>.</p>`}
+            ${update.blocked_version ? `<div class="notice small mt-1">${t('A blocked version stays disabled until it is removed on the host:')} <code>nexusd update --configure --unblock ${esc(update.blocked_version)}</code></div>` : ''}
+            ${update.available && update.remote_install && data.can_manage ? `<button class="btn small mt-1" type="button" id="host-update-install">${t('Install on host')}</button>` : ''}
+            ${update.available && !update.remote_install ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div><p class="aside-note">${t('Remote installation is disabled on this host.')}</p>` : ''}` : `<p class="aside-note">${t('No update check recorded yet.')}</p><p class="aside-note">${t('Updates are managed locally on the host; the hub only displays the state.')}</p>`}
           </div>
         </div>
         <div class="section-card">
@@ -200,6 +228,19 @@ export async function pageHostDetail(id) {
       button.disabled = false;
     }
   });
+  document.getElementById('host-update-install')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      await api(`/hosts/${encodeURIComponent(h.id)}/update/install`, { method: 'POST' });
+      toast(t('Installation requested'));
+      pageHostDetail(h.id).catch(() => {});
+    } catch (err) {
+      toast(err.message, true);
+      button.disabled = false;
+    }
+  });
   document.getElementById('host-update-check')?.addEventListener('click', async (event) => {
     const box = document.getElementById('host-update-result');
     const button = event.currentTarget;
@@ -208,12 +249,8 @@ export async function pageHostDetail(id) {
     const previous = box.innerHTML;
     box.innerHTML = `<div class="empty compact"><span class="spinner"></span>${t('Checking...')}</div>`;
     try {
-      const info = await api(`/hosts/${encodeURIComponent(h.id)}/update`);
-      box.innerHTML = `<div class="meta-list">
-        <div><span>${t('Installed')}</span><strong>${esc(info.current || h.version || t('unknown'))}</strong></div>
-        <div><span>${t('Latest')}</span><strong>${esc(info.latest || t('unknown'))}</strong></div>
-        <div><span>${t('Status')}</span><strong>${info.available ? t('update available') : t('up to date')}</strong></div>
-      </div>${info.available ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div>` : ''}`;
+      await api(`/hosts/${encodeURIComponent(h.id)}/update`);
+      await pageHostDetail(h.id);
     } catch (err) {
       box.innerHTML = `<div class="notice error small">${esc(err.message)}</div>`;
       toast(err.message, true);

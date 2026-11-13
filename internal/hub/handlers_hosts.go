@@ -348,3 +348,30 @@ func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, info)
 }
+
+// handleHostUpdateInstall asks the host to start its automatic update flow.
+// The host still enforces updates.allow_remote_install, its channel, signature
+// policy and idle gate; the hub cannot force an installation.
+func (s *Server) handleHostUpdateInstall(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("id")
+	if !s.hostPermission(u, hostID, "manage") {
+		writeError(w, http.StatusForbidden, "host manage permission required")
+		return
+	}
+	if !s.hostOnline(hostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, hostID, "update.install", nil)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var result any
+	_ = json.Unmarshal(raw, &result)
+	s.audit(u.Username, "host.update_install_requested", map[string]string{"host_id": hostID})
+	writeJSON(w, http.StatusAccepted, result)
+}

@@ -259,14 +259,40 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 			if notify {
 				s.lastUpdateNotified[hc.id] = status.Latest
 			}
+			alertKey := status.State + "|" + status.Latest + "|" + status.Message
+			phaseChanged := false
+			switch status.State {
+			case protocol.UpdateStateSuccess, protocol.UpdateStateFailed,
+				protocol.UpdateStateRolledBack, protocol.UpdateStateBlocked:
+				if s.lastUpdatePhase[hc.id] != alertKey {
+					s.lastUpdatePhase[hc.id] = alertKey
+					phaseChanged = true
+				}
+			}
 			s.updateMu.Unlock()
 			s.broadcastHostUpdate(hc.id)
-			if notify {
-				if host, err := s.store.HostByID(hc.id); err == nil && host.OwnerID != "" {
+			host, _ := s.store.HostByID(hc.id)
+			if notify && host.OwnerID != "" {
+				_ = s.store.AddNotification(host.OwnerID, "update",
+					"Update available on "+host.Name,
+					"nexusd "+status.Latest+" is available (installed "+status.Current+")",
+					"", "#/hosts/"+hc.id)
+			}
+			if phaseChanged && host.OwnerID != "" {
+				switch status.State {
+				case protocol.UpdateStateSuccess:
 					_ = s.store.AddNotification(host.OwnerID, "update",
-						"Update available on "+host.Name,
-						"nexusd "+status.Latest+" is available (installed "+status.Current+")",
-						"", "#/hosts")
+						"Update installed on "+host.Name,
+						"nexusd "+status.Current+" is running.",
+						"", "#/hosts/"+hc.id)
+				case protocol.UpdateStateFailed, protocol.UpdateStateRolledBack, protocol.UpdateStateBlocked:
+					detail := status.Message
+					if detail == "" {
+						detail = status.Error
+					}
+					_ = s.store.AddNotification(host.OwnerID, "update",
+						"Update problem on "+host.Name,
+						detail, "", "#/hosts/"+hc.id)
 				}
 			}
 		}

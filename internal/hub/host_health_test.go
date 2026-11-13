@@ -24,6 +24,12 @@ func TestBuildHostHealth(t *testing.T) {
 	if got := buildHostHealth(base, true); got.State != "degraded" || got.Reasons[0].Code != "agent_untested_version" {
 		t.Fatalf("untested agent: %+v", got)
 	}
+	base.Agents = base.Agents[:1]
+	base.Update = &protocol.UpdateStatus{State: protocol.UpdateStateBlocked, Message: "signature failed"}
+	if got := buildHostHealth(base, true); got.State != "degraded" {
+		t.Fatalf("blocked update should degrade health: %+v", got)
+	}
+	base.Update = nil
 	base.Disabled = true
 	if got := buildHostHealth(base, true); got.State != "disabled" {
 		t.Fatalf("disabled host: %+v", got)

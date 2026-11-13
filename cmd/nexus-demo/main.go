@@ -199,8 +199,13 @@ func (d *demoHost) connect(ctx context.Context) error {
 		},
 	})
 	_ = d.send(ws, protocol.Envelope{
-		Type:   "update.status",
-		Update: &protocol.UpdateStatus{Current: "alpha", CheckedAt: time.Now().UTC(), Error: "no published release"},
+		Type: "update.status",
+		Update: &protocol.UpdateStatus{
+			Current: "alpha", Channel: "stable", AutoEnabled: true, InstallIdle: true,
+			Signature: "cosign", State: protocol.UpdateStateIdle,
+			Message:   "no published release for this channel yet",
+			CheckedAt: time.Now().UTC(), Error: "no published release",
+		},
 	})
 	_ = d.send(ws, protocol.Envelope{Type: "sessions", Full: true, Sessions: d.fixtures.sessions})
 

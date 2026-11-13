@@ -5,7 +5,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const sources = ['web/assets/app.js', 'web/assets/chat-format.js', 'web/assets/markdown.js'];
+
+function sourceFiles(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+    const relative = path.posix.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...sourceFiles(relative));
+    else if (entry.name.endsWith('.js')) out.push(relative);
+  }
+  return out;
+}
+
+const sources = [
+  'web/assets/app.js',
+  'web/assets/chat-format.js',
+  'web/assets/markdown.js',
+  ...sourceFiles('web/assets/views'),
+  ...sourceFiles('web/assets/components'),
+];
 
 function unescapeKey(value) {
   return value.replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\');
