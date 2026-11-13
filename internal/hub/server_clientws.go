@@ -127,6 +127,12 @@ func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg protocol.ClientEnvelope) {
+	if signedWriteMessage(msg.Type) {
+		if err := s.verifyWSDeviceSignature(c.device.ID, msg); err != nil {
+			c.push(protocol.ServerEnvelope{Type: "error", Error: err.Error()})
+			return
+		}
+	}
 	switch msg.Type {
 	case "subscribe":
 		if msg.RunID == "" {

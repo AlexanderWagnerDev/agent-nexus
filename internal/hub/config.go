@@ -16,6 +16,9 @@ type Config struct {
 	MaxRunsPerHost    int
 	MaxRunsPerUser    int
 	MaxRunsPerProject int
+	// RequireSignedCommands rejects prompt/approval/stop writes unless the
+	// browser or native client signs them with a registered device key.
+	RequireSignedCommands bool
 }
 
 type ctxKey int

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -269,6 +271,14 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "# HELP nexus_queue_pending Queued prompts waiting for an idle run.\n# TYPE nexus_queue_pending gauge\nnexus_queue_pending %d\n", counts.QueuedPrompts)
 	fmt.Fprintf(&b, "# HELP nexus_active_runs Runs without an end timestamp.\n# TYPE nexus_active_runs gauge\nnexus_active_runs %d\n", runs)
 	fmt.Fprintf(&b, "# HELP nexus_browser_websockets Connected browser WebSockets.\n# TYPE nexus_browser_websockets gauge\nnexus_browser_websockets %d\n", clients)
+	fmt.Fprintf(&b, "# HELP nexus_goroutines Live goroutines in the hub process.\n# TYPE nexus_goroutines gauge\nnexus_goroutines %d\n", runtime.NumGoroutine())
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	fmt.Fprintf(&b, "# HELP nexus_heap_alloc_bytes Bytes of allocated heap objects.\n# TYPE nexus_heap_alloc_bytes gauge\nnexus_heap_alloc_bytes %d\n", mem.HeapAlloc)
+	fmt.Fprintf(&b, "# HELP nexus_heap_inuse_bytes Bytes in in-use heap spans.\n# TYPE nexus_heap_inuse_bytes gauge\nnexus_heap_inuse_bytes %d\n", mem.HeapInuse)
+	if fds, err := os.ReadDir("/proc/self/fd"); err == nil {
+		fmt.Fprintf(&b, "# HELP nexus_open_fds Open file descriptors in the hub process.\n# TYPE nexus_open_fds gauge\nnexus_open_fds %d\n", len(fds))
+	}
 	s.metrics.mu.Lock()
 	fmt.Fprintf(&b, "# HELP nexus_host_reconnects_total Host links that replaced an older link.\n# TYPE nexus_host_reconnects_total counter\nnexus_host_reconnects_total %d\n", s.metrics.hostReconnects)
 	fmt.Fprintf(&b, "# HELP nexus_push_failures_total Web Push delivery failures.\n# TYPE nexus_push_failures_total counter\nnexus_push_failures_total %d\n", s.metrics.pushFailures)

@@ -1,6 +1,10 @@
 package hub
 
 import (
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"database/sql"
+	"encoding/base64"
 	"net/http"
 	"strings"
 )
@@ -323,6 +327,59 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(u.Username, "auth.totp_enabled", nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "enabled"})
+}
+
+func (s *Server) handleSetDeviceKey(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	var req struct {
+		Algorithm string `json:"algorithm"`
+		PublicKey string `json:"public_key"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	req.Algorithm = strings.ToLower(strings.TrimSpace(req.Algorithm))
+	key, err := base64.StdEncoding.DecodeString(req.PublicKey)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "public_key must be base64")
+		return
+	}
+	switch req.Algorithm {
+	case "ed25519":
+		if len(key) != ed25519.PublicKeySize {
+			writeError(w, http.StatusBadRequest, "ed25519 public key must be 32 bytes")
+			return
+		}
+	case "p256":
+		if x, _ := elliptic.Unmarshal(elliptic.P256(), key); x == nil {
+			writeError(w, http.StatusBadRequest, "p256 public key must be an uncompressed point")
+			return
+		}
+	default:
+		writeError(w, http.StatusBadRequest, "algorithm must be ed25519 or p256")
+		return
+	}
+	if err := s.store.SetDevicePublicKey(u.ID, r.PathValue("id"), req.Algorithm, req.PublicKey); err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, http.StatusNotFound, "device not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "device.key_registered", map[string]string{"device_id": r.PathValue("id"), "algorithm": req.Algorithm})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "registered", "algorithm": req.Algorithm})
+}
+
+func (s *Server) handleDeleteDeviceKey(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	if err := s.store.DeleteDevicePublicKey(u.ID, r.PathValue("id")); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "device.key_removed", map[string]string{"device_id": r.PathValue("id")})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {

@@ -52,6 +52,33 @@ func (s *Server) runEventCursor(id string) uint64 {
 	return rs.eventSeq
 }
 
+// pendingApproval returns the newest approval.requested event that has no
+// matching approval.resolved event in the retained run window.
+func (s *Server) pendingApproval(id string) *protocol.RunEvent {
+	rs := s.runState(id)
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	pending := map[string]protocol.RunEvent{}
+	for _, ev := range rs.events {
+		switch ev.Type {
+		case "approval.requested":
+			if ev.ApprovalID != "" {
+				pending[ev.ApprovalID] = ev
+			}
+		case "approval.resolved":
+			delete(pending, ev.ApprovalID)
+		}
+	}
+	var newest *protocol.RunEvent
+	for _, ev := range pending {
+		candidate := ev
+		if newest == nil || candidate.Seq > newest.Seq {
+			newest = &candidate
+		}
+	}
+	return newest
+}
+
 func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	rs := s.runState(runID)
 	rs.mu.Lock()

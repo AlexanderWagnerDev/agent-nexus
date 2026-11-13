@@ -383,6 +383,12 @@ CREATE TABLE IF NOT EXISTS host_favorites (
   PRIMARY KEY (user_id, host_id)
 );
 CREATE INDEX IF NOT EXISTS host_favorites_user_idx ON host_favorites(user_id, created_at);
+CREATE TABLE IF NOT EXISTS device_keys (
+  device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+  algorithm TEXT NOT NULL,
+  public_key TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 `)
 	if err != nil {
 		return err

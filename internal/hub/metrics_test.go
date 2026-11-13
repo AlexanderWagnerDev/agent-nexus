@@ -5,12 +5,28 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
+
+func TestMetricsExposeRuntimeGauges(t *testing.T) {
+	hub := newAPITestHub(t, Config{MetricsEnabled: true, MetricsToken: "tok"})
+	status, body := hub.do(nil, http.MethodGet, "/metrics", nil, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer tok")
+	})
+	if status != http.StatusOK {
+		t.Fatalf("metrics status %d: %s", status, body)
+	}
+	for _, metric := range []string{"nexus_goroutines", "nexus_heap_alloc_bytes", "nexus_hosts_connected", "nexus_active_runs"} {
+		if !strings.Contains(string(body), metric) {
+			t.Fatalf("missing %s in metrics output", metric)
+		}
+	}
+}
 
 func TestApprovalMetricsAnsweredResolvedAndScopedByRun(t *testing.T) {
 	m := newMetrics()

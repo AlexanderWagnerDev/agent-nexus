@@ -330,6 +330,13 @@ type ClientEnvelope struct {
 	ApprovalID string         `json:"approval_id,omitempty"`
 	Decision   string         `json:"decision,omitempty"`
 	Options    *PromptOptions `json:"options,omitempty"`
+	// Device signatures are optional for cookie-only browser sessions and
+	// mandatory for a device that registered a command-signing key (or when
+	// the hub enforces signed commands).
+	DeviceAlgorithm string `json:"device_algorithm,omitempty"`
+	DeviceTimestamp int64  `json:"device_timestamp,omitempty"`
+	DeviceNonce     string `json:"device_nonce,omitempty"`
+	DeviceSignature string `json:"device_signature,omitempty"`
 }
 
 // ServerEnvelope is sent to the browser over the client WebSocket.
@@ -441,6 +448,9 @@ type RunView struct {
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
 	ErrorCode     string     `json:"error_code,omitempty"`
 	ErrorMessage  string     `json:"error_message,omitempty"`
+	// PendingApproval is the newest unresolved approval request, so a page
+	// reload can render the approval card without replaying the whole stream.
+	PendingApproval *RunEvent `json:"pending_approval,omitempty"`
 }
 
 // ProjectView groups native sessions that share a working directory on one

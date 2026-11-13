@@ -83,6 +83,7 @@ type SessionFilter struct {
 	HostID  string
 	Agent   string
 	Project string
+	RepoURL string
 	State   string
 	Query   string
 	Tag     string
@@ -187,6 +188,10 @@ func (s *Store) sessionFilterClause(userID string, f SessionFilter, all bool) (s
 	if f.Project != "" {
 		q += ` AND s.cwd LIKE ?`
 		args = append(args, "%"+f.Project+"%")
+	}
+	if f.RepoURL != "" {
+		q += ` AND lower(rtrim(s.repo_url,'/'))=?`
+		args = append(args, strings.TrimSuffix(strings.TrimRight(strings.ToLower(strings.TrimSpace(f.RepoURL)), "/"), ".git"))
 	}
 	if f.State != "" {
 		q += ` AND s.state=?`

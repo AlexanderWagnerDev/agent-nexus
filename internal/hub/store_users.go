@@ -177,6 +177,34 @@ func (s *Store) CreateSession(userID, deviceName string) (token string, device D
 	return token, device, err
 }
 
+// SetDevicePublicKey stores or replaces the command-signing key for one of
+// the user's own devices. Keys are scoped to the device session, so revoking
+// the device removes the key capability with it.
+func (s *Store) SetDevicePublicKey(userID, deviceID, algorithm, publicKey string) error {
+	res, err := s.db.Exec(`INSERT INTO device_keys(device_id,algorithm,public_key,created_at)
+		SELECT id,?,?,? FROM devices WHERE id=? AND user_id=? AND revoked_at IS NULL
+		ON CONFLICT(device_id) DO UPDATE SET algorithm=excluded.algorithm, public_key=excluded.public_key, created_at=excluded.created_at`,
+		algorithm, publicKey, ms(time.Now()), deviceID, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DevicePublicKey returns the registered signing key for a device.
+func (s *Store) DevicePublicKey(deviceID string) (algorithm, publicKey string, err error) {
+	err = s.db.QueryRow(`SELECT algorithm,public_key FROM device_keys WHERE device_id=?`, deviceID).Scan(&algorithm, &publicKey)
+	return algorithm, publicKey, err
+}
+
+func (s *Store) DeleteDevicePublicKey(userID, deviceID string) error {
+	_, err := s.db.Exec(`DELETE FROM device_keys WHERE device_id=? AND device_id IN (SELECT id FROM devices WHERE id=? AND user_id=?)`, deviceID, deviceID, userID)
+	return err
+}
+
 type SessionInfo struct {
 	User        User
 	Device      Device

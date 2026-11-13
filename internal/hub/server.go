@@ -69,6 +69,7 @@ type Server struct {
 
 	notificationAllowPrivate bool
 	mcpLimiter               *rateLimiter
+	replay                   *replayGuard
 }
 
 type pendingRequest struct {
@@ -103,6 +104,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		queueArmed:         map[string]bool{},
 		mcpLimiter:         newRateLimiter(120, time.Minute),
 		startedAt:          time.Now().UTC(),
+		replay:             newReplayGuard(),
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
@@ -150,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/totp/begin", s.requireAuth(s.requireStepUp(s.handleTOTPBegin)))
 	mux.HandleFunc("POST /api/v1/auth/totp/enable", s.requireAuth(s.requireStepUp(s.handleTOTPEnable)))
 	mux.HandleFunc("GET /api/v1/devices", s.requireAuth(s.handleDevices))
+	mux.HandleFunc("PUT /api/v1/devices/{id}/key", s.requireAuth(s.requireStepUp(s.handleSetDeviceKey)))
+	mux.HandleFunc("DELETE /api/v1/devices/{id}/key", s.requireAuth(s.requireStepUp(s.handleDeleteDeviceKey)))
 	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeDevice)))
 	mux.HandleFunc("POST /api/v1/devices/revoke-others", s.requireAuth(s.requireStepUp(s.handleRevokeOtherDevices)))
 	mux.HandleFunc("POST /api/v1/devices/pairing", s.requireAuth(s.requireStepUp(s.handleCreateDevicePairing)))

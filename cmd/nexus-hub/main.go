@@ -49,6 +49,7 @@ func main() {
 		maxHost     = flag.Int("max-runs-per-host", envInt("NEXUS_MAX_RUNS_PER_HOST", 0), "concurrent run limit per host (0 = unlimited)")
 		maxUser     = flag.Int("max-runs-per-user", envInt("NEXUS_MAX_RUNS_PER_USER", 0), "concurrent run limit per user (0 = unlimited)")
 		maxProject  = flag.Int("max-runs-per-project", envInt("NEXUS_MAX_RUNS_PER_PROJECT", 0), "concurrent run limit per project (0 = unlimited)")
+		signed      = flag.Bool("require-signed-commands", envOr("NEXUS_REQUIRE_SIGNED_COMMANDS", "") == "true", "reject prompt, approval and stop writes that are not signed by a registered device key")
 		logLevel    = flag.String("log-level", envOr("NEXUS_LOG_LEVEL", "info"), "debug, info, warn or error")
 		healthcheck = flag.Bool("healthcheck", false, "probe the local /healthz endpoint and exit")
 		backup      = flag.String("backup", "", "write a consistent database snapshot to this file and exit")
@@ -104,17 +105,18 @@ func main() {
 	}
 
 	srv := hub.NewServer(hub.Config{
-		Addr:              *addr,
-		DataDir:           *dataDir,
-		PublicURL:         *publicURL,
-		TLSCert:           *tlsCert,
-		TLSKey:            *tlsKey,
-		HubName:           *hubName,
-		MetricsEnabled:    *metrics,
-		MetricsToken:      *metricsTok,
-		MaxRunsPerHost:    *maxHost,
-		MaxRunsPerUser:    *maxUser,
-		MaxRunsPerProject: *maxProject,
+		Addr:                  *addr,
+		DataDir:               *dataDir,
+		PublicURL:             *publicURL,
+		TLSCert:               *tlsCert,
+		TLSKey:                *tlsKey,
+		HubName:               *hubName,
+		MetricsEnabled:        *metrics,
+		MetricsToken:          *metricsTok,
+		MaxRunsPerHost:        *maxHost,
+		MaxRunsPerUser:        *maxUser,
+		MaxRunsPerProject:     *maxProject,
+		RequireSignedCommands: *signed,
 	}, store, logger)
 	srv.SetSigner(signer)
 	srv.SetAssets(web.Handler())

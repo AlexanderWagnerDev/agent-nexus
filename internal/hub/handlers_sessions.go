@@ -23,7 +23,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := atoiOr(q.Get("offset"), 0)
 	filter := SessionFilter{
-		HostID: q.Get("host"), Agent: q.Get("agent"), Project: q.Get("project"),
+		HostID: q.Get("host"), Agent: q.Get("agent"), Project: q.Get("project"), RepoURL: q.Get("repo"),
 		State: q.Get("state"), Query: q.Get("q"), Tag: normalizeTag(q.Get("tag")),
 		Sort: q.Get("sort"), Order: q.Get("order"), Limit: limit + 1, Offset: offset,
 	}
@@ -621,6 +621,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run.LastEventSeq = s.runEventCursor(run.ID)
+	run.PendingApproval = s.pendingApproval(run.ID)
 	writeJSON(w, http.StatusOK, run)
 }
 
@@ -660,6 +661,9 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
 	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
 		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, nil) {
 		return
 	}
 	if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.stop", RunID: run.ID}); err != nil {

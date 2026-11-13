@@ -114,6 +114,39 @@ func TestStoreProjectsFavoritesAndNotifications(t *testing.T) {
 	}
 }
 
+func TestStoreFiltersSessionsByNormalizedRepoURL(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	u, _ := s.CreateUser("owner", "hash", "secret")
+	now := time.Now().UTC().Truncate(time.Second)
+	for _, hostName := range []string{"linux-builder", "windows-dev"} {
+		hostID, err := s.CreateHost(u.ID, hostName, make([]byte, 32), "linux", "amd64", "0.1.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := s.ReplaceHostSessions(hostID, []protocol.Session{
+			{NativeID: "same-" + hostName, Agent: "codex", Title: "shared repo", Cwd: "/work/" + hostName, RepoURL: "https://github.com/example/sample-api", CreatedAt: now, UpdatedAt: now, State: protocol.StateIdle},
+			{NativeID: "other-" + hostName, Agent: "codex", Title: "other repo", Cwd: "/work/other-" + hostName, RepoURL: "https://github.com/example/other", CreatedAt: now, UpdatedAt: now, State: protocol.StateIdle},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	filtered, err := s.ListSessionsFiltered(u.ID, SessionFilter{RepoURL: "https://github.com/example/sample-api/", Limit: 20}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 2 {
+		t.Fatalf("expected both hosts for the same remote, got %d", len(filtered))
+	}
+	total, err := s.CountSessionsFiltered(u.ID, SessionFilter{RepoURL: "https://github.com/example/sample-api"}, true)
+	if err != nil || total != 2 {
+		t.Fatalf("repo count: %d %v", total, err)
+	}
+}
+
 func TestPairingCodeSingleUse(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")
 	if err != nil {
