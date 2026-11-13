@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -29,6 +30,15 @@ func InstallStagedUpdate(staged string, force bool) error {
 	}
 	if !serviceInstalled() {
 		return errors.New("the host service is not installed; install it with: nexusd service install")
+	}
+	if runtime.GOOS != "windows" {
+		required := "systemctl"
+		if runtime.GOOS == "darwin" {
+			required = "launchctl"
+		}
+		if _, err := exec.LookPath(required); err != nil {
+			return fmt.Errorf("%s is required to restart the host service after an update", required)
+		}
 	}
 	target, err := os.Executable()
 	if err != nil {
@@ -112,6 +122,15 @@ func RollbackUpdate(force bool) error {
 	}
 	if !serviceInstalled() {
 		return errors.New("the host service is not installed; install it with: nexusd service install")
+	}
+	if runtime.GOOS != "windows" {
+		required := "systemctl"
+		if runtime.GOOS == "darwin" {
+			required = "launchctl"
+		}
+		if _, err := exec.LookPath(required); err != nil {
+			return fmt.Errorf("%s is required to restart the host service after an update", required)
+		}
 	}
 	target, err := os.Executable()
 	if err != nil {
