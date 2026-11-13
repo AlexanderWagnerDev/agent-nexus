@@ -1,6 +1,6 @@
 module github.com/AlexanderWagnerDev/agent-nexus
 
-go 1.27.4
+go 1.26.11
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0

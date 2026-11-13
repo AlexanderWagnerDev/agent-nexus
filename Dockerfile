@@ -2,13 +2,9 @@
 # Build on the native builder platform and cross-compile for the target image.
 # This avoids running the Go compiler under QEMU for every target architecture.
 FROM --platform=$BUILDPLATFORM alexanderwagnerdev/alpine:builder AS build
-# Go comes from apk. If the repository package is older than the go directive
-# in go.mod, Go downloads the pinned toolchain itself (GOTOOLCHAIN=auto).
-# ca-certificates is needed for the HTTPS module and toolchain downloads.
+# Go comes from apk; Alpine 3.24 ships 1.26.11, which matches the go directive.
+# ca-certificates is needed for the HTTPS module downloads.
 RUN apk add --no-cache go ca-certificates
-# Alpine's Go package forces GOTOOLCHAIN=local. Re-enable the standard
-# toolchain switch so the exact version from go.mod is used.
-ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
