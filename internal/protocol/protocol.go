@@ -85,15 +85,42 @@ type Session struct {
 	ForkedFromNativeID string `json:"forked_from_native_id,omitempty"`
 }
 
+// Update states reported by hosts in UpdateStatus.State.
+const (
+	UpdateStateIdle        = "idle"
+	UpdateStateChecking    = "checking"
+	UpdateStateDownloading = "downloading"
+	UpdateStateReady       = "ready"
+	UpdateStateWaitingIdle = "waiting_for_idle"
+	UpdateStateInstalling  = "installing"
+	UpdateStateVerifying   = "verifying"
+	UpdateStateSuccess     = "success"
+	UpdateStateFailed      = "failed"
+	UpdateStateRolledBack  = "rolled_back"
+	UpdateStateBlocked     = "blocked"
+	UpdateStateDisabled    = "disabled"
+)
+
 // UpdateStatus is reported by a host after checking the release feed. The hub
-// stores only this metadata so update availability can be shown centrally.
+// stores only this metadata so update availability and the host-local updater
+// state can be shown centrally. The hub cannot change these settings.
 type UpdateStatus struct {
-	Current    string    `json:"current"`
-	Latest     string    `json:"latest,omitempty"`
-	Available  bool      `json:"available"`
-	Prerelease bool      `json:"prerelease,omitempty"`
-	CheckedAt  time.Time `json:"checked_at"`
-	Error      string    `json:"error,omitempty"`
+	Current       string    `json:"current"`
+	Latest        string    `json:"latest,omitempty"`
+	Available     bool      `json:"available"`
+	Prerelease    bool      `json:"prerelease,omitempty"`
+	CheckedAt     time.Time `json:"checked_at"`
+	Error         string    `json:"error,omitempty"`
+	Channel       string    `json:"channel,omitempty"`
+	AutoEnabled   bool      `json:"auto_enabled"`
+	InstallIdle   bool      `json:"install_when_idle"`
+	State         string    `json:"state,omitempty"`
+	Message       string    `json:"message,omitempty"`
+	Signature     string    `json:"signature,omitempty"`
+	LastAttempt   time.Time `json:"last_attempt,omitempty"`
+	LastSuccess   time.Time `json:"last_success,omitempty"`
+	Blocked       string    `json:"blocked_version,omitempty"`
+	RemoteInstall bool      `json:"remote_install,omitempty"`
 }
 
 // SessionKey identifies a native session without sending its metadata.

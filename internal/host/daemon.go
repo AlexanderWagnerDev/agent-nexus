@@ -48,9 +48,12 @@ type Daemon struct {
 	hubNonceMu sync.Mutex
 	hubNonces  map[string]time.Time
 
-	statusMu   sync.Mutex
-	updateMu   sync.Mutex
-	lastUpdate *protocol.UpdateStatus
+	statusMu    sync.Mutex
+	updateMu    sync.Mutex
+	updateRunMu sync.Mutex
+	lastUpdate  *protocol.UpdateStatus
+	updateWake  chan struct{}
+	updating    atomic.Bool
 
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
@@ -72,6 +75,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		lastSnapshot: map[string]string{},
 		hubNonces:    map[string]time.Time{},
 		gitBranches:  map[string]gitRepoCache{},
+		updateWake:   make(chan struct{}, 1),
 	}
 	d.adapters = DetectAdapters(logger)
 	return d
@@ -96,7 +100,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return errors.New("not configured")
 	}
 	cleanupStaleAttachments(24 * time.Hour)
+	// A daemon start means any previous in-process installer is gone; a lock
+	// left by a killed update must not prevent the verification rollback.
+	clearStaleUpdateLock(0)
 	d.writeRuntimeStatus()
+	go d.runtimeStatusLoop(ctx)
 	go d.updateLoop(ctx)
 	backoff := time.Second
 	for {
@@ -266,6 +274,10 @@ func (d *Daemon) connect(ctx context.Context) error {
 		}
 	}
 	d.connectedAt.Store(time.Now().UnixNano())
+	select {
+	case d.updateWake <- struct{}{}:
+	default:
+	}
 	d.log.Info("connected to hub", "hub", d.cfg.HubURL, "host_id", d.cfg.HostID, "session_delta", d.sessionDelta.Load())
 	if err := d.sendInventory(); err != nil {
 		d.log.Warn("inventory send failed", "error", err)
@@ -807,7 +819,14 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		_ = json.Unmarshal(params, &p)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return CheckForUpdate(ctx, Version, p.Channel)
+		return d.CheckUpdateNow(ctx, p.Channel)
+	case "update.status":
+		return d.buildUpdateStatus(), nil
+	case "update.install":
+		if err := d.InstallUpdateNow(context.Background()); err != nil {
+			return nil, err
+		}
+		return map[string]string{"status": "scheduled"}, nil
 	case "run.options":
 		var p struct {
 			RunID string `json:"run_id"`
@@ -873,6 +892,9 @@ func (d *Daemon) sessionActiveLocked(key string) bool {
 // reserveRunLocked claims a session and run id for the short window between
 // validation and process registration. Callers must hold runMu.
 func (d *Daemon) reserveRunLocked(sessionKey, runID string) bool {
+	if d.updating.Load() {
+		return false
+	}
 	if d.sessionActiveLocked(sessionKey) || d.starting[sessionKey] ||
 		d.runActiveLocked(runID) || d.startingRuns[runID] {
 		return false
@@ -1017,46 +1039,23 @@ func (d *Daemon) writeRuntimeStatus() {
 	}
 }
 
-func (d *Daemon) updateLoop(ctx context.Context) {
-	d.checkAndReportUpdate(ctx)
-	t := time.NewTicker(6 * time.Hour)
+func (d *Daemon) sendStoredUpdateStatus() {
+	d.reportUpdateStatus()
+}
+
+// runtimeStatusLoop keeps runtime.json fresh for external installer and CLI
+// checks. Without the heartbeat a long-running agent run would make the
+// snapshot look stale after two minutes.
+func (d *Daemon) runtimeStatusLoop(ctx context.Context) {
+	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			d.checkAndReportUpdate(ctx)
+			d.writeRuntimeStatus()
 		}
-	}
-}
-
-func (d *Daemon) checkAndReportUpdate(ctx context.Context) {
-	channel := strings.TrimSpace(os.Getenv("NEXUS_UPDATE_CHANNEL"))
-	info, err := CheckForUpdate(ctx, Version, channel)
-	status := &protocol.UpdateStatus{
-		Current: Version, Latest: info.Latest, Available: info.Available,
-		Prerelease: info.Prerelease, CheckedAt: time.Now().UTC(),
-	}
-	if err != nil {
-		if errors.Is(err, ErrNoRelease) {
-			status.Error = ErrNoRelease.Error()
-		} else {
-			status.Error = err.Error()
-		}
-	}
-	d.updateMu.Lock()
-	d.lastUpdate = status
-	d.updateMu.Unlock()
-	d.sendUpdateStatus(status)
-}
-
-func (d *Daemon) sendStoredUpdateStatus() {
-	d.updateMu.Lock()
-	status := d.lastUpdate
-	d.updateMu.Unlock()
-	if status != nil {
-		d.sendUpdateStatus(status)
 	}
 }
 

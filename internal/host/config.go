@@ -51,6 +51,86 @@ func (p Policy) ProcessGrace() time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+// UpdateSettings controls the host-local auto-updater. The settings live on
+// the host and are never pushed by the hub. A nil Updates field in an existing
+// config means "official defaults": enabled, stable, every six hours, install
+// when idle, signed releases only.
+type UpdateSettings struct {
+	Disabled             bool     `json:"disabled,omitempty"`
+	Channel              string   `json:"channel,omitempty"`
+	CheckIntervalMinutes int      `json:"check_interval_minutes,omitempty"`
+	InstallWhenIdle      *bool    `json:"install_when_idle,omitempty"`
+	RequireSignature     *bool    `json:"require_signature,omitempty"`
+	AllowRemoteInstall   bool     `json:"allow_remote_install,omitempty"`
+	BlockedVersions      []string `json:"blocked_versions,omitempty"`
+}
+
+const (
+	UpdateChannelStable      = "stable"
+	UpdateChannelPrerelease  = "prerelease"
+	UpdateChannelDevelopment = "development"
+
+	DefaultUpdateInterval = 6 * time.Hour
+	MinUpdateInterval     = 15 * time.Minute
+	MaxUpdateInterval     = 7 * 24 * time.Hour
+)
+
+// Resolve returns a normalized copy of the settings with defaults applied.
+func (u UpdateSettings) Resolve() UpdateSettings {
+	if u.Channel == "" {
+		u.Channel = UpdateChannelStable
+	}
+	switch strings.ToLower(strings.TrimSpace(u.Channel)) {
+	case UpdateChannelStable, "auto":
+		u.Channel = UpdateChannelStable
+	case UpdateChannelPrerelease:
+		u.Channel = UpdateChannelPrerelease
+	case UpdateChannelDevelopment:
+		u.Channel = UpdateChannelDevelopment
+	default:
+		u.Channel = UpdateChannelStable
+	}
+	if u.CheckIntervalMinutes <= 0 {
+		u.CheckIntervalMinutes = int(DefaultUpdateInterval / time.Minute)
+	}
+	interval := time.Duration(u.CheckIntervalMinutes) * time.Minute
+	if interval < MinUpdateInterval {
+		interval = MinUpdateInterval
+	}
+	if interval > MaxUpdateInterval {
+		interval = MaxUpdateInterval
+	}
+	u.CheckIntervalMinutes = int(interval / time.Minute)
+	return u
+}
+
+// Interval returns the configured check interval.
+func (u UpdateSettings) Interval() time.Duration {
+	minutes := u.Resolve().CheckIntervalMinutes
+	return time.Duration(minutes) * time.Minute
+}
+
+// InstallIdle reports whether updates may be installed automatically.
+func (u UpdateSettings) InstallIdle() bool {
+	return u.InstallWhenIdle == nil || *u.InstallWhenIdle
+}
+
+// SignatureRequired reports whether a cosign bundle must verify successfully.
+// The default is true; checksum-only is an explicit local decision.
+func (u UpdateSettings) SignatureRequired() bool {
+	return u.RequireSignature == nil || *u.RequireSignature
+}
+
+// IsBlocked reports whether a version was temporarily blocked after failures.
+func (u UpdateSettings) IsBlocked(version string) bool {
+	for _, blocked := range u.BlockedVersions {
+		if strings.TrimPrefix(strings.TrimSpace(blocked), "v") == strings.TrimPrefix(strings.TrimSpace(version), "v") {
+			return true
+		}
+	}
+	return false
+}
+
 // Config is stored next to the host key in the per-user config directory.
 type Config struct {
 	HubURL             string `json:"hub_url"`
@@ -60,6 +140,9 @@ type Config struct {
 	HubPublicKey       string `json:"hub_public_key,omitempty"`
 	HubSigningRequired bool   `json:"hub_signing_required,omitempty"`
 	Policy             Policy `json:"policy"`
+	// Updates configures the host-local auto-updater. Omitted means enabled
+	// with the official defaults; a hub cannot change these settings.
+	Updates *UpdateSettings `json:"updates,omitempty"`
 	// RunBufferBytes bounds the per-run terminal replay buffer. Omitted means
 	// 1 MiB; values below 64 KiB or above 16 MiB are clamped.
 	RunBufferBytes int `json:"run_buffer_bytes,omitempty"`
@@ -94,6 +177,26 @@ func (c Config) RunBufferBytesOrDefault() int {
 // SearchIndexEnabled reports whether the local search index may be built.
 func (c Config) SearchIndexEnabled() bool {
 	return c.SearchIndex == nil || *c.SearchIndex
+}
+
+// UpdatePrefs returns the host-local updater settings with defaults applied.
+func (c Config) UpdatePrefs() UpdateSettings {
+	if c.Updates == nil {
+		return UpdateSettings{}.Resolve()
+	}
+	return c.Updates.Resolve()
+}
+
+// SaveUpdatePrefs stores normalized updater settings without touching any
+// other field. It never changes the host identity or pairing.
+func SaveUpdatePrefs(prefs UpdateSettings) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	resolved := prefs.Resolve()
+	cfg.Updates = &resolved
+	return SaveConfig(cfg)
 }
 
 // ACPCommand returns the ACP adapter command configured for an agent.

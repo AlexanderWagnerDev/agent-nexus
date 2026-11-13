@@ -108,6 +108,25 @@ func (d *Daemon) safeDoctor() DoctorReport {
 			add("agents", "ok", "Detected agents: "+strings.Join(names, ", ")+".")
 		}
 	}
+	prefs := d.updatePrefs()
+	if prefs.Disabled {
+		add("auto_update", "ok", "Automatic host updates are disabled by local policy.")
+	} else {
+		add("auto_update", "ok", "Automatic host updates are enabled; channel and signature policy are configured locally.")
+	}
+	if state, ok := ReadUpdateState(); ok {
+		switch state.Phase {
+		case UpdatePhaseFailed, UpdatePhaseRolledBack, UpdatePhaseBlocked:
+			detail := state.LastError
+			if detail == "" {
+				detail = state.Message
+			}
+			if detail == "" {
+				detail = "The last update did not complete."
+			}
+			add("update_state", "warning", detail)
+		}
+	}
 	if index := d.searchIndexStatus(); index != nil {
 		switch index.State {
 		case "error":

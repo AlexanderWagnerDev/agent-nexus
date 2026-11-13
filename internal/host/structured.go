@@ -57,6 +57,10 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		d.log.Warn("structured run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if d.updating.Load() {
+		fail("host is installing an update; start the run again after it reconnects")
+		return
+	}
 	if err := d.validateRunPolicy(spec); err != nil {
 		fail(err.Error())
 		return

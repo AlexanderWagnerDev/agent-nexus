@@ -171,6 +171,20 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 	for _, band := range AgentMatrix() {
 		fmt.Fprintf(out, "  %-9s %-22s structured=%v\n", band.Agent, band.TestedRange(), band.Structured)
 	}
+	prefs := cfg.UpdatePrefs()
+	fmt.Fprintf(out, "updates:    channel=%s auto=%v idle=%v signature=%s\n",
+		prefs.Channel, !prefs.Disabled, prefs.InstallIdle(),
+		map[bool]string{true: "cosign-required", false: "checksum-only"}[prefs.SignatureRequired()])
+	if state, ok := ReadUpdateState(); ok {
+		fmt.Fprintf(out, "update state: %s", state.Phase)
+		if state.Info.Latest != "" {
+			fmt.Fprintf(out, " latest=%s", state.Info.Latest)
+		}
+		if state.LastError != "" {
+			fmt.Fprintf(out, " error=%s", state.LastError)
+		}
+		fmt.Fprintln(out)
+	}
 	if !cfg.SearchIndexEnabled() {
 		fmt.Fprintln(out, "search index: disabled (search_index=false)")
 	} else if dir, err := ConfigDir(); err == nil {

@@ -11,7 +11,9 @@ import (
 func restartUnixService() error {
 	switch runtime.GOOS {
 	case "linux":
-		return runCmd("systemctl", "--user", "restart", "agentnexus.service")
+		// --no-block prevents the daemon from waiting for a job that cannot
+		// finish until this process exits.
+		return runCmd("systemctl", "--user", "--no-block", "restart", "agentnexus.service")
 	case "darwin":
 		return runCmd("launchctl", "kickstart", "-k", fmt.Sprintf("gui/%d/dev.agentnexus.nexusd", os.Getuid()))
 	}

@@ -163,6 +163,10 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		d.log.Warn("run rejected", "run_id", spec.RunID, "error", msg)
 		_ = d.send(protocol.Envelope{Type: "run.error", RunID: spec.RunID, Error: msg})
 	}
+	if d.updating.Load() {
+		fail("host is installing an update; start the run again after it reconnects")
+		return
+	}
 	if spec.Action == protocol.ActionResume && !spec.Force {
 		if d.activeElsewhere(ctx, spec.Agent, spec.NativeID) {
 			fail("session is active in another terminal; close it or fork the session")

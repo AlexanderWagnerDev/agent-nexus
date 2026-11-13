@@ -63,10 +63,14 @@ Usage:
   nexusd status
   nexusd index [status|rebuild]
   nexusd service <install|uninstall|status>
-  nexusd update --check [--channel stable|prerelease]
-  nexusd update --stage [--channel ...]
+  nexusd update --check [--channel stable|prerelease|development]
+  nexusd update --stage [--channel ...] [--allow-checksum-only]
   nexusd update --install [--force] [--allow-checksum-only]
   nexusd update --rollback [--force]
+  nexusd update --status [--json]
+  nexusd update --configure [--channel ...] [--auto on|off]
+             [--install-when-idle on|off] [--checksum-only|--require-signature]
+             [--allow-remote-install on|off] [--unblock VERSION]
   nexusd version
 
 The daemon runs as the logged-in user; it never needs root/SYSTEM.
@@ -315,10 +319,135 @@ func updateCmd(args []string) {
 	stage := fs.Bool("stage", false, "download and verify the latest release")
 	install := fs.Bool("install", false, "install the staged release and restart the service")
 	rollback := fs.Bool("rollback", false, "restore nexusd.previous and restart the service")
-	channel := fs.String("channel", "auto", "stable, prerelease or auto")
+	status := fs.Bool("status", false, "show the persisted updater state")
+	configure := fs.Bool("configure", false, "change host-local update settings")
+	asJSON := fs.Bool("json", false, "print machine-readable output")
+	channel := fs.String("channel", "", "stable, prerelease or development (default: configured channel)")
+	auto := fs.String("auto", "", "on or off")
+	installIdle := fs.String("install-when-idle", "", "on or off")
+	remoteInstall := fs.String("allow-remote-install", "", "on or off")
+	checksumOnly := fs.Bool("checksum-only", false, "accept checksum-only updates (weaker trust mode)")
+	requireSignature := fs.Bool("require-signature", false, "require a verified cosign bundle")
+	unblock := fs.String("unblock", "", "remove a version from updates.blocked_versions")
 	force := fs.Bool("force", false, "restart even if active agent runs are reported")
 	allowChecksumOnly := fs.Bool("allow-checksum-only", false, "accept a release when cosign is unavailable (checksum only)")
+	verifyRollback := fs.Bool("verify-rollback", false, "internal: verify a started update and roll back on failure")
+	target := fs.String("target", "", "internal: installed binary path")
+	previous := fs.String("previous", "", "internal: rollback binary path")
+	expected := fs.String("expected", "", "internal: expected version")
 	_ = fs.Parse(args)
+
+	if *verifyRollback {
+		if err := host.VerifyUpdateAndRollback(*target, *previous, *expected); err != nil {
+			fmt.Fprintln(os.Stderr, "update watchdog:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	cfg, cfgErr := host.LoadConfig()
+	prefs := host.UpdateSettings{}.Resolve()
+	if cfgErr == nil {
+		prefs = cfg.UpdatePrefs()
+	}
+
+	if *status || *auto != "" || *installIdle != "" || *remoteInstall != "" ||
+		*checksumOnly || *requireSignature || *unblock != "" || *configure {
+		configuring := *configure || *auto != "" || *installIdle != "" || *remoteInstall != "" ||
+			*checksumOnly || *requireSignature || *unblock != ""
+		if configuring && cfgErr != nil {
+			fmt.Fprintln(os.Stderr, "update:", cfgErr)
+			os.Exit(1)
+		}
+		if *auto != "" {
+			enabled, err := parseOnOff(*auto)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "update:", err)
+				os.Exit(2)
+			}
+			prefs.Disabled = !enabled
+		}
+		if *channel != "" {
+			prefs.Channel = host.NormalizeUpdateChannel(*channel, host.Version)
+		}
+		if *installIdle != "" {
+			value, err := parseOnOff(*installIdle)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "update:", err)
+				os.Exit(2)
+			}
+			prefs.InstallWhenIdle = &value
+		}
+		if *remoteInstall != "" {
+			value, err := parseOnOff(*remoteInstall)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "update:", err)
+				os.Exit(2)
+			}
+			prefs.AllowRemoteInstall = value
+		}
+		if *checksumOnly {
+			value := false
+			prefs.RequireSignature = &value
+		}
+		if *requireSignature {
+			value := true
+			prefs.RequireSignature = &value
+		}
+		if *unblock != "" {
+			kept := prefs.BlockedVersions[:0]
+			for _, version := range prefs.BlockedVersions {
+				if version != *unblock {
+					kept = append(kept, version)
+				}
+			}
+			prefs.BlockedVersions = kept
+		}
+		if *configure || *auto != "" || *installIdle != "" || *remoteInstall != "" ||
+			*checksumOnly || *requireSignature || *unblock != "" {
+			if err := host.SaveUpdatePrefs(prefs); err != nil {
+				fmt.Fprintln(os.Stderr, "update:", err)
+				os.Exit(1)
+			}
+			if *unblock != "" {
+				host.ClearUpdateBlock(*unblock)
+			}
+			if !*status {
+				fmt.Println("update settings saved")
+				return
+			}
+		}
+		prefs = host.UpdateSettings{
+			Disabled: prefs.Disabled, Channel: prefs.Channel,
+			CheckIntervalMinutes: prefs.CheckIntervalMinutes,
+			InstallWhenIdle:      prefs.InstallWhenIdle, RequireSignature: prefs.RequireSignature,
+			AllowRemoteInstall: prefs.AllowRemoteInstall, BlockedVersions: prefs.BlockedVersions,
+		}.Resolve()
+	}
+	if *status {
+		state, ok := host.ReadUpdateState()
+		if *asJSON {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+				"version": host.Version, "settings": prefs, "state": state, "persisted": ok,
+			})
+			return
+		}
+		fmt.Printf("current:       %s\nchannel:       %s\nauto update:   %v\ninstall idle:  %v\nsignature:     %s\n",
+			host.Version, prefs.Channel, !prefs.Disabled, prefs.InstallIdle(), signatureMode(prefs))
+		if !ok {
+			fmt.Println("state:         no update check recorded yet")
+			return
+		}
+		fmt.Printf("phase:         %s\nlatest:        %s\nchecked:       %s\nlast success:  %s\n",
+			state.Phase, state.Info.Latest, formatTime(state.LastCheck), formatTime(state.LastSuccess))
+		if state.Message != "" {
+			fmt.Printf("message:       %s\n", state.Message)
+		}
+		if state.LastError != "" {
+			fmt.Printf("last error:    %s\n", state.LastError)
+		}
+		return
+	}
 	if *rollback {
 		if err := host.RollbackUpdate(*force); err != nil {
 			fmt.Fprintln(os.Stderr, "update:", err)
@@ -329,6 +458,9 @@ func updateCmd(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	if *channel == "" {
+		*channel = prefs.Channel
+	}
 	info, err := host.CheckForUpdate(ctx, host.Version, *channel)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "update:", err)
@@ -349,14 +481,18 @@ func updateCmd(args []string) {
 		os.Exit(1)
 	}
 	stagedDir := filepath.Join(dir, "updates", info.Latest)
-	staged, err := host.StageUpdate(ctx, info, stagedDir, !*allowChecksumOnly)
+	staged, err := host.StageUpdate(ctx, info, stagedDir, !*allowChecksumOnly && prefs.SignatureRequired())
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "update:", err)
+		os.Exit(1)
+	}
+	if err := host.VerifyStagedBinary(ctx, staged, info.Latest); err != nil {
 		fmt.Fprintln(os.Stderr, "update:", err)
 		os.Exit(1)
 	}
 	fmt.Println("staged: ", staged)
 	if *check && !*install {
-		fmt.Println("checksum verified")
+		fmt.Println("checksum and version verified")
 		return
 	}
 	if *install {
@@ -366,4 +502,28 @@ func updateCmd(args []string) {
 		}
 		fmt.Println("update applied; check nexusd doctor and the service status")
 	}
+}
+
+func parseOnOff(value string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on", "true", "1", "yes", "enabled":
+		return true, nil
+	case "off", "false", "0", "no", "disabled":
+		return false, nil
+	}
+	return false, fmt.Errorf("expected on or off, got %q", value)
+}
+
+func signatureMode(prefs host.UpdateSettings) string {
+	if prefs.SignatureRequired() {
+		return "cosign required"
+	}
+	return "checksum-only (weaker)"
+}
+
+func formatTime(value time.Time) string {
+	if value.IsZero() {
+		return "never"
+	}
+	return value.Local().Format(time.RFC3339)
 }
