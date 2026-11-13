@@ -37,9 +37,10 @@ The Docker Hub push in `.github/workflows/docker.yml` needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
 access token with read/write scope).
 
-The image is multi-arch (`linux/amd64`, `linux/arm64`), runs as the distroless
-nonroot user (UID 65532), writes only to `/data`, and exposes a
-`/nexus-hub --healthcheck` probe.
+The image is multi-arch (`linux/amd64`, `linux/arm64`, `linux/386`,
+`linux/arm/v6`, `linux/arm/v7`, `linux/ppc64le`, `linux/s390x`,
+`linux/riscv64`), runs as the nonroot user (UID 65532) on Alpine, writes only
+to `/data`, and exposes a `/nexus-hub --healthcheck` probe.
 
 Minimal compose deployment with Caddy:
 

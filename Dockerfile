@@ -1,30 +1,42 @@
 # syntax=docker/dockerfile:1
 # Build on the native builder platform and cross-compile for the target image.
-# This avoids running the Go compiler under QEMU for linux/arm64.
-FROM --platform=$BUILDPLATFORM golang:1.27 AS build
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
-ARG VERSION=dev
+# This avoids running the Go compiler under QEMU for every target architecture.
+FROM --platform=$BUILDPLATFORM alexanderwagnerdev/alpine:builder AS build
+# Go comes from apk. If the repository package is older than the go directive
+# in go.mod, Go downloads the pinned toolchain itself (GOTOOLCHAIN=auto).
+# ca-certificates is needed for the HTTPS module and toolchain downloads.
+RUN apk add --no-cache go ca-certificates
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false \
+# Target args stay below the module download so that layer is shared by all
+# architectures instead of repeated once per platform.
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG TARGETVARIANT
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
+    go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/hub.Version=${VERSION}" \
     -o /out/nexus-hub ./cmd/nexus-hub
 
-# Prepare the data directory with the distroless nonroot UID (65532). Docker
-# copies this ownership into a new named volume, so SQLite can write to /data.
-FROM build AS data
-RUN mkdir -p /data && chown 65532:65532 /data
-
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM alexanderwagnerdev/alpine:latest
 LABEL org.opencontainers.image.title="AgentNexus" \
       org.opencontainers.image.description="Self-hosted control plane for coding-agent sessions" \
       org.opencontainers.image.source="https://github.com/AlexanderWagnerDev/agent-nexus" \
       org.opencontainers.image.licenses="MIT"
+# ca-certificates is required for outbound HTTPS (web push). The nonroot UID
+# 65532 matches the previous distroless image (BusyBox adduser rejects UIDs
+# above 60000, so the passwd/group entries are written directly), and /data
+# keeps its ownership in new named volumes so SQLite can write to it.
+RUN apk add --no-cache ca-certificates tzdata \
+ && echo 'nexus:x:65532:65532:nexus:/nonexistent:/sbin/nologin' >> /etc/passwd \
+ && echo 'nexus:x:65532:' >> /etc/group \
+ && mkdir -p /data \
+ && chown 65532:65532 /data
 COPY --from=build /out/nexus-hub /nexus-hub
-COPY --from=data --chown=65532:65532 /data /data
+USER 65532:65532
 VOLUME ["/data"]
 EXPOSE 8080
 ENV NEXUS_ADDR=0.0.0.0:8080 \
