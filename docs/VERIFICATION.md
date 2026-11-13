@@ -33,6 +33,7 @@ request for the maintainer to perform tests personally.
 | MCP | Auth, revocation, initialize, tools/list, tool calls and error results |
 | CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
 | OpenCode 2.2.7 protocol | Read-only SQLite schema and `/openapi.json` inspected on a local 2.2.7 install; native session create/interrupt and fork contract exercised without a paid model turn; daily driver tests use a fake HTTP server |
+| Audit round 2026-11-13 | New regression tests for MCP bearer clients without the browser marker, search `not_searched` semantics, atomic first-run setup, bounded rate-limit maps, hidden approvals on finished runs, admin queue pause, activity grouping by `updated_at`, FTS pruning of deleted sessions, adapter native-ID validation, Codex JSON-RPC request/response separation, ACP failed-turn state, replay coalescing and updater token scoping pass locally |
 
 ## Not verified here
 
@@ -52,6 +53,9 @@ request for the maintainer to perform tests personally.
 - Real MCP clients (Claude Desktop, Cursor) and real microphone dictation.
 - PostgreSQL backend (not implemented).
 - Container/Portainer runtime in this environment.
+- A live service binary replacement and rollback: the rollback no longer
+  overwrites `nexusd.previous` with the installed binary, but no real Windows
+  Task Scheduler or systemd service was replaced in this environment.
 
 ## Release policy
 

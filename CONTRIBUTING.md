@@ -4,7 +4,7 @@ Thanks for your interest in AgentNexus.
 
 ## Development setup
 
-- Go 1.27+
+- Go 1.26.11+
 - Node.js 22+ (only for `node --check`; the browser client has no build step)
 
 ```bash

@@ -123,7 +123,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
 | Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>`; structured `thread/fork` |
-| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ❌ no non-interactive fork in v2 |
+| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ✅ structured (`POST /api/session/{id}/fork`); no terminal fork |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ⚠️ ACP via `gemini --acp` (fake-tested, not real-tested) | ✅ | ❌ |
 
 A tested version band is recorded per agent in `internal/host/versions.go` and
@@ -139,7 +139,7 @@ Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adap
 ### Install a host client (no Go toolchain)
 
 CI builds the daemon for Windows, Linux and macOS on every push to `main` and
-uploads it as an authenticated workflow artifact. Clone the private repository,
+uploads it as an authenticated workflow artifact. Clone the repository,
 then run the installer; it downloads, checksum-verifies and installs `nexusd`:
 
 ```powershell
@@ -152,7 +152,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 -Hub https://n
 ./scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-A source build still works when Go 1.27.4+ is available:
+A source build still works when Go 1.26.11+ is available:
 
 ```bash
 make build          # produces bin/nexus-hub and bin/nexusd
@@ -170,7 +170,7 @@ The `alpha` tag moves with `main` and is not an official release. Use a
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
 Linux and macOS host-client installation.
 
-Requirements: Go 1.27+ and Node.js only for the JavaScript syntax check (the browser client is embedded and has no build step).
+Requirements: Go 1.26.11+ and Node.js only for the JavaScript syntax check (the browser client is embedded and has no build step).
 
 ```bash
 # 1. Run the hub locally
@@ -217,11 +217,11 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
-CodeQL runs on every push and pull request. GitHub does not allow SARIF upload
-to code scanning for this private repository without GitHub Advanced Security,
-so the workflow keeps the SARIF results as 14-day workflow artifacts instead of
-the Security tab. Enable code scanning and switch `upload: never` to
-`upload: always` in `.github/workflows/codeql.yml` once GHAS is available.
+CodeQL runs on every push and pull request. The workflow currently keeps the
+SARIF results as 14-day workflow artifacts instead of publishing them to the
+Security tab. Switch `upload: never` to `upload: always` in
+`.github/workflows/codeql.yml` to upload them once code scanning is enabled for
+the repository.
 
 ## Testing
 

@@ -91,7 +91,7 @@ There are no published release archives during alpha. The daemon is built for
 uploaded as authenticated GitHub Actions artifacts (30-day retention). The
 installer scripts download the newest successful build from `main`, verify its
 SHA-256 and place it in the per-user install directory. They need the GitHub
-CLI (`gh auth login`) with read access to the private repository, but no Go
+CLI (`gh auth login`) with read access to the repository, but no Go
 toolchain.
 
 Clone the repository once on the machine that runs the installer so the script
@@ -102,7 +102,7 @@ gh repo clone AlexanderWagnerDev/agent-nexus
 ```
 
 If you prefer a source build, `go build -trimpath -o nexusd ./cmd/nexusd`
-still works. Go 1.27.4 or newer is required.
+still works. Go 1.26.11 or newer is required.
 
 ### Windows (including Windows Server 2025)
 

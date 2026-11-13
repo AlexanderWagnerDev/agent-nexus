@@ -22,7 +22,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
 | Web Push | VAPID, content-free payloads, subscriptions bound to user and device; private key encrypted at rest | permission is browser-controlled |
-| Host updates | `nexusd update` downloads releases directly from GitHub, verifies SHA-256 and verifies the cosign keyless bundle when cosign is installed; install is refused while runs are active unless forced | private repository needs a read-only GitHub token; hub does not apply updates |
+| Host updates | `nexusd update` downloads releases directly from GitHub, verifies SHA-256 and verifies the cosign keyless bundle when cosign is installed; install is refused while runs are active unless forced | a private release feed needs a read-only GitHub token; hub does not apply updates |
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
 | Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
 | Role limits | viewers cannot create host pairing codes | viewers can still read every host explicitly shared with them |
@@ -475,7 +475,7 @@ non-repudiation but not protection against a compromised hub.
 ## 20. Security testing
 
 - Threat model review at the end of Phase 0 and before 1.0.
-- Static analysis (`gosec`, CodeQL), dependency scanning, secret scanning on every PR. While the repository is private without GitHub Advanced Security, CodeQL SARIF is uploaded as a workflow artifact instead of to the Security tab.
+- Static analysis (`gosec`, CodeQL), dependency scanning, secret scanning on every PR. CodeQL SARIF is currently kept as a workflow artifact; switch `upload: never` to `upload: always` once code scanning is enabled for the public repository.
 - Fuzzing of all parsers (transcript parsers, Protobuf/JSON decoders, path canonicalization) with `go test -fuzz`.
 - Dedicated tests for: path traversal (incl. Windows UNC, short names, symlinks/junctions), argument injection, CSRF/Origin checks, WebSocket auth, replay of signed commands and auth challenges, rate limiting.
-- External penetration test before 1.0 (WP-5.5).
+- An external penetration test is optional additional assurance when one is available; it is not a release condition.

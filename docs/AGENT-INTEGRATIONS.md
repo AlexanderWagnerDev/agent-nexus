@@ -84,12 +84,14 @@ vendor documentation above:
   outage is replayed on reconnect and deduplicated by sequence number.
 - **Structured fork:** Codex app-server exposes `thread/fork`; AgentNexus
   uses it in structured mode and links the run to the new native thread. The
-  source thread is not modified. ACP fork is capability-gated on the unstable
-  `session/fork` advertisement and is fake-agent tested only. OpenCode's tested
-  v2 CLI has no documented non-interactive fork, so only Codex and Claude
-  terminal mode (`codex fork`, `claude --resume --fork-session`) are offered.
-  Structured fork requests are rejected when the driver or adapter cannot
-  perform them.
+  source thread is not modified. OpenCode 2.2.x is forked through
+  `POST /api/session/{id}/fork` and linked the same way; this is fake-server
+  tested, and OpenCode rejects a fork of an empty session. ACP fork is
+  capability-gated on the unstable `session/fork` advertisement and is
+  fake-agent tested only. OpenCode's tested v2 CLI has no documented
+  non-interactive terminal fork, so terminal fork is offered for Codex and
+  Claude only. Structured fork requests are rejected when the driver or adapter
+  cannot perform them.
 - **Gemini ACP:** the generic ACP driver works with
   `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
   the installed Gemini version. The path is implemented and fake-tested, not
