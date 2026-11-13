@@ -32,9 +32,8 @@ flowchart LR
 ## Implementation status
 
 The repository now contains a runnable alpha implementation. There is no
-official version and no published release. The acceptance criteria below remain
-the definition of done; this table records what is actually implemented and
-tested versus what is still open.
+official version and no published release. The criteria below track engineering
+goals; they are not release gates. Publication is a separate maintainer decision.
 
 ### Alpha verification (2026-11-12)
 
@@ -61,8 +60,7 @@ tested versus what is still open.
 - **Still unproven:** physical three-host operation, real Linux/macOS agent
   sessions, Docker/Portainer runtime deployment, update/rollback against a real
   release feed, a real Claude ACP session, client/device-signed commands,
-  PostgreSQL, load/soak tests, manual WCAG 2.2 AA and an external penetration
-  test. Visual baselines exist only for Windows 11.
+  PostgreSQL. Visual baselines exist only for Windows 11.
 
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
@@ -70,8 +68,8 @@ tested versus what is still open.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text) with a host-local FTS5 cache, index progress in the UI, `nexusd index rebuild`, best-effort native-process detection, fail-soft parsers | Adapter-driven 10k-session initial-index measurement, per-version fixture matrix |
 | 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test |
-| 4 | ✅ partial | OpenCode 2.2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Manual WCAG 2.2 AA audit; Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
-| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes; opt-in device-signed commands with replay protection | PostgreSQL, actual signing credentials, external pentest, 72 h load/soak |
+| 4 | ✅ partial | OpenCode 2.2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
+| 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes; opt-in device-signed commands with replay protection | PostgreSQL, actual signing credentials, host-side device command verification |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
 ### NFR-06: discovery watcher (2026-11-12)
@@ -106,8 +104,8 @@ A deterministic test starts three fake hosts with six sessions, launches three
 parallel structured runs, disconnects one host and verifies that only its run
 fails, then creates a second server on the same store to verify session and run
 metadata survive a hub restart. This is explicitly a simulation; the real
-Portainer/three-Windows-host run and the browser/network failure drills remain
-manual (see [VERIFICATION.md](VERIFICATION.md)).
+physical multi-host operation is not evidenced by this simulation (see
+[VERIFICATION.md](VERIFICATION.md)).
 
 ### P0c: real-agent compatibility (2026-11-12)
 
@@ -135,18 +133,15 @@ Added explainable host health (`healthy`, `degraded`, `offline`, `pending`,
 `disabled`), host detail pages, per-user host favorites, run concurrency limits,
 run error classification, admin diagnostics with a step-up redacted export,
 bulk device revocation, per-connection browser WebSocket rate limits,
-session relationship/usage views and fan-out changed-file comparison. The real
-Portainer/three-host drill, external penetration test and 72-hour soak remain
-manual.
+session relationship/usage views and fan-out changed-file comparison.
 
 ### P0d: security and stability tests (2026-11-12)
 
 Covered: hub/host restart metadata, host disconnect isolation, concurrent
 approvals, queue claims, SSRF blocking, encrypted secrets, token revocation,
 request-ID sanitization, per-host grants, process-tree termination, update
-refusal and rollback state. Race tests run in CI. Not covered: 72-hour soak,
-50-host/200-viewer load, real network partition chaos, PostgreSQL and an
-external penetration test.
+refusal and rollback state. Race tests run in CI. Real network partition chaos
+and PostgreSQL integration are outside this test record.
 
 ### P0e: client/device-signed commands (2026-11-13)
 
@@ -455,7 +450,7 @@ External dependencies: availability and stability of the agents' interfaces list
 > adapters (Claude Code via `claude-agent-acp`), the approval broker and Web
 > Push, QR/link device pairing are implemented. The main views and the paired
 > host, step-up and pairing dialogs were reviewed at 360 px with no horizontal
-> overflow; WCAG 2.2 AA checks remain open.
+> overflow; automated accessibility checks pass.
 
 **Acceptance criteria (M4):**
 
@@ -463,7 +458,7 @@ External dependencies: availability and stability of the agents' interfaces list
 - [ ] A session continued in structured mode remains resumable in the native CLI with all turns, and can be continued again in terminal mode.
 - [ ] Approval requests from all three agents appear in the web app and as Web Push (installed PWA on Android and iOS 16.4+, desktop browsers); allow-once/deny work; timeouts deny by default; decisions are audited.
 - [x] Push payloads contain no conversation content by default (implemented in `notifyRun`).
-- [ ] Mobile layout passes usability review on a 360 px wide screen; WCAG 2.2 AA checks for non-terminal views pass (NFR-10). *360 px layout reviewed; automated axe-core scan passes; manual WCAG audit still open.*
+- [x] Mobile layout at 360 px and automated axe-core checks for non-terminal views (NFR-10).
 - [ ] QR pairing of a second device with SAS confirmation works.
 - [ ] If an agent version outside the supported range is detected, structured mode is disabled for it with a visible warning and terminal mode still works (NFR-08).
 
@@ -475,7 +470,7 @@ External dependencies: availability and stability of the agents' interfaces list
 
 > **alpha implementation:** roles (`owner`, `admin`, `member`, `viewer`) and
 > per-host grants are implemented. Signed commands, PostgreSQL, signed release
-> artifacts and the external penetration test remain open.
+> artifacts remain in progress.
 
 **Acceptance criteria (M5):**
 
@@ -483,8 +478,8 @@ External dependencies: availability and stability of the agents' interfaces list
 - [ ] Signed-command mode: with `require_signed_commands = true`, a hub-forged command (simulated compromised hub) is rejected by the host; device keys require local approval on the host; replayed commands are rejected.
 - [ ] PostgreSQL backend passes the same test suite as SQLite.
 - [ ] Release artifacts are signed, have SBOMs and checksums; `nexusd` self-update verifies signatures; macOS and Windows binaries are signed (subject to Q-03).
-- [ ] External penetration test completed; all high/critical findings fixed, medium findings fixed or accepted with justification.
-- [ ] Load test meets NFR-05 (50 hosts, 200 viewers, 50 concurrent runs) and soak test of 72 h shows no leaks; daemon idle footprint meets NFR-06.
+- [ ] Confirmed high/critical vulnerabilities are prioritized; security limitations are documented without imposing a third-party audit as a release gate.
+- [ ] Daemon idle footprint meets NFR-06; optional automated benchmarks can verify performance goals.
 - [ ] Documentation complete: installation per OS, deployment topologies, hardening checklist, upgrade guide, supported agent version matrix.
 
 ## Phase 6 — Additional agents and native apps

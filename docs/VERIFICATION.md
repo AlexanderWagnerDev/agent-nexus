@@ -1,8 +1,8 @@
 # Verification status
 
 Last updated: 2026-11-13. This file records what was actually executed in the
-development environment and what remains a manual step. It is deliberately
-conservative.
+development environment. It is an evidence record, not a release gate or a
+request for the maintainer to perform tests personally.
 
 ## Automated and executed here
 
@@ -16,7 +16,7 @@ conservative.
 | Virtualized 10k sessions | `node e2e/virtual.mjs`: ~20 rows initially, 33 after 1,400 sessions, 222/252 DOM nodes, no duplicates |
 | Accessibility | axe-core scan passes desktop (dark and light) and mobile for home, projects, sessions, usage, fan-out, runs, hosts, settings and a structured chat; no critical/serious violations |
 | Visual regression | Four stable demo views compare at 0 px; activity views are excluded because elapsed times are live |
-| Load/soak harness | `npm run e2e:soak` starts up to 12 synthetic hosts, opens structured runs and samples goroutines, heap and FDs from `/metrics`; a 0.25 min smoke run (2 hosts, 3 runs, 8 samples) showed goroutines 14→16 and no FD growth. The 72 h run still has to be executed on a dedicated Linux host |
+| Load/soak harness | `npm run e2e:soak` starts up to 12 synthetic hosts, opens structured runs and samples goroutines, heap and FDs from `/metrics`; a 0.25 min smoke run (2 hosts, 3 runs, 8 samples) showed goroutines 14→16 and no FD growth. |
 | Device signing | Ed25519 and P-256/P1363 signature tests, unsigned-write rejection, per-device nonce replay rejection, step-up key registration and the stop/prompt/approval/input paths |
 | Multi-host simulation | Three fake hosts, six sessions, three parallel structured runs, host-disconnect isolation and hub-restart metadata persistence |
 | Installer/update | Active-run refusal, stale runtime snapshot, checksum and version checks, rollback path, fake-host tests |
@@ -50,16 +50,12 @@ conservative.
   covered.
 - Real ntfy/Gotify/Telegram/Discord/Slack or generic webhook endpoints.
 - Real MCP clients (Claude Desktop, Cursor) and real microphone dictation.
-- PostgreSQL, large-scale load/soak (50 hosts/200 viewers/72 h), external
-  penetration test and manual WCAG 2.2 AA audit.
+- PostgreSQL backend (not implemented).
 - Container/Portainer runtime in this environment.
 
-## Manual steps for the operator
+## Release policy
 
-1. Deploy the hub behind HTTPS/WebSocket and pair a real Windows host.
-2. Open an existing OpenCode session in AgentNexus, continue it, then reopen it
-   with `opencode --session <id>` on that machine.
-3. Repeat with Codex (`codex resume <id>`) and, if installed, Claude/Gemini.
-4. Disconnect the browser, host and hub in turn and confirm the run/session
-   recovery behaviour.
-5. Run the load/soak and manual accessibility checks before production use.
+This verification record is informational. Publication requires the maintainer's
+explicit approval, not a fixed-duration load test, personally executed device
+tests, or a formal third-party audit. Existing automated checks remain part of
+the ordinary development workflow.

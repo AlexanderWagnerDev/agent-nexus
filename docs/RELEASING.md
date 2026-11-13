@@ -18,17 +18,17 @@ explicitly approved the first public version.
 - The hub and daemon report their version as `alpha` unless a build sets a
   version through `-ldflags`.
 
-## Before the first public version
+## Release decision
 
-1. The maintainer personally reviews the UI, security model and installation
-   path and gives explicit approval.
-2. The privacy checklist in `docs/PRIVACY.md` is complete and the git history
-   has been rewritten with the approved public identity.
-3. `go test ./...`, `go vet ./...`, the race detector, the JavaScript tests, the
-   browser E2E suite and the accessibility scan pass on the release commit.
-4. A backup created by the previous build restores cleanly into the candidate.
-5. The release notes, screenshots and README contain no personal data.
-6. The container image digest, checksums and SBOMs are recorded.
+The repository is intentionally **public during alpha**. An official version
+requires the maintainer's **explicit approval**. A fixed-duration load test,
+personally performed end-to-end test, formal accessibility certification or
+third-party penetration test is **not** a condition for publication. Engineering
+milestones and verification records are informational, not release gates.
+
+Normal CI, privacy safeguards, backups and artifact integrity remain part of
+the regular development and distribution process. Describe actual limitations
+accurately without turning optional testing into release blockers.
 
 ## Manual release procedure (only after approval)
 
