@@ -41,6 +41,38 @@ func (s *Store) CreateUserWithRole(username, passwordHash, totpSecret, role stri
 	return u, nil
 }
 
+// ErrSetupComplete is returned when a first-run setup request loses the race
+// against another one. It maps to HTTP 409.
+var ErrSetupComplete = errors.New("hub is already set up")
+
+// CreateFirstUser creates the owner account only while the users table is
+// empty. The conditional INSERT is evaluated by SQLite in one statement, so
+// two concurrent first-run requests cannot both create an owner.
+func (s *Store) CreateFirstUser(username, passwordHash, totpSecret string) (User, error) {
+	u := User{
+		ID:           newID(),
+		Username:     username,
+		PasswordHash: passwordHash,
+		TOTPSecret:   totpSecret,
+		Role:         "owner",
+		CreatedAt:    time.Now().UTC(),
+	}
+	sealed, err := s.seal(u.TOTPSecret)
+	if err != nil {
+		return User{}, err
+	}
+	res, err := s.db.Exec(`INSERT INTO users(id, username, password_hash, totp_secret, role, created_at)
+		SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM users)`,
+		u.ID, u.Username, u.PasswordHash, sealed, u.Role, ms(u.CreatedAt))
+	if err != nil {
+		return User{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return User{}, ErrSetupComplete
+	}
+	return u, nil
+}
+
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`SELECT id, username, password_hash, totp_secret, totp_enabled, role, created_at FROM users ORDER BY created_at`)
 	if err != nil {

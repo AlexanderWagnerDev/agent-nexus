@@ -1,10 +1,35 @@
 package hub
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestRateLimiterMapIsBounded(t *testing.T) {
+	limiter := newRateLimiter(5, time.Minute)
+	limiter.maxEntries = 4
+	for i := 0; i < 100; i++ {
+		limiter.allow(fmt.Sprintf("attacker-%d", i))
+	}
+	limiter.mu.Lock()
+	size := len(limiter.entries)
+	limiter.mu.Unlock()
+	if size > limiter.maxEntries {
+		t.Fatalf("rate limiter map grew to %d entries, max %d", size, limiter.maxEntries)
+	}
+
+	// The window is still enforced for a key that is present.
+	for i := 0; i < 5; i++ {
+		if !limiter.allow("stable") {
+			t.Fatalf("attempt %d was rejected before the limit", i)
+		}
+	}
+	if limiter.allow("stable") {
+		t.Fatal("the limiter did not enforce its limit")
+	}
+}
 
 func TestPasswordRoundTrip(t *testing.T) {
 	hash, err := HashPassword("test-password-123")

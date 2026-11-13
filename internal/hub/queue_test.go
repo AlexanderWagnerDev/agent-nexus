@@ -51,13 +51,13 @@ func TestPromptQueueStoreLifecycle(t *testing.T) {
 	if err := hub.store.UpdatePromptQueueItem(runID, second.ID, "second edited", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := hub.store.SetPromptQueuePaused(runID, owner.ID, true); err != nil {
+	if err := hub.store.SetPromptQueuePaused(runID, true); err != nil {
 		t.Fatal(err)
 	}
 	if paused, _ := hub.store.PromptQueuePaused(runID); !paused {
 		t.Fatal("queue pause was not persisted")
 	}
-	if err := hub.store.SetPromptQueuePaused(runID, owner.ID, false); err != nil {
+	if err := hub.store.SetPromptQueuePaused(runID, false); err != nil {
 		t.Fatal(err)
 	}
 

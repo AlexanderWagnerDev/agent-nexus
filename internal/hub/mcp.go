@@ -283,11 +283,14 @@ func (s *Server) mcpSearch(ctx context.Context, u User, query string) (any, erro
 		hits     []protocol.SearchHit
 		hostName string
 		hostID   string
+		failed   bool
 	}
 	ch := make(chan result, len(hosts))
+	notSearched := []string{}
 	online := 0
 	for _, host := range hosts {
 		if !s.hostPermission(u, host.ID, "read_transcript") || !s.hostOnline(host.ID) {
+			notSearched = append(notSearched, host.Name)
 			continue
 		}
 		online++
@@ -297,19 +300,21 @@ func (s *Server) mcpSearch(ctx context.Context, u User, query string) (any, erro
 			params, _ := json.Marshal(map[string]any{"query": query, "limit": 50})
 			raw, err := s.hostRequest(cctx, hostID, "search", params)
 			if err != nil {
-				ch <- result{hostName: hostName, hostID: hostID}
+				ch <- result{hostName: hostName, hostID: hostID, failed: true}
 				return
 			}
 			var hits []protocol.SearchHit
-			_ = json.Unmarshal(raw, &hits)
+			if err := json.Unmarshal(raw, &hits); err != nil {
+				ch <- result{hostName: hostName, hostID: hostID, failed: true}
+				return
+			}
 			ch <- result{hits: hits, hostName: hostName, hostID: hostID}
 		}(host.ID, host.Name)
 	}
 	all := []protocol.SearchHit{}
-	notSearched := []string{}
 	for i := 0; i < online; i++ {
 		res := <-ch
-		if len(res.hits) == 0 {
+		if res.failed {
 			notSearched = append(notSearched, res.hostName)
 			continue
 		}

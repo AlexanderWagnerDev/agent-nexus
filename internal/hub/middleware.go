@@ -118,8 +118,13 @@ func (s *Server) csrfGuard(next http.Handler) http.Handler {
 			return
 		}
 		if r.Header.Get("X-Nexus-Request") != "1" {
-			writeError(w, http.StatusForbidden, "missing request marker")
-			return
+			// A bearer token is not a browser credential: a cross-site form
+			// cannot attach it, and standard MCP clients do not send the
+			// browser marker. Cookie-authenticated requests still need it.
+			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+				writeError(w, http.StatusForbidden, "missing request marker")
+				return
+			}
 		}
 		if origin := r.Header.Get("Origin"); origin != "" {
 			if !s.originAllowed(origin, r.Host) {

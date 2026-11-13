@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -75,7 +76,11 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := NewTOTPSecret()
-	user, err := s.store.CreateUser(req.Username, hash, secret)
+	user, err := s.store.CreateFirstUser(req.Username, hash, secret)
+	if errors.Is(err, ErrSetupComplete) {
+		writeError(w, http.StatusConflict, "hub is already set up")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

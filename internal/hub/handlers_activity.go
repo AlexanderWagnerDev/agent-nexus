@@ -94,9 +94,12 @@ func (s *Server) handleProjectActivity(w http.ResponseWriter, r *http.Request) {
 		hosts    string
 	}
 	dayMap := map[string]*ActivityDay{}
-	rows, err := s.store.db.Query(`SELECT strftime('%Y-%m-%d',s.created_at/1000,'unixepoch') AS day,COUNT(*),
+	// Group sessions by their last activity, matching the since/until filter
+	// the heatmap click sends to the session list. Grouping by created_at here
+	// would highlight a day whose clickable list is empty.
+	rows, err := s.store.db.Query(`SELECT strftime('%Y-%m-%d',s.updated_at/1000,'unixepoch') AS day,COUNT(*),
 		GROUP_CONCAT(DISTINCT s.agent),GROUP_CONCAT(DISTINCT h.name)`+base+`
-		AND s.created_at>=? AND s.created_at<=? GROUP BY day ORDER BY day`, append(args, ms(from), ms(to))...)
+		AND s.updated_at>=? AND s.updated_at<=? GROUP BY day ORDER BY day`, append(args, ms(from), ms(to))...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -34,7 +34,7 @@ export async function pageSearch() {
       });
     box.innerHTML = `
       ${building.length ? `<div class="notice info mb-2">${building.map(esc).join(' / ')}. ${t('Using the slower adapter search until the index is ready.')}</div>` : ''}
-      ${skipped.length ? `<div class="notice info mb-2">${t('Not searched:')} ${skipped.map(esc).join(', ')} ${t('(offline)')}</div>` : ''}
+      ${skipped.length ? `<div class="notice info mb-2">${t('Not searched:')} ${skipped.map(esc).join(', ')}</div>` : ''}
       ${results.length ? `<div class="list">${results.map((r) => {
         const inner = `<div style="min-width:0"><div class="title">${esc(r.title || t('Untitled session'))}</div><div class="sub"><span>${esc(r.snippet)}</span></div></div><div class="right">${agentBadge(r.agent)}${r.host_name ? `<span class="small muted">${esc(r.host_name)}</span>` : ''}<span class="small muted">${fmtRelative(r.at)}</span></div>`;
         return r.session_id

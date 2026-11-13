@@ -13,7 +13,11 @@ func TestMCPReadOnlyTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth := func(req *http.Request) { req.Header.Set("Authorization", "Bearer "+raw) }
+	auth := func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+raw)
+		// A real MCP client does not know the browser CSRF marker.
+		req.Header.Del("X-Nexus-Request")
+	}
 
 	call := func(body map[string]any) (int, []byte) {
 		return hub.do(nil, http.MethodPost, "/mcp", body, auth)
@@ -67,4 +71,10 @@ func TestMCPReadOnlyTools(t *testing.T) {
 	}
 	status, body = call(map[string]any{"jsonrpc": "2.0", "id": 8, "method": "ping"})
 	expectStatus(t, status, http.StatusUnauthorized, body, "revoked token")
+
+	// Cookie-authenticated writes still need the browser marker.
+	status, body = hub.do(nil, http.MethodPost, "/api/v1/me/settings", map[string]any{}, func(req *http.Request) {
+		req.Header.Del("X-Nexus-Request")
+	})
+	expectStatus(t, status, http.StatusForbidden, body, "cookie request without marker")
 }

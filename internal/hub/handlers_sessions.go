@@ -357,18 +357,25 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		hits   []protocol.SearchHit
 		host   string
 		hostID string
+		failed bool
 	}
 	ch := make(chan result, len(hosts))
 	indexStatus := map[string]protocol.IndexStatus{}
+	// A host is "not searched" when it could not be queried: offline, not
+	// readable, or the request failed. A successful query with zero matches is
+	// a valid empty result and must not be reported as skipped.
+	notSearched := map[string]bool{}
 	online := 0
 	for _, h := range hosts {
 		if status := s.hostIndexStatus(h.ID); status != nil {
 			indexStatus[h.Name] = *status
 		}
 		if !s.hostPermission(u, h.ID, "read_transcript") {
+			notSearched[h.Name] = true
 			continue
 		}
 		if !s.hostOnline(h.ID) {
+			notSearched[h.Name] = true
 			continue
 		}
 		online++
@@ -378,44 +385,46 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			params, _ := json.Marshal(map[string]any{"query": query, "limit": 50})
 			raw, err := s.hostRequest(ctx, hostID, "search", params)
 			if err != nil {
-				ch <- result{host: hostName, hostID: hostID}
+				ch <- result{host: hostName, hostID: hostID, failed: true}
 				return
 			}
 			var hits []protocol.SearchHit
-			_ = json.Unmarshal(raw, &hits)
+			if err := json.Unmarshal(raw, &hits); err != nil {
+				ch <- result{host: hostName, hostID: hostID, failed: true}
+				return
+			}
 			ch <- result{hits: hits, host: hostName, hostID: hostID}
 		}(h.ID, h.Name)
 	}
 	all := []protocol.SearchHit{}
 	seen := map[string]bool{}
-	search := map[string]bool{}
 	for i := 0; i < online; i++ {
 		res := <-ch
-		if len(res.hits) > 0 {
-			for _, hit := range res.hits {
-				key := res.hostID + "|" + hit.Agent + "|" + hit.NativeID
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				hit.HostID = res.hostID
-				hit.HostName = res.host
-				hit.Title = displayTitle(hit.Title)
-				hit.Snippet = strings.TrimSpace(hit.Snippet)
-				if id, err := s.store.SessionIDForNative(res.hostID, hit.Agent, hit.NativeID); err == nil {
-					hit.SessionID = id
-				}
-				all = append(all, hit)
+		if res.failed {
+			notSearched[res.host] = true
+			continue
+		}
+		for _, hit := range res.hits {
+			key := res.hostID + "|" + hit.Agent + "|" + hit.NativeID
+			if seen[key] {
+				continue
 			}
-		} else {
-			search[res.host] = true
+			seen[key] = true
+			hit.HostID = res.hostID
+			hit.HostName = res.host
+			hit.Title = displayTitle(hit.Title)
+			hit.Snippet = strings.TrimSpace(hit.Snippet)
+			if id, err := s.store.SessionIDForNative(res.hostID, hit.Agent, hit.NativeID); err == nil {
+				hit.SessionID = id
+			}
+			all = append(all, hit)
 		}
 	}
 	if len(all) > 100 {
 		all = all[:100]
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"results": all, "not_searched": search, "hosts_total": len(hosts), "index_status": indexStatus,
+		"results": all, "not_searched": notSearched, "hosts_total": len(hosts), "index_status": indexStatus,
 	})
 }
 
@@ -621,7 +630,11 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run.LastEventSeq = s.runEventCursor(run.ID)
-	run.PendingApproval = s.pendingApproval(run.ID)
+	// A finished or stopping run cannot answer an approval anymore. Do not
+	// resurrect a stale approval card after a reload.
+	if !terminalRunState(run.State) && run.State != protocol.StateStopping {
+		run.PendingApproval = s.pendingApproval(run.ID)
+	}
 	writeJSON(w, http.StatusOK, run)
 }
 

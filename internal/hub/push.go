@@ -147,6 +147,10 @@ func (s *Server) notifyRun(runID, kind, title, body string) {
 			Endpoint: sub.Endpoint,
 			Keys:     webpush.Keys{P256dh: sub.P256DH, Auth: sub.Auth},
 		}, &webpush.Options{
+			// Use the same private/loopback-blocking dialer as the notification
+			// channels: a stored endpoint must not turn the hub into an SSRF
+			// proxy for internal services.
+			HTTPClient:      s.notificationHTTPClient(),
 			Subscriber:      "https://github.com/AlexanderWagnerDev/agent-nexus",
 			VAPIDPublicKey:  s.vapidPublic,
 			VAPIDPrivateKey: s.vapidPrivate,

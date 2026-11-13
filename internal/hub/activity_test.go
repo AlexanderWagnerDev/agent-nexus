@@ -20,7 +20,7 @@ func TestProjectActivityAggregatesSessionsAndRuns(t *testing.T) {
 	now := time.Now().UTC()
 	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
 		Agent: "codex", NativeID: "activity-1", Title: "Activity", Cwd: "/work/activity",
-		RepoURL: "https://github.com/example/activity", CreatedAt: now, UpdatedAt: now,
+		RepoURL: "https://github.com/example/activity", CreatedAt: now.Add(-72 * time.Hour), UpdatedAt: now,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +49,12 @@ func TestProjectActivityAggregatesSessionsAndRuns(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("today missing from activity: %+v", view.Days)
+	}
+	createdDay := now.Add(-72 * time.Hour).Format("2006-01-02")
+	for _, day := range view.Days {
+		if day.Date == createdDay && day.Sessions != 0 {
+			t.Fatalf("heatmap counted the creation day instead of the activity day: %+v", day)
+		}
 	}
 	// The same data is reachable by repository identity across hosts.
 	status, body = hub.do(nil, http.MethodGet,

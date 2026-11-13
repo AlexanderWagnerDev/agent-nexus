@@ -226,7 +226,7 @@ func (s *Server) handlePausePromptQueue(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if err := s.store.SetPromptQueuePaused(run.ID, u.ID, req.Paused); err != nil {
+	if err := s.store.SetPromptQueuePaused(run.ID, req.Paused); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

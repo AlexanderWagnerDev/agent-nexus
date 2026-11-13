@@ -1,13 +1,48 @@
 package hub
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
+
+func TestCreateFirstUserIsAtomic(t *testing.T) {
+	s, err := OpenStore(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	const workers = 8
+	var wg sync.WaitGroup
+	var successes atomic.Int32
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := s.CreateFirstUser(fmt.Sprintf("owner-%d", i), "hash", "secret")
+			switch {
+			case err == nil:
+				successes.Add(1)
+			case errors.Is(err, ErrSetupComplete):
+			default:
+				t.Errorf("unexpected setup error: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("concurrent setup created %d owners, want 1", got)
+	}
+	if n, err := s.UserCount(); err != nil || n != 1 {
+		t.Fatalf("user count = %d, %v", n, err)
+	}
+}
 
 func TestStoreSessionsAndAudit(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")

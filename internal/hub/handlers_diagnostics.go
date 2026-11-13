@@ -46,6 +46,16 @@ func (s *Server) diagnosticsPayload(u User, includeIdentity bool) map[string]any
 	s.mu.RUnlock()
 
 	hosts, _ := s.store.ListHosts(u.ID, true)
+	// Update availability lives in memory until a host reports it; merge it
+	// here so diagnostics reflects the same state as the host list.
+	s.updateMu.Lock()
+	for i := range hosts {
+		if status, ok := s.hostUpdates[hosts[i].ID]; ok {
+			copyStatus := status
+			hosts[i].Update = &copyStatus
+		}
+	}
+	s.updateMu.Unlock()
 	var hostRows []diagnosticsHost
 	var updateRows []map[string]any
 	for _, h := range hosts {
@@ -74,10 +84,14 @@ func (s *Server) diagnosticsPayload(u User, includeIdentity bool) map[string]any
 		}
 		hostRows = append(hostRows, row)
 		if h.Update != nil && h.Update.Available {
-			updateRows = append(updateRows, map[string]any{
-				"host": h.Name, "current": h.Update.Current, "latest": h.Update.Latest,
+			update := map[string]any{
+				"current": h.Update.Current, "latest": h.Update.Latest,
 				"available": h.Update.Available, "checked_at": h.Update.CheckedAt,
-			})
+			}
+			if includeIdentity {
+				update["host"] = h.Name
+			}
+			updateRows = append(updateRows, update)
 		}
 	}
 

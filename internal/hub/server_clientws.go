@@ -153,10 +153,8 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		if rs != nil {
 			rs.mu.Lock()
 			state = rs.state
-			for _, ch := range rs.chunks {
-				if ch.seq > msg.LastSeq {
-					chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
-				}
+			for _, ch := range coalesceChunks(rs.chunks, msg.LastSeq, replayBatchBytes) {
+				chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
 			}
 			for i := range rs.events {
 				ev := rs.events[i]
@@ -301,6 +299,36 @@ type runState struct {
 	bytes    int
 	events   []protocol.RunEvent
 	eventSeq uint64
+}
+
+// replayBatchBytes bounds one replayed terminal message. Coalescing keeps a
+// long run from filling the per-client send queue with thousands of small PTY
+// reads, which would disconnect the client and repeat on every reconnect.
+const replayBatchBytes = 64 << 10
+
+// coalesceChunks merges consecutive replay chunks into bounded messages. The
+// merged message carries the newest sequence number; the bytes stay in order.
+func coalesceChunks(chunks []runChunk, lastSeq uint64, maxBytes int) []runChunk {
+	if maxBytes <= 0 {
+		maxBytes = replayBatchBytes
+	}
+	var out []runChunk
+	var current runChunk
+	for _, chunk := range chunks {
+		if chunk.seq <= lastSeq || len(chunk.data) == 0 {
+			continue
+		}
+		if len(current.data) > 0 && len(current.data)+len(chunk.data) > maxBytes {
+			out = append(out, current)
+			current = runChunk{}
+		}
+		current.data = append(current.data, chunk.data...)
+		current.seq = chunk.seq
+	}
+	if len(current.data) > 0 {
+		out = append(out, current)
+	}
+	return out
 }
 
 func (s *Server) closeDevice(deviceID string) {

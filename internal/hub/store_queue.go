@@ -165,8 +165,11 @@ func (s *Store) ReorderPromptQueue(runID string, ids []string) error {
 	return tx.Commit()
 }
 
-func (s *Store) SetPromptQueuePaused(runID, userID string, paused bool) error {
-	res, err := s.db.Exec(`UPDATE runs SET queue_paused=? WHERE id=? AND started_by=?`, boolInt(paused), runID, userID)
+// SetPromptQueuePaused toggles delivery for one run. Authorization is enforced
+// by the caller: owners and admins may pause, so the store must not filter by
+// the acting user.
+func (s *Store) SetPromptQueuePaused(runID string, paused bool) error {
+	res, err := s.db.Exec(`UPDATE runs SET queue_paused=? WHERE id=?`, boolInt(paused), runID)
 	if err != nil {
 		return err
 	}

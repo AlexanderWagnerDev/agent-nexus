@@ -126,12 +126,15 @@ func totpAt(secret string, counter int64) string {
 	return fmt.Sprintf("%06d", v%1_000_000)
 }
 
-// rateLimiter is a tiny fixed-window limiter used for login and pairing.
+// rateLimiter is a tiny fixed-window limiter used for login and pairing. The
+// entry map is bounded: unauthenticated callers choose the key, so an unbounded
+// map would be a memory-exhaustion vector.
 type rateLimiter struct {
-	mu      sync.Mutex
-	entries map[string]*rateEntry
-	limit   int
-	window  time.Duration
+	mu         sync.Mutex
+	entries    map[string]*rateEntry
+	limit      int
+	window     time.Duration
+	maxEntries int
 }
 
 type rateEntry struct {
@@ -139,8 +142,10 @@ type rateEntry struct {
 	reset time.Time
 }
 
+const defaultRateLimiterEntries = 10_000
+
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	return &rateLimiter{entries: map[string]*rateEntry{}, limit: limit, window: window}
+	return &rateLimiter{entries: map[string]*rateEntry{}, limit: limit, window: window, maxEntries: defaultRateLimiterEntries}
 }
 
 func (r *rateLimiter) allow(key string) bool {
@@ -149,6 +154,9 @@ func (r *rateLimiter) allow(key string) bool {
 	now := time.Now()
 	e := r.entries[key]
 	if e == nil || now.After(e.reset) {
+		if e == nil {
+			r.makeRoom(now)
+		}
 		r.entries[key] = &rateEntry{count: 1, reset: now.Add(r.window)}
 		return true
 	}
@@ -157,6 +165,35 @@ func (r *rateLimiter) allow(key string) bool {
 	}
 	e.count++
 	return true
+}
+
+// makeRoom keeps the map bounded. Expired entries are dropped first; if the
+// map is still full, the entry closest to expiry is evicted. The evicted key
+// loses its counter, which only weakens throttling for that one key.
+func (r *rateLimiter) makeRoom(now time.Time) {
+	limit := r.maxEntries
+	if limit <= 0 {
+		limit = defaultRateLimiterEntries
+	}
+	if len(r.entries) < limit {
+		return
+	}
+	for candidate, entry := range r.entries {
+		if now.After(entry.reset) {
+			delete(r.entries, candidate)
+		}
+	}
+	if len(r.entries) < limit {
+		return
+	}
+	var oldestKey string
+	var oldest time.Time
+	for candidate, entry := range r.entries {
+		if oldestKey == "" || entry.reset.Before(oldest) {
+			oldestKey, oldest = candidate, entry.reset
+		}
+	}
+	delete(r.entries, oldestKey)
 }
 
 // ValidatePairingCode checks the XXXX-XXXX format used by the CLI.
