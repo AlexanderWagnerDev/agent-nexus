@@ -52,3 +52,16 @@ test('dictionary has no empty values', () => {
     .map((match) => match[1] ?? match[2]);
   assert.deepEqual(empty, [], `empty translations: ${empty.join(', ')}`);
 });
+
+test('duplicate keys do not disagree about the translation', () => {
+  const text = fs.readFileSync(path.join(root, 'web/assets/i18n.js'), 'utf8');
+  const seen = new Map();
+  const conflicts = [];
+  for (const match of text.matchAll(/^\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?$/gm)) {
+    const key = unescapeKey(match[1] ?? match[2]);
+    const value = match[3] ?? match[4];
+    if (!seen.has(key)) seen.set(key, value);
+    else if (seen.get(key) !== value) conflicts.push(`${key}: ${JSON.stringify(seen.get(key))} vs ${JSON.stringify(value)}`);
+  }
+  assert.deepEqual(conflicts, [], `conflicting duplicate translations: ${conflicts.join('; ')}`);
+});
