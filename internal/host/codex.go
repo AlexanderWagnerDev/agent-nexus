@@ -18,8 +18,9 @@ import (
 
 // CodexAdapter discovers Codex CLI rollouts and starts the native CLI.
 type CodexAdapter struct {
-	bin  string
-	root string
+	bin   string
+	root  string
+	cache metadataCache
 }
 
 func NewCodexAdapter(bin string) *CodexAdapter {
@@ -96,12 +97,18 @@ func (a *CodexAdapter) ListSessions(ctx context.Context) ([]protocol.Session, er
 }
 
 func (a *CodexAdapter) scanMetadata(path string) (protocol.Session, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return protocol.Session{}, err
+	}
+	if cached, ok := a.cache.get(path, st.ModTime(), st.Size()); ok {
+		return cached, nil
+	}
 	rc, err := openSessionFile(path)
 	if err != nil {
 		return protocol.Session{}, err
 	}
 	defer rc.Close()
-	st, _ := os.Stat(path)
 	s := protocol.Session{
 		Agent: "codex", State: protocol.StateIdle,
 		NativeID: sessionIDFromFilename(path), Title: "",
@@ -173,6 +180,7 @@ func (a *CodexAdapter) scanMetadata(path string) (protocol.Session, error) {
 	if s.Title == "" {
 		s.Title = filepath.Base(s.Cwd)
 	}
+	a.cache.put(path, st.ModTime(), st.Size(), s)
 	return s, nil
 }
 

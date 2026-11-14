@@ -15,8 +15,9 @@ import (
 // format is less stable than the other agents, so unknown files are skipped
 // and never break indexing.
 type GeminiAdapter struct {
-	bin  string
-	root string
+	bin   string
+	root  string
+	cache metadataCache
 }
 
 func NewGeminiAdapter(bin string) *GeminiAdapter {
@@ -60,22 +61,31 @@ func (a *GeminiAdapter) ListSessions(ctx context.Context) ([]protocol.Session, e
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
-		s, err := a.readSession(path)
+		st, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if cached, ok := a.cache.get(path, st.ModTime(), st.Size()); ok {
+			out = append(out, cached)
+			continue
+		}
+		s, _, err := a.readSession(path)
 		if err == nil {
+			a.cache.put(path, st.ModTime(), st.Size(), s)
 			out = append(out, s)
 		}
 	}
 	return out, nil
 }
 
-func (a *GeminiAdapter) readSession(path string) (protocol.Session, error) {
+func (a *GeminiAdapter) readSession(path string) (protocol.Session, map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return protocol.Session{}, err
+		return protocol.Session{}, nil, err
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return protocol.Session{}, err
+		return protocol.Session{}, nil, err
 	}
 	st, _ := os.Stat(path)
 	s := protocol.Session{
@@ -118,18 +128,15 @@ func (a *GeminiAdapter) readSession(path string) (protocol.Session, error) {
 	if s.Title == "" {
 		s.Title = "Gemini session"
 	}
-	return s, nil
+	return s, doc, nil
 }
 
 func (a *GeminiAdapter) Transcript(ctx context.Context, nativeID string, offset, limit int) (protocol.Transcript, error) {
 	for _, path := range a.files() {
-		s, err := a.readSession(path)
+		s, doc, err := a.readSession(path)
 		if err != nil || s.NativeID != nativeID {
 			continue
 		}
-		data, _ := os.ReadFile(path)
-		var doc map[string]any
-		_ = json.Unmarshal(data, &doc)
 		var all []protocol.Message
 		if msgs, ok := doc["messages"].([]any); ok {
 			for _, raw := range msgs {
@@ -169,16 +176,8 @@ func (a *GeminiAdapter) Search(ctx context.Context, query string, limit int) ([]
 		if len(hits) >= limit {
 			break
 		}
-		s, err := a.readSession(path)
+		s, doc, err := a.readSession(path)
 		if err != nil {
-			continue
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var doc map[string]any
-		if json.Unmarshal(data, &doc) != nil {
 			continue
 		}
 		messages, _ := doc["messages"].([]any)

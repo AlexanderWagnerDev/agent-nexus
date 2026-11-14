@@ -18,8 +18,9 @@ import (
 // ClaudeAdapter discovers Claude Code sessions from its JSONL store and
 // starts the native CLI for terminal runs.
 type ClaudeAdapter struct {
-	bin  string
-	root string
+	bin   string
+	root  string
+	cache metadataCache
 }
 
 func NewClaudeAdapter(bin string) *ClaudeAdapter {
@@ -108,12 +109,18 @@ func (a *ClaudeAdapter) ListSessions(ctx context.Context) ([]protocol.Session, e
 }
 
 func (a *ClaudeAdapter) scanMetadata(path, nativeID, _ string) (protocol.Session, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return protocol.Session{}, err
+	}
+	if cached, ok := a.cache.get(path, st.ModTime(), st.Size()); ok {
+		return cached, nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return protocol.Session{}, err
 	}
 	defer f.Close()
-	st, _ := f.Stat()
 	s := protocol.Session{
 		NativeID: nativeID,
 		Agent:    "claude",
@@ -179,6 +186,7 @@ func (a *ClaudeAdapter) scanMetadata(path, nativeID, _ string) (protocol.Session
 	if s.Title == "" {
 		s.Title = filepath.Base(s.Cwd)
 	}
+	a.cache.put(path, st.ModTime(), st.Size(), s)
 	return s, nil
 }
 

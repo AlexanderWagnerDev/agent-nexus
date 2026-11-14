@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
 func TestCodexFindFileRequiresExactSessionSuffix(t *testing.T) {
@@ -42,5 +45,23 @@ func TestFileURIIsAbsoluteOnEveryPlatform(t *testing.T) {
 	}
 	if strings.HasPrefix(fileURI("C:\\tmp\\a.png"), "file://C:") {
 		t.Fatal("windows drive letter was parsed as a URL host")
+	}
+}
+
+func TestMetadataCacheHonoursFileFingerprint(t *testing.T) {
+	var cache metadataCache
+	mod := time.Unix(100, 0)
+	cache.put("a", mod, 10, protocol.Session{NativeID: "one"})
+	if got, ok := cache.get("a", mod, 10); !ok || got.NativeID != "one" {
+		t.Fatalf("cache miss for an unchanged file: %+v %v", got, ok)
+	}
+	if _, ok := cache.get("a", mod.Add(time.Second), 10); ok {
+		t.Fatal("a newer mtime did not invalidate the entry")
+	}
+	if _, ok := cache.get("a", mod, 11); ok {
+		t.Fatal("a size change did not invalidate the entry")
+	}
+	if _, ok := cache.get("b", mod, 10); ok {
+		t.Fatal("an unknown path was a cache hit")
 	}
 }

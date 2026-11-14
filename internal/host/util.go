@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -137,4 +138,40 @@ func fileURI(path string) string {
 		return "file:///" + slash
 	}
 	return (&url.URL{Scheme: "file", Path: slash}).String()
+}
+
+// metadataCache keeps the parsed metadata of unchanged agent session files.
+// Discovery used to re-read every transcript on every poll; keying on the file
+// fingerprint means one changed file costs one parse instead of a full store
+// re-read.
+type metadataCache struct {
+	mu      sync.Mutex
+	entries map[string]cachedMetadata
+}
+
+type cachedMetadata struct {
+	modTime time.Time
+	size    int64
+	session protocol.Session
+}
+
+const metadataCacheLimit = 4096
+
+func (c *metadataCache) get(path string, modTime time.Time, size int64) (protocol.Session, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[path]
+	if !ok || !entry.modTime.Equal(modTime) || entry.size != size {
+		return protocol.Session{}, false
+	}
+	return entry.session, true
+}
+
+func (c *metadataCache) put(path string, modTime time.Time, size int64, session protocol.Session) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil || len(c.entries) >= metadataCacheLimit {
+		c.entries = make(map[string]cachedMetadata, metadataCacheLimit)
+	}
+	c.entries[path] = cachedMetadata{modTime: modTime, size: size, session: session}
 }
