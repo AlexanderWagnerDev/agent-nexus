@@ -65,7 +65,7 @@ func TestHandleMessageDispatchesCodexAndACP(t *testing.T) {
 	d := silentDaemon()
 	// A closed Codex run and ACP run exercise the error branches without a peer.
 	codex := &CodexRun{
-		id: "codex-1", threadID: "thread-1", pending: map[int64]chan json.RawMessage{},
+		id: "codex-1", threadID: "thread-1", pending: map[int64]chan codexReply{},
 		approvals: map[int64]string{}, stdin: nopWriteCloser{},
 		daemon: d,
 	}
@@ -203,3 +203,27 @@ type nopWriteCloser struct{}
 
 func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
 func (nopWriteCloser) Close() error                { return nil }
+
+func TestRunStopDuringStartIsRemembered(t *testing.T) {
+	d := silentDaemon()
+	d.handleMessage(context.Background(), protocol.Envelope{Type: "run.stop", RunID: "run-pending"})
+	if !d.consumePendingStop("run-pending") {
+		t.Fatal("a stop that arrived before run.start was lost")
+	}
+	if d.consumePendingStop("run-pending") {
+		t.Fatal("the pending stop was consumed twice")
+	}
+	// A stop after registration is handled by the live run; the pending entry
+	// must not survive to kill a later run with the same id.
+	d.handleMessage(context.Background(), protocol.Envelope{Type: "run.stop", RunID: "run-other"})
+	if !d.consumePendingStop("run-other") {
+		t.Fatal("stop before start was not recorded")
+	}
+	d.runMu.Lock()
+	d.stopping["run-stale"] = time.Now().Add(-2 * time.Minute)
+	d.notePendingStopLocked("run-fresh")
+	if _, ok := d.stopping["run-stale"]; ok {
+		t.Error("expired pending stops are never pruned")
+	}
+	d.runMu.Unlock()
+}

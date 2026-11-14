@@ -35,6 +35,9 @@ type Daemon struct {
 	acpRuns      map[string]*ACPRun
 	starting     map[string]bool
 	startingRuns map[string]bool
+	// stopping remembers a run.stop that arrived before the run registered
+	// its process, so a stop during the startup window is not lost.
+	stopping map[string]time.Time
 
 	sendMu     sync.Mutex
 	snapshotMu sync.Mutex
@@ -76,6 +79,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		acpRuns:      map[string]*ACPRun{},
 		starting:     map[string]bool{},
 		startingRuns: map[string]bool{},
+		stopping:     map[string]time.Time{},
 		lastByAgent:  map[string][]protocol.Session{},
 		lastSnapshot: map[string]string{},
 		hubNonces:    map[string]time.Time{},
@@ -598,13 +602,53 @@ func (d *Daemon) sessionCwd(agent, nativeID string) (string, bool) {
 
 // sessionWithinRoots enforces the host policy for a session outside a run.
 // Unknown sessions fail closed: the hub only asks about sessions it received
-// in a snapshot, which always includes the working directory.
+// in a snapshot, which always includes the working directory. An empty root
+// list allows nothing, consistent with WithinRoots, git and the search index.
 func (d *Daemon) sessionWithinRoots(agent, nativeID string) bool {
-	if len(d.policy.AllowedRoots) == 0 {
-		return true
-	}
 	cwd, ok := d.sessionCwd(agent, nativeID)
 	return ok && d.policy.WithinRoots(cwd)
+}
+
+// resolveRunCwd returns the working directory a run must use and enforces the
+// host policy on it. When the agent store can report the session's own
+// directory, that directory wins over the one supplied by the hub: otherwise a
+// hub could name an allowed directory and still resume a session that lives
+// outside the policy roots. Agents without a readable session store (a
+// configured ACP command) fall back to the hub value, which policy still
+// checks.
+func (d *Daemon) resolveRunCwd(ctx context.Context, spec protocol.RunSpec) (string, error) {
+	if spec.Action != protocol.ActionNew {
+		cwd := ""
+		if cached, ok := d.sessionCwd(spec.Agent, spec.NativeID); ok {
+			cwd = cached
+		} else if a := d.adapter(spec.Agent); a != nil {
+			if sessions, err := a.ListSessions(ctx); err == nil {
+				for _, s := range sessions {
+					if s.NativeID == spec.NativeID {
+						cwd = s.Cwd
+						break
+					}
+				}
+			}
+		}
+		if cwd == "" {
+			cwd = spec.Cwd
+		}
+		if cwd == "" {
+			return "", errors.New("session working directory is unknown")
+		}
+		if !d.policy.WithinRoots(cwd) {
+			return "", errors.New("session working directory is outside the allowed roots")
+		}
+		return cwd, nil
+	}
+	if spec.Cwd == "" {
+		return "", errors.New("working directory is required for a new session")
+	}
+	if !d.policy.WithinRoots(spec.Cwd) {
+		return "", errors.New("working directory is outside the allowed roots")
+	}
+	return spec.Cwd, nil
 }
 
 func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
@@ -791,6 +835,12 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 		sr := d.structured[msg.RunID]
 		cr := d.codexRuns[msg.RunID]
 		ar := d.acpRuns[msg.RunID]
+		if r == nil && sr == nil && cr == nil && ar == nil {
+			// run.start and run.stop are handled concurrently, so a stop can
+			// arrive before the starter has registered its process. Record it
+			// and let the starter abort right after registration.
+			d.notePendingStopLocked(msg.RunID)
+		}
 		d.runMu.Unlock()
 		if r != nil {
 			go r.Stop()
@@ -986,6 +1036,34 @@ func (d *Daemon) reserveRunLocked(sessionKey, runID string) bool {
 func (d *Daemon) releaseRunLocked(sessionKey, runID string) {
 	delete(d.starting, sessionKey)
 	delete(d.startingRuns, runID)
+}
+
+// notePendingStopLocked records a stop for a run that has not registered yet.
+// Entries expire so a stop for a run that never starts cannot accumulate.
+// Callers must hold runMu.
+func (d *Daemon) notePendingStopLocked(runID string) {
+	if d.stopping == nil {
+		d.stopping = map[string]time.Time{}
+	}
+	now := time.Now()
+	for id, at := range d.stopping {
+		if now.Sub(at) > time.Minute {
+			delete(d.stopping, id)
+		}
+	}
+	d.stopping[runID] = now
+}
+
+// consumePendingStop reports whether a stop arrived while the run was still
+// starting. A true result obliges the caller to stop the registered run.
+func (d *Daemon) consumePendingStop(runID string) bool {
+	d.runMu.Lock()
+	defer d.runMu.Unlock()
+	if _, ok := d.stopping[runID]; !ok {
+		return false
+	}
+	delete(d.stopping, runID)
+	return true
 }
 
 // runActiveLocked reports whether a run id already exists. Callers must hold

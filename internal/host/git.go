@@ -1,6 +1,7 @@
 package host
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -9,6 +10,28 @@ import (
 	"strings"
 	"time"
 )
+
+// cappedBuffer keeps at most limit bytes and remembers that it dropped data.
+// It always reports a full write so the child is not killed by a write error.
+type cappedBuffer struct {
+	buf      bytes.Buffer
+	limit    int
+	overflow bool
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if remaining := c.limit - c.buf.Len(); remaining > 0 {
+		if len(p) > remaining {
+			_, _ = c.buf.Write(p[:remaining])
+			c.overflow = true
+		} else {
+			_, _ = c.buf.Write(p)
+		}
+	} else if len(p) > 0 {
+		c.overflow = true
+	}
+	return len(p), nil
+}
 
 type gitRepoCache struct {
 	branch string
@@ -121,12 +144,16 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
 		cmd.Dir = cwd
 		hideProcessWindow(cmd)
-		out, err := cmd.CombinedOutput()
-		text := strings.TrimSpace(string(out))
+		// Bound the allocation while git runs. A multi-hundred-megabyte diff
+		// used to be fully buffered before the truncation check.
+		buf := &cappedBuffer{limit: limit}
+		cmd.Stdout, cmd.Stderr = buf, buf
+		err := cmd.Run()
+		text := strings.TrimSpace(buf.buf.String())
 		if err != nil {
-			return text + "\n" + err.Error(), false
+			return truncate(text+"\n"+err.Error(), limit), buf.overflow
 		}
-		if len(text) > limit {
+		if buf.overflow || len(text) > limit {
 			return truncate(text, limit), true
 		}
 		return text, false

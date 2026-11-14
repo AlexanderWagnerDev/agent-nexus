@@ -391,7 +391,7 @@ func TestACPControlsWithInProcessAgent(t *testing.T) {
 
 	err = run.Prompt("hello", &protocol.PromptOptions{
 		Model: "model-2", Variant: "high", AgentMode: "ask",
-		Attachments: []protocol.Attachment{{Name: "shot.png", MIME: "image/png", Data: "cG5n"}},
+		Attachments: []protocol.Attachment{{Name: "shot.png", MIME: "image/png", Data: onePixelPNG}},
 	})
 	if err != nil {
 		t.Fatal(err)

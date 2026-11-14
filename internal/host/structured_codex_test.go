@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,14 +22,14 @@ func TestCodexRunRoutesServerRequestWithCollidingID(t *testing.T) {
 	defer responseWriter.Close()
 	run := &CodexRun{
 		id: "run-collide", threadID: "thread-1", agent: "codex", cwd: t.TempDir(),
-		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{},
+		pending: map[int64]chan codexReply{}, approvals: map[int64]string{},
 		daemon: &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 	}
 	go run.readLoop(responseReader)
 
 	// Client request 1 is in flight while the server asks for an approval with
 	// the same JSON-RPC id. The approval must not resolve the pending call.
-	pending := make(chan json.RawMessage, 1)
+	pending := make(chan codexReply, 1)
 	run.mu.Lock()
 	run.pending[1] = pending
 	run.mu.Unlock()
@@ -50,7 +51,7 @@ func TestCodexRunRoutesServerRequestWithCollidingID(t *testing.T) {
 	}
 	select {
 	case got := <-pending:
-		t.Fatalf("server request resolved the pending client call: %s", got)
+		t.Fatalf("server request resolved the pending client call: %s", got.result)
 	default:
 	}
 
@@ -60,8 +61,8 @@ func TestCodexRunRoutesServerRequestWithCollidingID(t *testing.T) {
 	}
 	select {
 	case got := <-pending:
-		if string(got) != `{"ok":true}` {
-			t.Fatalf("response = %s", got)
+		if string(got.result) != `{"ok":true}` {
+			t.Fatalf("response = %s", got.result)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("real response was not correlated")
@@ -76,7 +77,7 @@ func TestCodexRunJSONRPC(t *testing.T) {
 
 	run := &CodexRun{
 		id: "run-1", threadID: "thread-1", agent: "codex", cwd: t.TempDir(),
-		stdin: requestWriter, pending: map[int64]chan json.RawMessage{},
+		stdin: requestWriter, pending: map[int64]chan codexReply{},
 		approvals: map[int64]string{}, daemon: &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 	}
 	run.cancel = func() {}
@@ -163,7 +164,7 @@ func TestCodexApprovalResolvesAndTimesOut(t *testing.T) {
 	defer stdinWriter.Close()
 	run := &CodexRun{
 		id: "run-approval", threadID: "thread-1", agent: "codex", cwd: t.TempDir(), stdin: stdinWriter,
-		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{},
+		pending: map[int64]chan codexReply{}, approvals: map[int64]string{},
 		approvalTimers: map[int64]*time.Timer{},
 		daemon:         &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 	}
@@ -219,5 +220,35 @@ func TestCodexApprovalResolvesAndTimesOut(t *testing.T) {
 	run.mu.Unlock()
 	if stillPending {
 		t.Fatal("timed-out approval kept pending state")
+	}
+}
+
+// A JSON-RPC error response must fail the pending call instead of being
+// delivered as a successful nil result. A rejected thread/resume used to look
+// successful until a later call failed with an unrelated message.
+func TestCodexRunSurfacesJSONRPCErrors(t *testing.T) {
+	responseReader, responseWriter := io.Pipe()
+	defer responseWriter.Close()
+	requestReader, requestWriter := io.Pipe()
+	defer requestReader.Close()
+	run := &CodexRun{
+		id: "run-error", pending: map[int64]chan codexReply{}, approvals: map[int64]string{},
+		stdin: requestWriter, daemon: &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+	}
+	go run.readLoop(responseReader)
+	go func() {
+		buf := make([]byte, 4096)
+		if _, err := requestReader.Read(buf); err != nil {
+			return
+		}
+		_, _ = responseWriter.Write([]byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"thread not found"}}` + "\n"))
+	}()
+
+	_, err := run.request("thread/resume", map[string]any{"threadId": "gone"}, 5*time.Second)
+	if err == nil {
+		t.Fatal("a JSON-RPC error response was returned as success")
+	}
+	if !strings.Contains(err.Error(), "thread not found") {
+		t.Fatalf("error does not carry the app-server message: %v", err)
 	}
 }

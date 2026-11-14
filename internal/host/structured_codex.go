@@ -38,7 +38,7 @@ type CodexRun struct {
 
 	writeMu        sync.Mutex
 	mu             sync.Mutex
-	pending        map[int64]chan json.RawMessage
+	pending        map[int64]chan codexReply
 	approvals      map[int64]string
 	approvalTimers map[int64]*time.Timer
 	nextID         int64
@@ -56,6 +56,32 @@ type codexEvent struct {
 	Error  json.RawMessage `json:"error,omitempty"`
 }
 
+// codexReply carries either the result or the JSON-RPC error of a client
+// request. Dropping the error made a rejected thread/resume or initialize look
+// successful until the next call failed with an unrelated message.
+type codexReply struct {
+	result json.RawMessage
+	err    error
+}
+
+func codexErrorMessage(raw json.RawMessage) string {
+	var body struct {
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	if json.Unmarshal(raw, &body) == nil && body.Message != "" {
+		return body.Message
+	}
+	text := strings.TrimSpace(string(raw))
+	if len(text) > 300 {
+		text = text[:300] + "…"
+	}
+	if text == "" || text == "null" {
+		return "unknown JSON-RPC error"
+	}
+	return text
+}
+
 func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunSpec) {
 	fail := func(msg string) {
 		d.log.Warn("codex structured run rejected", "run_id", spec.RunID, "error", msg)
@@ -69,25 +95,9 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail("host policy does not allow new sessions")
 		return
 	}
-	cwd := spec.Cwd
-	if cwd == "" {
-		if a := d.adapter("codex"); a != nil {
-			if sessions, err := a.ListSessions(parent); err == nil {
-				for _, s := range sessions {
-					if s.NativeID == spec.NativeID {
-						cwd = s.Cwd
-						break
-					}
-				}
-			}
-		}
-	}
-	if cwd == "" {
-		fail("session working directory is unknown")
-		return
-	}
-	if !d.policy.WithinRoots(cwd) {
-		fail("working directory is outside the allowed roots")
+	cwd, err := d.resolveRunCwd(parent, spec)
+	if err != nil {
+		fail(err.Error())
 		return
 	}
 	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
@@ -167,7 +177,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		id: spec.RunID, sessionKey: sessionKey, agent: "codex", cwd: cwd,
 		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
 		stdout: stdout, stderr: stderr,
-		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, approvalTimers: map[int64]*time.Timer{}, state: protocol.StateIdle,
+		pending: map[int64]chan codexReply{}, approvals: map[int64]string{}, approvalTimers: map[int64]*time.Timer{}, state: protocol.StateIdle,
 	}
 	go cr.readLoop(stdout)
 	go func() {
@@ -219,6 +229,10 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	d.codexRuns[spec.RunID] = cr
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	if d.consumePendingStop(spec.RunID) {
+		d.log.Info("codex structured run was stopped while starting", "run_id", spec.RunID)
+		go cr.Stop()
+	}
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("codex structured run started", "run_id", spec.RunID, "thread", cr.threadID, "cwd", cwd)
 	hostAudit("codex.structured.started", map[string]any{"run_id": spec.RunID, "cwd": cwd})
@@ -255,7 +269,7 @@ func (r *CodexRun) request(method string, params any, timeout time.Duration) (js
 	r.mu.Lock()
 	r.nextID++
 	id := r.nextID
-	ch := make(chan json.RawMessage, 1)
+	ch := make(chan codexReply, 1)
 	r.pending[id] = ch
 	r.mu.Unlock()
 	defer func() {
@@ -271,8 +285,8 @@ func (r *CodexRun) request(method string, params any, timeout time.Duration) (js
 		return nil, err
 	}
 	select {
-	case raw := <-ch:
-		return raw, nil
+	case reply := <-ch:
+		return reply.result, reply.err
 	case <-time.After(timeout):
 		return nil, errors.New("codex app-server request timed out")
 	}
@@ -298,10 +312,14 @@ func (r *CodexRun) readLoop(reader io.Reader) {
 			ch := r.pending[*ev.ID]
 			r.mu.Unlock()
 			if ch != nil {
+				reply := codexReply{result: ev.Result}
+				if len(ev.Error) > 0 && string(ev.Error) != "null" {
+					reply.err = errors.New("codex app-server: " + codexErrorMessage(ev.Error))
+				}
 				// A duplicate response for the same id must never block the
 				// only reader of the app-server stream.
 				select {
-				case ch <- ev.Result:
+				case ch <- reply:
 				default:
 				}
 			}
@@ -591,9 +609,7 @@ func (r *CodexRun) Stop() {
 	}
 	r.cancel()
 	r.closeReaders()
-	if r.cmd != nil && r.cmd.Process != nil {
-		_ = r.cmd.Process.Kill()
-	}
+	stopProcessTree(r.guard, r.cmd, r.daemon.policy.ProcessGrace())
 	for _, id := range pending {
 		ev := protocol.RunEvent{Type: "approval.resolved", ApprovalID: fmt.Sprintf("%d", id), Decision: "reject", Text: "run stopped"}
 		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
@@ -623,6 +639,9 @@ func (r *CodexRun) markFinished() {
 	}
 	r.closeReaders()
 	r.cancel()
+	if r.guard != nil {
+		r.guard.Close()
+	}
 	cleanupPromptAttachments(r.id)
 }
 

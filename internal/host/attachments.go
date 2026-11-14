@@ -29,6 +29,48 @@ type promptFile struct {
 	Path string
 }
 
+// decodedAttachment is one validated upload. The original base64 text is kept
+// so a protocol that carries inline base64 (ACP) does not have to re-encode.
+type decodedAttachment struct {
+	name string
+	mime string
+	data []byte
+	raw  string
+}
+
+// decodeAttachments validates count, base64, size and MIME for every upload.
+// Agents that forward inline data and agents that stage files share it, so the
+// same limits apply on every path.
+func decodeAttachments(attachments []protocol.Attachment) ([]decodedAttachment, error) {
+	if len(attachments) > maxAttachmentCount {
+		return nil, fmt.Errorf("at most %d attachments are allowed", maxAttachmentCount)
+	}
+	var total int
+	out := make([]decodedAttachment, 0, len(attachments))
+	for i, attachment := range attachments {
+		name := safeAttachmentName(attachment.Name, i+1)
+		data, err := base64.StdEncoding.DecodeString(attachment.Data)
+		if err != nil {
+			return nil, errors.New("attachment is not valid base64")
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("%s is empty", name)
+		}
+		if len(data) > maxAttachmentBytes {
+			return nil, fmt.Errorf("%s exceeds the %d MB attachment limit", name, maxAttachmentBytes>>20)
+		}
+		if err := validateAttachmentMIME(name, attachment.MIME, data); err != nil {
+			return nil, err
+		}
+		total += len(data)
+		if total > maxAttachmentTotal {
+			return nil, errors.New("attachments exceed the total size limit")
+		}
+		out = append(out, decodedAttachment{name: name, mime: attachment.MIME, data: data, raw: attachment.Data})
+	}
+	return out, nil
+}
+
 // validRunID bounds the hub-supplied run identifier. It is used as a
 // directory name under the attachment base, so separators, dots and control
 // characters are rejected; the hub's own ids are 32 lowercase hex characters.
@@ -63,14 +105,18 @@ func runDirName(runID string) string {
 // writePromptAttachments materialises browser uploads inside a private
 // per-run directory. The hub never writes files; only the host does.
 func writePromptAttachments(runID string, attachments []protocol.Attachment) ([]promptFile, error) {
-	if len(attachments) > maxAttachmentCount {
-		return nil, fmt.Errorf("at most %d attachments are allowed", maxAttachmentCount)
+	decoded, err := decodeAttachments(attachments)
+	if err != nil {
+		return nil, err
 	}
-	if len(attachments) == 0 {
+	if len(decoded) == 0 {
 		return nil, nil
 	}
 	dir := attachmentDir(runID)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	if err := secureDirOwner(dir); err != nil {
 		return nil, err
 	}
 	_ = os.Chmod(dir, 0o700)
@@ -80,40 +126,22 @@ func writePromptAttachments(runID string, attachments []protocol.Attachment) ([]
 			_ = os.RemoveAll(dir)
 		}
 	}()
-	var total int
-	files := make([]promptFile, 0, len(attachments))
-	for i, attachment := range attachments {
-		name := safeAttachmentName(attachment.Name, i+1)
-		data, err := base64.StdEncoding.DecodeString(attachment.Data)
-		if err != nil {
-			return nil, errors.New("attachment is not valid base64")
-		}
-		if len(data) == 0 {
-			return nil, fmt.Errorf("%s is empty", name)
-		}
-		if len(data) > maxAttachmentBytes {
-			return nil, fmt.Errorf("%s exceeds the %d MB attachment limit", name, maxAttachmentBytes>>20)
-		}
-		if err := validateAttachmentMIME(name, attachment.MIME, data); err != nil {
-			return nil, err
-		}
-		total += len(data)
-		if total > maxAttachmentTotal {
-			return nil, errors.New("attachments exceed the total size limit")
-		}
+	files := make([]promptFile, 0, len(decoded))
+	for i, attachment := range decoded {
+		name := attachment.name
 		ext := filepath.Ext(name)
-		if ext == "" && attachment.MIME != "" {
-			if exts, _ := mime.ExtensionsByType(attachment.MIME); len(exts) > 0 {
+		if ext == "" && attachment.mime != "" {
+			if exts, _ := mime.ExtensionsByType(attachment.mime); len(exts) > 0 {
 				ext = exts[0]
 				name += ext
 			}
 		}
 		filePath := filepath.Join(dir, fmt.Sprintf("%02d-%s", i+1, name))
-		if err := os.WriteFile(filePath, data, 0o600); err != nil {
+		if err := os.WriteFile(filePath, attachment.data, 0o600); err != nil {
 			return nil, err
 		}
 		_ = os.Chmod(filePath, 0o600)
-		files = append(files, promptFile{Name: name, MIME: attachment.MIME, Path: filePath})
+		files = append(files, promptFile{Name: name, MIME: attachment.mime, Path: filePath})
 	}
 	success = true
 	return files, nil

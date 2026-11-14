@@ -118,3 +118,26 @@ func TestCleanupStaleAttachments(t *testing.T) {
 		t.Fatal("fresh attachment directory was removed")
 	}
 }
+
+// onePixelPNG is a valid 1x1 PNG. The MIME check sniffs the actual bytes, so a
+// placeholder string is rejected.
+const onePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
+
+func TestDecodeAttachmentsEnforcesTheSharedLimits(t *testing.T) {
+	if _, err := decodeAttachments([]protocol.Attachment{{Name: "ok.png", MIME: "image/png", Data: onePixelPNG}}); err != nil {
+		t.Fatalf("valid image rejected: %v", err)
+	}
+	if _, err := decodeAttachments([]protocol.Attachment{{Name: "bad.png", MIME: "image/png", Data: "not base64!"}}); err == nil {
+		t.Fatal("invalid base64 was accepted")
+	}
+	if _, err := decodeAttachments([]protocol.Attachment{{Name: "bad.png", MIME: "image/png", Data: "cG5n"}}); err == nil {
+		t.Fatal("text bytes labelled as an image were accepted")
+	}
+	var many []protocol.Attachment
+	for i := 0; i <= maxAttachmentCount; i++ {
+		many = append(many, protocol.Attachment{Name: "x.png", MIME: "image/png", Data: onePixelPNG})
+	}
+	if _, err := decodeAttachments(many); err == nil {
+		t.Fatal("more than the attachment count limit was accepted")
+	}
+}

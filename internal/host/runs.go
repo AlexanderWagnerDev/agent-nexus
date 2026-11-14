@@ -197,25 +197,9 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		fail(err.Error())
 		return
 	}
-	cwd := spec.Cwd
-	if a := d.adapter(spec.Agent); a != nil {
-		if sessions, err := a.ListSessions(ctx); err == nil {
-			for _, s := range sessions {
-				if s.NativeID == spec.NativeID {
-					if cwd == "" {
-						cwd = s.Cwd
-					}
-					break
-				}
-			}
-		}
-	}
-	if cwd == "" {
-		fail("session working directory is unknown")
-		return
-	}
-	if !d.policy.WithinRoots(cwd) {
-		fail("working directory is outside the allowed roots")
+	cwd, err := d.resolveRunCwd(ctx, spec)
+	if err != nil {
+		fail(err.Error())
 		return
 	}
 	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
@@ -295,6 +279,10 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 	d.runMu.Unlock()
 
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: spec.Action})
+	if d.consumePendingStop(spec.RunID) {
+		d.log.Info("run was stopped while starting", "run_id", spec.RunID)
+		go r.Stop()
+	}
 	d.log.Info("run started", "run_id", spec.RunID, "agent", spec.Agent, "cwd", cwd, "action", spec.Action)
 	hostAudit("run.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd, "action": spec.Action, "forced_active_elsewhere": spec.Force})
 	_ = d.sendSessions(true)

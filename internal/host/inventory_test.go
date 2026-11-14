@@ -59,9 +59,12 @@ func TestSessionWithinRootsAppliesToTranscriptReads(t *testing.T) {
 	if d.sessionWithinRoots("claude", "unknown") {
 		t.Fatal("an undiscovered session failed open")
 	}
-	// Without a restriction every session remains readable.
+	// An empty root list allows nothing, matching runs, git and the index.
 	d.policy.AllowedRoots = nil
-	if !d.sessionWithinRoots("claude", "unknown") {
-		t.Fatal("unrestricted host rejected a session")
+	if d.sessionWithinRoots("claude", "unknown") {
+		t.Fatal("an empty allowed_roots list must fail closed")
+	}
+	if d.sessionWithinRoots("claude", "inside") {
+		t.Fatal("an empty allowed_roots list must fail closed for known sessions too")
 	}
 }

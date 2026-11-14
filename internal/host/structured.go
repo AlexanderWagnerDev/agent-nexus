@@ -82,25 +82,9 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("structured mode is available for OpenCode, Codex and configured ACP agents; use terminal mode")
 		return
 	}
-	cwd := spec.Cwd
-	if cwd == "" {
-		if a := d.adapter(spec.Agent); a != nil {
-			if sessions, err := a.ListSessions(parent); err == nil {
-				for _, s := range sessions {
-					if s.NativeID == spec.NativeID {
-						cwd = s.Cwd
-						break
-					}
-				}
-			}
-		}
-	}
-	if cwd == "" {
-		fail("session working directory is unknown")
-		return
-	}
-	if !d.policy.WithinRoots(cwd) {
-		fail("working directory is outside the allowed roots")
+	cwd, err := d.resolveRunCwd(parent, spec)
+	if err != nil {
+		fail(err.Error())
 		return
 	}
 	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
@@ -110,6 +94,11 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	sessionKey := spec.Agent + ":" + spec.NativeID
 	if spec.Action == protocol.ActionNew {
 		sessionKey = spec.Agent + ":new:" + randomRunKey()
+	}
+	if spec.Action == protocol.ActionFork {
+		// A fork creates an independent session; it must not contend with a
+		// concurrent run on the source session.
+		sessionKey = spec.Agent + ":fork:" + randomRunKey()
 	}
 	d.runMu.Lock()
 	reserved := d.reserveRunLocked(sessionKey, spec.RunID)
@@ -191,19 +180,19 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	case <-ready:
 	case <-time.After(25 * time.Second):
 		cancel()
-		_ = cmd.Process.Kill()
+		stopProcessTree(sr.guard, cmd, d.policy.ProcessGrace())
 		sr.closeReaders()
 		fail("opencode server did not become ready")
 		return
 	case <-parent.Done():
 		cancel()
-		_ = cmd.Process.Kill()
+		stopProcessTree(sr.guard, cmd, d.policy.ProcessGrace())
 		sr.closeReaders()
 		return
 	}
 	if sr.baseURL == "" {
 		cancel()
-		_ = cmd.Process.Kill()
+		stopProcessTree(sr.guard, cmd, d.policy.ProcessGrace())
 		sr.closeReaders()
 		fail("opencode server did not report its listening address")
 		return
@@ -241,6 +230,10 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	d.structured[spec.RunID] = sr
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	if d.consumePendingStop(spec.RunID) {
+		d.log.Info("structured run was stopped while starting", "run_id", spec.RunID)
+		go sr.Stop()
+	}
 	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
 	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
@@ -620,6 +613,11 @@ func (r *StructuredRun) markFinished() {
 	r.mu.Unlock()
 	r.closeReaders()
 	r.cancel()
+	if r.guard != nil {
+		// The child exited on its own; close the job handle so a long-lived
+		// daemon does not accumulate one handle per structured run.
+		r.guard.Close()
+	}
 	cleanupPromptAttachments(r.id)
 }
 

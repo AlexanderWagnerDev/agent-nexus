@@ -1,10 +1,12 @@
 package host
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -222,5 +224,67 @@ func TestSignedForceResumeRejectedWhenDisabled(t *testing.T) {
 	}
 	if err := d.validateRunPolicy(spec); err == nil {
 		t.Fatal("signed force-resume command bypassed allow_force_resume=false")
+	}
+}
+
+func TestResolveRunCwdUsesTheDiscoveredSessionDirectory(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	inside := filepath.Join(root, "repo")
+	d := &Daemon{
+		policy: Policy{AllowedRoots: []string{root}},
+		lastByAgent: map[string][]protocol.Session{
+			"claude": {{NativeID: "native-outside", Agent: "claude", Cwd: outside}},
+		},
+	}
+	// A hub may not invent an allowed directory for a session that lives
+	// outside the roots.
+	_, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionResume, NativeID: "native-outside", Cwd: root,
+	})
+	if err == nil || !strings.Contains(err.Error(), "outside the allowed roots") {
+		t.Fatalf("hub-supplied directory bypassed the session directory: %v", err)
+	}
+
+	// The discovered directory wins even when the hub names another one.
+	d.lastByAgent["claude"] = []protocol.Session{{NativeID: "native-inside", Agent: "claude", Cwd: inside}}
+	cwd, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionFork, NativeID: "native-inside", Cwd: outside,
+	})
+	if err != nil {
+		t.Fatalf("discovered session inside the root rejected: %v", err)
+	}
+	if cwd != inside {
+		t.Fatalf("run cwd = %q, want the discovered session directory %q", cwd, inside)
+	}
+
+	// A session the store cannot enumerate falls back to the hub directory,
+	// which policy still checks.
+	if cwd, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionResume, NativeID: "unknown", Cwd: root,
+	}); err != nil || cwd != root {
+		t.Fatalf("fallback to an allowed directory: cwd=%q err=%v", cwd, err)
+	}
+	if _, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionResume, NativeID: "unknown", Cwd: outside,
+	}); err == nil {
+		t.Fatal("fallback accepted a directory outside the allowed roots")
+	}
+
+	// New sessions still require an allowed directory from the hub.
+	if _, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionNew,
+	}); err == nil {
+		t.Fatal("new session without a working directory was accepted")
+	}
+	if _, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionNew, Cwd: outside,
+	}); err == nil {
+		t.Fatal("new session outside the allowed roots was accepted")
+	}
+	if cwd, err := d.resolveRunCwd(context.Background(), protocol.RunSpec{
+		Agent: "claude", Action: protocol.ActionNew, Cwd: root,
+	}); err != nil || cwd != root {
+		t.Fatalf("new session inside the root: cwd=%q err=%v", cwd, err)
 	}
 }

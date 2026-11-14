@@ -73,25 +73,9 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail("invalid native session id")
 		return
 	}
-	cwd := spec.Cwd
-	if cwd == "" {
-		if a := d.adapter(spec.Agent); a != nil {
-			if sessions, err := a.ListSessions(parent); err == nil {
-				for _, s := range sessions {
-					if s.NativeID == spec.NativeID {
-						cwd = s.Cwd
-						break
-					}
-				}
-			}
-		}
-	}
-	if cwd == "" {
-		fail("session working directory is unknown")
-		return
-	}
-	if !d.policy.WithinRoots(cwd) {
-		fail("working directory is outside the allowed roots")
+	cwd, err := d.resolveRunCwd(parent, spec)
+	if err != nil {
+		fail(err.Error())
 		return
 	}
 	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
@@ -249,6 +233,10 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	d.acpRuns[spec.RunID] = ar
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	if d.consumePendingStop(spec.RunID) {
+		d.log.Info("ACP structured run was stopped while starting", "run_id", spec.RunID)
+		go ar.Stop()
+	}
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt"}})
 	d.log.Info("ACP structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", ar.sessionID, "cwd", cwd)
 	hostAudit("acp.structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
@@ -370,14 +358,18 @@ func (r *ACPRun) Prompt(text string, options *protocol.PromptOptions) error {
 	}
 	blocks := []acp.ContentBlock{acp.TextBlock(text)}
 	if options != nil {
-		for _, attachment := range options.Attachments {
-			if !strings.HasPrefix(strings.ToLower(attachment.MIME), "image/") {
+		decoded, err := decodeAttachments(options.Attachments)
+		if err != nil {
+			return fail(err)
+		}
+		for _, attachment := range decoded {
+			if !strings.HasPrefix(strings.ToLower(attachment.mime), "image/") {
 				return fail(errors.New("this ACP agent only accepts image attachments"))
 			}
 			if !supportsFiles {
 				return fail(errors.New("this ACP agent does not advertise image prompt support"))
 			}
-			blocks = append(blocks, acp.ImageBlock(attachment.Data, attachment.MIME))
+			blocks = append(blocks, acp.ImageBlock(attachment.raw, attachment.mime))
 		}
 	}
 
@@ -552,6 +544,9 @@ func (r *ACPRun) markFinished() {
 	r.mu.Unlock()
 	r.closeReaders()
 	r.cancel()
+	if r.guard != nil {
+		r.guard.Close()
+	}
 }
 
 func (r *ACPRun) Stop() {
