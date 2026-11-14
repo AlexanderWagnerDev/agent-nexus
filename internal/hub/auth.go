@@ -49,6 +49,37 @@ func HashPassword(password string) (string, error) {
 
 // VerifyPassword checks a password against an Argon2id PHC string in
 // constant time.
+// dummyPasswordHash is a valid Argon2id hash used to spend the same work on
+// an unknown username as on a real one. It is built lazily so a hub that never
+// sees a failed login does not pay the cost at startup.
+var dummyPassword = sync.OnceValue(func() string {
+	hash, err := HashPassword("agentnexus-login-timing-equalizer")
+	if err != nil {
+		return ""
+	}
+	return hash
+})
+
+func dummyPasswordHash() string { return dummyPassword() }
+
+// passwordWork bounds concurrent Argon2id verifications. Each hash allocates
+// 64 MiB; without a bound, many parallel login attempts could exhaust the
+// process even though per-key rate limits are in place.
+var passwordWork = make(chan struct{}, 4)
+
+// VerifyPasswordBounded verifies a password while holding one of the bounded
+// Argon2 slots. It returns false when the slot cannot be acquired in time, so
+// a flood cannot grow the queue indefinitely.
+func VerifyPasswordBounded(encoded, password string) bool {
+	select {
+	case passwordWork <- struct{}{}:
+		defer func() { <-passwordWork }()
+		return VerifyPassword(encoded, password)
+	case <-time.After(10 * time.Second):
+		return false
+	}
+}
+
 func VerifyPassword(encoded, password string) bool {
 	parts := strings.Split(strings.TrimPrefix(encoded, "$"), "$")
 	if len(parts) != 5 || parts[0] != "argon2id" || parts[1] != "v=19" {

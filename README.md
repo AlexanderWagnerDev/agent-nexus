@@ -68,7 +68,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline/disabled, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, rename, disable/enable, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active; mtime fingerprint of agent stores with a 500 ms debounce and a 15 s fallback (new sessions normally appear within 2-3 s) |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key. Native clients can register a per-device Ed25519/P-256 key; signed writes cover WebSocket prompt/approval/input/interrupt and the REST run, queue, task, fan-out and stop paths. The browser UI stays cookie-authenticated, and host-side verification of a *device* identity (independent of the hub) remains open |
-| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | No public release feed during alpha; CI development builds remain an explicit installer fallback |
+| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | No public release feed during alpha. The `development` update channel follows the prerelease release feed; unsigned CI development builds are only available through the installer's explicit `--development` path, not through auto-update |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -279,7 +279,7 @@ the repository.
 go test ./...
 go vet ./...
 cd web && npm test          # Markdown and diff unit tests
-cd web && npm run e2e       # disposable hub + browser smoke test
+E2E_SPAWN_HUB=1 npm run e2e # disposable hub + browser smoke test
 
 # axe-core WCAG 2.2 A/AA scan against a running hub (desktop and mobile):
 BASE_URL=http://127.0.0.1:8788 npm run e2e:a11y

@@ -11,7 +11,7 @@ request for the maintainer to perform tests personally.
 | Go unit/integration | `gofmt -l .`, `go vet ./...`, `go test ./...` pass locally (Windows); CI runs Linux, macOS and Windows plus `go test -race` |
 | Static analysis | `staticcheck` v0.8.2 passes; `govulncheck` v1.9.0 reports no vulnerabilities; `actionlint` v1.7.12 passes on all workflows |
 | Browser unit tests | `node web/scripts/check-syntax.mjs`, `npm test` pass |
-| Browser smoke | `npm run e2e` passes, including bell badge geometry, focus return for palette/notifications and the five-entry mobile bar with a More menu |
+| Browser smoke | `E2E_SPAWN_HUB=1 npm run e2e` passes, including bell badge geometry, focus return for palette/notifications and the five-entry mobile bar with a More menu |
 | Browser UI regressions | `npm run e2e:demo-ui` (with `E2E_SPAWN_DEMO=1`) covers tab dedupe, cross-host project grouping, the bell badge, host overflow actions, the Git diffstat list and the mobile sticky header |
 | Installer syntax | `bash -n scripts/install-host.sh` and the PowerShell parser accept the reworked installers; Docker Compose and both Portainer stacks validate with `docker compose config` when their required variables are set |
 | Virtualized 10k sessions | `node e2e/virtual.mjs`: ~20 rows initially, 33 after 1,400 sessions, 222/252 DOM nodes, no duplicates |
@@ -36,6 +36,7 @@ request for the maintainer to perform tests personally.
 | CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
 | OpenCode 2.2.7 protocol | Read-only SQLite schema and `/openapi.json` inspected on a local 2.2.7 install; native session create/interrupt and fork contract exercised without a paid model turn; daily driver tests use a fake HTTP server |
 | Audit round 2026-11-13 | New regression tests for MCP bearer clients without the browser marker, search `not_searched` semantics, atomic first-run setup, bounded rate-limit maps, hidden approvals on finished runs, admin queue pause, activity grouping by `updated_at`, FTS pruning of deleted sessions, adapter native-ID validation, Codex JSON-RPC request/response separation, ACP failed-turn state, replay coalescing and updater token scoping pass locally |
+| Audit round 2026-11-14 | Hardening round with new regression tests: stale runs and their sessions are closed after a hub restart and re-adopted when a host reports them, finished run buffers are released, host broadcasts respect grants, viewers cannot write through a grant, run-scoped prompt text is not broadcast to other users, `terminal_input`/`approve` are enforced, queue attachments fit the body/WS limits, `X-Forwarded-For` is ignored from public peers, run-ID traversal is rejected before an attachment path is built, structured mode enforces the tested version band, Codex approvals resolve and time out, pty runs end on Unix, a healthy first start after an update is not counted as a failure, interrupted installs do not block a release, and rollbacks block the version. `go test ./...`, `go vet ./...`, `npm test`, the expanded i18n/module-import checks, the Playwright smoke test and the 10k-session virtual test pass locally; CI provides the Linux/macOS/race results |
 
 ## Not verified here
 

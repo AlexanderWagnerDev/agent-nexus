@@ -19,13 +19,13 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in the alpha |
 | Audit | hash-chained append-only table plus host-local JSONL audit, verification endpoint/UI | host-local log is not hash-chained |
 | Device revocation | deletes sessions and closes open browser sockets | push subscriptions are not deleted with the device |
-| Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP) | in-memory only, per-process |
+| Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP); `X-Forwarded-For` is only honoured when the direct peer is loopback/private, using the rightmost entry, and password hashing runs in four bounded Argon2 slots | in-memory only, per-process |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
 | Web Push | VAPID, content-free payloads, subscriptions bound to user and device; private key encrypted at rest | permission is browser-controlled |
 | Host updates | `nexusd update` downloads releases directly from GitHub, verifies SHA-256 and verifies the cosign keyless bundle when cosign is installed; install is refused while runs are active unless forced | a private release feed needs a read-only GitHub token; hub does not apply updates |
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
 | Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
-| Role limits | viewers cannot create host pairing codes | viewers can still read every host explicitly shared with them |
+| Role limits | viewers cannot create host pairing codes and never gain write capabilities (run start, terminal input, approval, manage) even when an administrator stored such a grant; the grant is reduced to read-only on save | viewers can still read every host explicitly shared with them |
 | Windows autostart | per-user Task Scheduler task, logon trigger, least privilege, restart on failure | Server 2025 untested; no boot-time task by design |
 
 **Hardening changes in this build (2026-11-11):**
@@ -171,35 +171,34 @@ flowchart LR
 
 | # | Threat | Category | Mitigations |
 | --- | --- | --- | --- |
-| T-01 | Credential stuffing / brute force on the hub login | Spoofing | Passkeys as primary factor; Argon2id; rate limiting per IP and per account; TOTP for password logins; generic error messages. |
-| T-02 | Session hijacking via stolen cookie | Spoofing | `Secure; HttpOnly; SameSite=Strict` cookies, `__Host-` prefix, short idle timeout, binding to device record, revocation; step-up authentication for sensitive actions. |
+| T-01 | Credential stuffing / brute force on the hub login | Spoofing | Argon2id; per-IP+user rate limiting; bounded concurrent password hashing; TOTP for password logins; generic error messages and equalized unknown-user timing. |
+| T-02 | Session hijacking via stolen cookie | Spoofing | `Secure` (behind TLS), `HttpOnly`, `SameSite=Strict` cookie, hashed server-side session records bound to a device record, revocation and a 30-day absolute lifetime; step-up authentication for sensitive actions. |
 | T-03 | Pairing code intercepted and used by attacker to register a rogue host | Spoofing | Single-use, 10-minute TTL, stored hashed, bound to creating user; **short authentication string (SAS) confirmation** in the UI before the host becomes active. |
-| T-04 | Rogue hub impersonation toward hosts (MITM) | Spoofing | TLS with system trust store or pinned certificate fingerprint established at pairing; host verifies hub identity key on every connection. |
-| T-05 | CSRF / cross-site WebSocket hijacking | Tampering | SameSite=Strict cookies, CSRF token on state-changing requests, strict `Origin` check on WebSocket upgrade. |
-| T-06 | XSS in the web app (e.g. via transcript content or terminal output) | Tampering / EoP | React escaping, sanitized markdown rendering (no raw HTML), strict CSP without `unsafe-inline` scripts, Trusted Types where supported; terminal output only rendered through xterm.js. |
-| T-07 | Malicious hub sends commands to hosts | EoP | Host policy (SP-3) bounds what any command can do; permission bypass forbidden by default; local audit on host; **signed-command mode** removes the hub's ability to forge commands. |
+| T-04 | Rogue hub impersonation toward hosts (MITM) | Spoofing | TLS with system trust store; the host authenticates the hub with an Ed25519 challenge and pins the hub key after pairing. |
+| T-05 | CSRF / cross-site WebSocket hijacking | Tampering | SameSite=Strict cookies, the `X-Nexus-Request` marker plus Origin check on mutating requests, and a strict `Origin` check on the WebSocket upgrade. |
+| T-06 | XSS in the web app (e.g. via transcript content or terminal output) | Tampering / EoP | Escape-first Markdown/diff renderers (no raw HTML), plain ES modules with no inline script, strict CSP (`style-src` allows inline styles for layout only); terminal output only rendered through xterm.js. |
+| T-07 | Malicious hub sends commands to hosts | EoP | Host policy (SP-3) bounds what any command can do; permission bypass forbidden by default; local audit on host; hub commands are signed. Host-side verification of the user's device identity is not implemented. |
 | T-08 | Path traversal / starting agents in arbitrary directories | EoP | Host policy `allowed_roots`; canonicalized paths (symlinks resolved, Windows short names/casing normalized) checked against roots; no shell interpolation — argv arrays only. |
 | T-09 | Argument injection into agent command lines (e.g. session ID `--dangerously-skip-permissions`) | EoP | Strict validation of native IDs per agent (UUID/known formats); `--` separators where supported; argv built only by adapters, never from free text. |
-| T-10 | Approving a harmful action on a small screen (prompt injection) | EoP | Full command/diff display, risk highlighting, no "always allow" unless policy permits, approval timeouts default-deny, re-authentication for "always allow". |
+| T-10 | Approving a harmful action on a small screen (prompt injection) | EoP | Full command/diff display, no "always allow" unless policy permits, approval timeouts default-deny for OpenCode/ACP/Codex adapters. |
 | T-11 | Lost phone used to control agents | Spoofing | Device revocation; WebAuthn user verification for step-up; short sessions on mobile by default. |
 | T-12 | Transcript leakage from hub database/backups | Information disclosure | No transcript persistence on hub by default; secrets encrypted at rest; backup encryption guidance. |
 | T-13 | Secrets leaking into logs or push notifications | Information disclosure | Structured logging with redaction; content never logged; push payloads content-free by default. |
 | T-14 | Denial of service of hub or hosts (floods, huge transcripts) | DoS | Rate limits, request size limits, per-host/per-run quotas (`max_concurrent_runs`), paged transcripts, backpressure. |
-| T-15 | Repudiation of actions ("I didn't approve that") | Repudiation | Hash-chained audit log on hub plus local audit on host; signed commands provide non-repudiation per device. |
+| T-15 | Repudiation of actions ("I didn't approve that") | Repudiation | Hash-chained audit log on hub plus local audit on host; hub-side device signatures provide non-repudiation for native clients that opt in. |
 | T-16 | Other local OS users reading `nexusd` keys or socket | Information disclosure / EoP | Key storage in OS keystore or `0600` files; no listening sockets except loopback-only ephemeral servers protected by random credentials (OpenCode `serve`); per-user data directories. |
 | T-17 | Compromised dependency or release artifact | Tampering | Pinned dependencies, lockfiles, `govulncheck`, signed releases with SBOM, reproducible builds, signature verification on self-update. |
 | T-18 | Exposure of agent-side servers (e.g. OpenCode server, Codex app-server WebSocket) | EoP | Only loopback/stdio transports; random port + random password for `opencode serve`; Codex app-server only via stdio; mDNS and CORS never enabled. |
 
 ## User authentication
 
-- **Primary:** WebAuthn passkeys (platform or roaming authenticators), user verification **required**. Library: `go-webauthn/webauthn`. Relying-party ID = hub hostname.
-- **Fallback:** password (Argon2id, parameters m = 64 MiB, t = 3, p = 1, 16-byte salt; tuned on first start to ≥ 250 ms) **plus** TOTP (RFC 6238) — required for password logins on non-loopback hubs.
-- **Recovery:** 10 single-use recovery codes generated at enrollment (stored as Argon2id hashes); owner can additionally reset via local CLI on the hub server (`nexus-hub admin reset-credentials`), which requires shell access to the server.
-- **First run:** the hub starts in setup mode bound to loopback only, or prints a one-time setup token to its log/console; the first account becomes `owner`.
-- **Sessions:** server-side session records; cookie `__Host-nexus_session`; idle timeout 7 days (desktop) / 24 h (mobile, configurable); absolute lifetime 30 days; rotation on privilege change.
-- **Step-up authentication** (passkey/TOTP within the last 10 minutes) for: pairing or revoking hosts, adding devices, changing security settings, user management, enabling "always allow" approvals.
-- **Rate limiting:** login attempts per IP and per account with exponential backoff; generic error messages.
-- **Optional (Phase 5+):** OIDC login for teams (e.g. against an existing identity provider).
+- **Passkeys:** WebAuthn registration and login (`go-webauthn/webauthn`), relying-party ID = hub hostname. A passkey can also be used for step-up. Passkeys are optional; password login remains available.
+- **Password fallback:** Argon2id with m = 64 MiB, t = 3, p = 2 and a 16-byte salt; optional TOTP (RFC 6238) as a second factor.
+- **Recovery:** there are no recovery codes and no local credential-reset command. Recovery requires shell access to the hub data directory (or restoring a backup); losing both password and passkeys means the account cannot be recovered through the API.
+- **First run:** the first account created through `/api/v1/setup` becomes `owner`; the setup endpoint refuses a second account. Bind the hub to loopback for setup or place it behind your TLS proxy.
+- **Sessions:** server-side session records keyed by a SHA-256 token hash and bound to a device row; cookie `nexus_session` (`HttpOnly`, `SameSite=Strict`, `Secure` when served over TLS); absolute lifetime 30 days; expiry and device revocation are checked on every request. Expired sessions are purged at hub start.
+- **Step-up authentication** (password or passkey confirmation valid for 5 minutes) for: pairing or revoking hosts, host update installation, adding/revoking devices, device keys, user management, host grants, API tokens and renaming/disabling a host. Approval decisions do not require an extra step-up.
+- **Not implemented:** recovery codes, session idle timeout/rotation, OIDC login and a local credential-reset CLI.
 
 ## 5. Client devices and device pairing
 
@@ -255,19 +254,19 @@ sequenceDiagram
 
 On every connection (after TLS):
 
-1. Host sends `Hello{host_id, protocol_version, capabilities}`.
-2. Hub sends `AuthChallenge{nonce (32 bytes), hub_time, hub_signature}` — the signature with the hub identity key proves the hub's identity to the host independent of the TLS terminator.
-3. Host verifies the hub signature against the pinned key and replies `AuthResponse{sig_host("agentnexus-host-auth-v1" ‖ nonce ‖ host_id ‖ hub_origin)}`.
-4. Hub verifies against the registered host public key; nonces are single-use and valid for 30 s.
+1. Hub sends `Hello{protocol version, random nonce}`.
+2. Host signs the nonce with its Ed25519 host key and replies `auth{signature, protocol, os, arch, version}`.
+3. Hub verifies the signature against the registered host public key, checks the protocol major and replies `auth.ok`, signed with the hub identity key; the host verifies it against the pinned hub key.
+4. A fresh nonce is generated per connection and the authentication exchange has a 15-second window.
 
-mTLS is intentionally not required so that TLS may terminate at a reverse proxy (ADR-007). Host keys can be rotated (`nexusd rotate-key`: new key signed by the old key, accepted by the hub, old key revoked).
+mTLS is intentionally not required so that TLS may terminate at a reverse proxy (ADR-007). Host key rotation is not implemented: re-pairing a host creates a new host identity, and the old host row is revoked separately.
 
 ## 8. Encryption
 
 | Data | Protection |
 | --- | --- |
-| Client ↔ hub, host ↔ hub | TLS 1.3 preferred, TLS 1.2 minimum with AEAD ciphers only; HSTS; the hub refuses to start a non-loopback listener without TLS unless explicitly told it is behind a TLS-terminating proxy (`trusted_proxy` setting with proxy IP allow-list). |
-| Hub secrets at rest (TOTP secrets, VAPID private key, push subscription keys, hub identity key) | TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under `secret.key` (`0600`), generated on first start. An encryption error aborts the write; secrets are never silently stored in plaintext. Push subscription keys remain public material. Protects against database-only leaks; back up the database and key together. |
+| Client ↔ hub, host ↔ hub | TLS terminated by the hub or a reverse proxy; WSS for hosts. The hub does not enforce TLS by itself, so expose it only behind a TLS proxy or on a trusted network. HSTS is emitted when `--public-url` is `https://`. |
+| Hub secrets at rest (TOTP secrets, VAPID private key, notification-channel configs) | Encrypted with AES-256-GCM under `secret.key` (`0600`), generated on first start. An encryption error aborts the write; secrets are never silently stored in plaintext. The hub signing key is a separate `0600` key file, not encrypted with `secret.key`. Protects against database-only leaks; back up the database and key files together. |
 | Optional transcript cache on hub (Q-02) | Encrypted the same way; disabled by default. |
 | Hub database and backups | Recommend full-disk encryption on the server; backup command produces an encrypted archive (age/X25519 recipient). |
 | Host private key | OS keystore (macOS Keychain, Windows DPAPI/Credential Manager, Linux Secret Service), fallback file `0600` in the user data directory. |
@@ -308,9 +307,14 @@ An action is executed only if **all** of the following allow it:
 
 1. Hub: authenticated user + valid, non-revoked device + (step-up if required).
    Search and git diff require `read_transcript`, not just `view`.
-2. Hub: role and per-host permission.
-3. Host: host policy (cannot be overridden by the hub).
-4. Host (signed-command mode only): valid device signature from a device key trusted by the host.
+2. Hub: role and per-host permission. A viewer stays read-only even when a
+   write grant was stored; terminal input/approval additionally require
+   `terminal_input`/`approve`.
+3. Hub (device key registered or `--require-signed-commands`): a valid device
+   signature over the exact request body or WebSocket payload.
+4. Host: host policy (cannot be overridden by the hub). The host verifies the
+   *hub's* signature; it does not currently verify the user's device identity
+   itself.
 5. Agent: the agent's own permission/sandbox system (AgentNexus never weakens it by default).
 
 ## Host policy
@@ -408,33 +412,37 @@ sessions and fork enabled, and the forbidden-argument list above.
 - macOS notarization and Windows Authenticode signing are not available in the
   alpha. SHA-256 and cosign verification are the current release trust chain.
 
-## Signed-command mode (Phase 5)
+## Signed-command mode
 
 Goal: a compromised or malicious hub must not be able to forge control commands.
 
-- Each client device generates a signing key (WebCrypto non-extractable key in IndexedDB for browsers — Ed25519 where the browser supports it, ECDSA P-256 otherwise; OS keystore in native apps).
-- **Key trust is established on the host, not on the hub:** when a device key is first used for a host, `nexusd` requires local approval (`nexusd devices approve <fingerprint>` or the tray app). The hub can therefore not inject its own key.
-- Control commands (resume, create, input, approval, stop) are signed by the client over a canonical byte payload `{host_id, action, target, params_hash, issued_at, expires_at (≤ 60 s), nonce}`; the hub forwards the exact bytes; the host verifies signature, expiry and nonce uniqueness.
-- Terminal keystrokes are batched per signed frame to keep overhead acceptable (to be measured).
+**Implemented (hub-side, opt-in per device):** a native client can register an
+Ed25519 or P-256 key per device (step-up protected). Once registered, the hub
+requires a signature for prompt, approval, terminal input and interrupt
+messages and for the REST endpoints that start runs or deliver prompts. The
+canonical payload binds the method/type, run, body or prompt text and options,
+timestamp and nonce. Replays are rejected. See
+[DEVICE-SIGNING.md](DEVICE-SIGNING.md) for the exact format.
 
-**Limitation (documented, risk R-10):** in the web client the JavaScript is delivered by the hub. A compromised hub could serve modified JavaScript that uses the (non-extractable) key to sign malicious commands while the page is open. Full protection therefore requires a native client whose UI code is not loaded from the hub (ADR-013). Signed-command mode still protects against offline or stolen-database attacks and against a hub that is compromised while no browser session is open.
+**Not implemented:** host-side device-identity verification and host-local key
+approval. The host verifies the hub's signature, so a fully compromised hub can
+still mint commands that the host accepts. A compromised hub can also serve
+modified JavaScript to the browser. Full protection requires a native client
+whose code is not loaded from the hub and a host-side trust decision for each
+device key; neither exists in this alpha.
 
-**Status (alpha): not implemented.** The host enforces policy, run uniqueness,
-argument filters and hub-command signatures, but it cannot distinguish a command
-that a signed-in browser intended from one fabricated by a compromised hub. A
-browser-delivered client cannot close that gap because the hub also serves the
-JavaScript. A useful future implementation therefore needs either a native
-client/extension whose code is not loaded from the hub, or host-local device
-approval that shows the exact command before execution. Device keys alone add
-non-repudiation but not protection against a compromised hub.
+**Status (alpha): partially implemented.** The hub-side key path protects a
+native client against stolen cookies and replayed write requests. It does not
+protect against a compromised hub, and the browser UI remains
+cookie-authenticated. Do not describe it as end-to-end signed commands.
 
 ## Web security controls
 
-- **CSP:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://<hub>; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`; Trusted Types where supported.
-- **Headers:** HSTS (with `includeSubDomains` when appropriate), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` restricting unused features, `Cross-Origin-Opener-Policy: same-origin`.
-- **CSRF:** SameSite=Strict cookies + synchronizer token for all state-changing requests; WebSocket upgrade requires matching `Origin` and a valid token.
-- **CORS:** disabled (same-origin only).
-- **Input validation:** OpenAPI schema validation on all requests; size limits (request body default 1 MiB, terminal input frames 64 KiB).
+- **CSP:** `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'`. Inline styles are required by the diff/terminal layout; no inline script is allowed.
+- **Headers:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: same-origin`, `Cross-Origin-Opener-Policy: same-origin`, `Permissions-Policy` restricting camera/microphone/geolocation, and HSTS when the hub is served over TLS.
+- **CSRF:** SameSite=Strict cookies plus the `X-Nexus-Request: 1` marker and an Origin check for mutating requests; bearer-token clients (MCP, CLI) are exempt from the browser marker. WebSocket upgrades require the session cookie and a matching Origin.
+- **CORS:** no CORS headers; same-origin only.
+- **Input validation:** per-handler validation with strict JSON decoding. Request bodies default to 1 MiB; the prompt-queue endpoint accepts up to 24 MiB for base64 attachments, terminal input frames are capped at 2 MiB and WebSocket reads at 24 MiB.
 - **Service worker:** caches only the static shell, never API responses or transcripts.
 
 ## Terminal and content safety

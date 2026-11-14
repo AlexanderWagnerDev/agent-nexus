@@ -177,3 +177,16 @@ func TestUpdateRefusesActiveRuns(t *testing.T) {
 		t.Fatal("stale runtime status reported as fresh")
 	}
 }
+
+func TestStableChannelRejectsSuffixedTags(t *testing.T) {
+	for _, tag := range []string{"v0.2.0", "0.2.0", "v1.0.0+build.5"} {
+		if !stableVersionAllowed(tag) {
+			t.Fatalf("stable rejected %q", tag)
+		}
+	}
+	for _, tag := range []string{"v0.2.0-rc.1", "0.2.0-beta", "1.0.0-alpha.2"} {
+		if stableVersionAllowed(tag) {
+			t.Fatalf("stable accepted prerelease tag %q", tag)
+		}
+	}
+}

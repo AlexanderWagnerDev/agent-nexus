@@ -97,7 +97,7 @@ func (s *Server) handleStepUpPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if !VerifyPassword(u.PasswordHash, req.Password) {
+	if !VerifyPasswordBounded(u.PasswordHash, req.Password) {
 		s.audit(u.Username, "auth.step_up_failed", map[string]string{"method": "password"})
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return

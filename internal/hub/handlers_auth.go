@@ -120,7 +120,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := s.store.UserByUsername(req.Username)
-	if err != nil || !VerifyPassword(user.PasswordHash, req.Password) {
+	if err != nil {
+		// Equalize timing with a real password check so the response does not
+		// reveal whether the username exists.
+		_ = VerifyPasswordBounded(dummyPasswordHash(), req.Password)
+		s.audit(req.Username, "auth.login_failed", map[string]string{"ip": clientIP(r)})
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if !VerifyPasswordBounded(user.PasswordHash, req.Password) {
 		s.audit(req.Username, "auth.login_failed", map[string]string{"ip": clientIP(r)})
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return

@@ -165,6 +165,11 @@ func CheckForUpdateCached(ctx context.Context, currentVersion, channel, etag str
 		if release.Draft || release.TagName == "" || !channelAllows(channel, release.Prerelease) {
 			continue
 		}
+		if NormalizeUpdateChannel(channel, "") == UpdateChannelStable && !stableVersionAllowed(release.TagName) {
+			// A suffixed tag (for example v0.2.0-rc.1) is never installed on
+			// stable, even if GitHub's prerelease flag was left unchecked.
+			continue
+		}
 		if !validReleaseVersion(release.TagName) {
 			continue
 		}
@@ -199,6 +204,12 @@ func CheckForUpdateCached(ctx context.Context, currentVersion, channel, etag str
 		return info, newETag, false, fmt.Errorf("release %s has no checksums.txt; refusing an unverifiable update", version)
 	}
 	return info, newETag, false, nil
+}
+
+// stableVersionAllowed rejects prerelease tags on the stable channel even when
+// the release is not flagged as a prerelease on GitHub.
+func stableVersionAllowed(tag string) bool {
+	return !strings.Contains(strings.TrimPrefix(strings.TrimSpace(tag), "v"), "-")
 }
 
 // validReleaseVersion accepts semver-like tags and rejects arbitrary labels
