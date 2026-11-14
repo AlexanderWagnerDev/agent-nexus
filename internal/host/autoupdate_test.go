@@ -383,3 +383,28 @@ func TestRecordRollbackBlockPersistsState(t *testing.T) {
 		t.Fatalf("rollback block not recorded: %+v", loaded)
 	}
 }
+
+func TestTransientStageFailuresDoNotBlockTheRelease(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	d := silentDaemon(echoTestAdapter{})
+	state := updateState{Phase: UpdatePhaseDownloading, TargetVersion: "1.2.3", InstallFailures: updateMaxAttempts - 1}
+	d.updateFailed(state, "1.2.3", errors.New("network unavailable"), d.updatePrefs(), false)
+	loaded, err := loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Phase == UpdatePhaseBlocked {
+		t.Fatalf("transient download failures blocked the release: %+v", loaded)
+	}
+	d.updateFailed(state, "1.2.3", errors.New("replacement failed"), d.updatePrefs(), true)
+	loaded, err = loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Phase != UpdatePhaseBlocked {
+		t.Fatalf("repeated install failures were not blocked: %+v", loaded)
+	}
+}

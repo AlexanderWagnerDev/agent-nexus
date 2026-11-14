@@ -342,11 +342,11 @@ func (d *Daemon) autoInstall(ctx context.Context, prefs UpdateSettings, state up
 	stagedDir := filepath.Join(dir, "updates", strings.TrimPrefix(info.Latest, "v"))
 	staged, mode, err := StageUpdateWithMode(ctx, info, stagedDir, prefs.SignatureRequired())
 	if err != nil {
-		d.updateFailed(state, info.Latest, err, prefs)
+		d.updateFailed(state, info.Latest, err, prefs, false)
 		return
 	}
 	if err := VerifyStagedBinary(ctx, staged, info.Latest); err != nil {
-		d.updateFailed(state, info.Latest, err, prefs)
+		d.updateFailed(state, info.Latest, err, prefs, false)
 		return
 	}
 	state.SignatureMode = mode
@@ -376,7 +376,7 @@ func (d *Daemon) autoInstall(ctx context.Context, prefs UpdateSettings, state up
 	}
 	if err := InstallStagedUpdate(staged, true); err != nil {
 		d.updating.Store(false)
-		d.updateFailed(state, info.Latest, err, prefs)
+		d.updateFailed(state, info.Latest, err, prefs, true)
 		return
 	}
 	// On Windows the helper replaces the binary while this process exits. On
@@ -423,13 +423,19 @@ func (d *Daemon) waitForIdleAndGate(ctx context.Context, timeout time.Duration) 
 	}
 }
 
-func (d *Daemon) updateFailed(state updateState, version string, cause error, prefs UpdateSettings) {
+// updateFailed records a failed attempt. Transient staging, download or
+// verifier problems only count as consecutive failures; the version is blocked
+// only after repeated install/start failures, so a flaky network or a missing
+// cosign binary cannot permanently block a release.
+func (d *Daemon) updateFailed(state updateState, version string, cause error, prefs UpdateSettings, duringInstall bool) {
 	state.Phase = UpdatePhaseFailed
 	state.LastError = cause.Error()
 	state.Message = "update " + version + " failed: " + cause.Error()
 	state.Failures++
-	state.InstallFailures++
-	if state.Attempts >= updateMaxAttempts || state.InstallFailures >= updateMaxAttempts {
+	if duringInstall {
+		state.InstallFailures++
+	}
+	if state.Attempts >= updateMaxAttempts || (duringInstall && state.InstallFailures >= updateMaxAttempts) {
 		state.Phase = UpdatePhaseBlocked
 		state.BlockedVersion = version
 		state.Blocked = appendUnique(state.Blocked, version)
