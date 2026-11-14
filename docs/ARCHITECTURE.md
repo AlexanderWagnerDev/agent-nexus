@@ -113,7 +113,7 @@ flowchart LR
 | Container | Responsibility | Technology (ADR) |
 | --- | --- | --- |
 | Web app | UI for hosts, sessions, transcripts, terminals, chat, approvals | React + TypeScript (ADR-011) |
-| Hub | Auth, device registry, host registry, metadata index, relay, notifications, audit | Go (ADR-002), SQLite/PostgreSQL (ADR-008) |
+| Hub | Auth, device registry, host registry, metadata index, relay, notifications, audit | Go (ADR-002), SQLite (ADR-008; PostgreSQL planned, not implemented) |
 | Host daemon | Discovery, run management, PTY, adapters, policy enforcement, local search | Go, CGO-free (ADR-002, NFR-09) |
 
 ## 3. Hub
@@ -310,7 +310,7 @@ message Envelope {
 
 - REST for queries and commands; one WebSocket per client (`wss://<hub>/v1/client/ws`) for: session record updates, run streams (subscribe/unsubscribe per run), approval events, notifications.
 - Terminal data uses binary frames; everything else JSON.
-- Browser authentication via `Secure; HttpOnly; SameSite=Strict` cookie; the WebSocket handshake validates the `Origin` header and a per-session CSRF token (see [SECURITY.md](SECURITY.md#web-security-controls)).
+- Browser authentication via `Secure; HttpOnly; SameSite=Strict` cookie; mutating requests require the `X-Nexus-Request` marker and a matching Origin, and the WebSocket handshake validates the `Origin` header (see [SECURITY.md](SECURITY.md#web-security-controls)).
 
 ### 6.3 Agent-side communication (inside the host)
 
@@ -408,8 +408,8 @@ sequenceDiagram
     D->>D: policy check (forbidden? auto-deny)
     D-->>HUB: approval.requested{id, details}
     HUB-->>UI: approval dialog + Web Push
-    UI->>HUB: POST /approvals/{id} {decision: allow_once}
-    HUB->>D: ApprovalAnswer (signed in signed-command mode)
+    UI->>HUB: WebSocket approval {decision}
+    HUB->>D: run.approval (hub-signed envelope)
     D->>AG: approval response
     D-->>HUB: approval.resolved
     AG-->>D: tool output, completion
