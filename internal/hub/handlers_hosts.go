@@ -289,6 +289,7 @@ func (s *Server) handleRevokeHost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.clearPermissionCache()
 	s.dropHost(id, "host revoked")
 	s.audit(u.Username, "host.revoked", map[string]string{"host_id": id})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})

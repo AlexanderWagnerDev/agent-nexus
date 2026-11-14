@@ -189,3 +189,30 @@ func TestViewerGrantIsReducedToReadOnly(t *testing.T) {
 		t.Fatalf("viewer grant without read permissions: %q", got)
 	}
 }
+
+func TestPermissionCacheClearsOnGrantChange(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	member, err := hub.store.CreateUserWithRole("cache-member", "hash", "secret", "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostID, err := hub.store.CreateHost(owner.ID, "cache-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.SetHostGrant(hostID, member.ID, "view"); err != nil {
+		t.Fatal(err)
+	}
+	if !hub.server.hostPermission(member, hostID, "view") {
+		t.Fatal("grant was not applied")
+	}
+	if err := hub.store.DeleteHostGrant(hostID, member.ID); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.clearPermissionCache()
+	if hub.server.hostPermission(member, hostID, "view") {
+		t.Fatal("revoked grant survived the cache clear")
+	}
+}

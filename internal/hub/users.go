@@ -90,6 +90,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.clearPermissionCache()
 	s.audit(u.Username, "user.role_changed", map[string]string{"user_id": id, "role": req.Role})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
@@ -134,6 +135,7 @@ func (s *Server) handleSetHostGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.clearPermissionCache()
 	s.audit(u.Username, "host.grant_set", map[string]string{"host_id": hostID, "user_id": userID, "permissions": permissions})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "granted", "permissions": permissions})
 }
@@ -150,6 +152,7 @@ func (s *Server) handleDeleteHostGrant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.clearPermissionCache()
 	s.audit(u.Username, "host.grant_deleted", map[string]string{"host_id": hostID, "user_id": userID})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

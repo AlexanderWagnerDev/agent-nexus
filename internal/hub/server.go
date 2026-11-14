@@ -71,6 +71,14 @@ type Server struct {
 	notificationAllowPrivate bool
 	mcpLimiter               *rateLimiter
 	replay                   *replayGuard
+
+	permMu sync.Mutex
+	perms  map[string]permissionEntry
+}
+
+type permissionEntry struct {
+	allowed bool
+	expires time.Time
 }
 
 type pendingRequest struct {
@@ -107,6 +115,7 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		mcpLimiter:         newRateLimiter(120, time.Minute),
 		startedAt:          time.Now().UTC(),
 		replay:             newReplayGuard(),
+		perms:              map[string]permissionEntry{},
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"strings"
+	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -51,21 +52,41 @@ func (s *Server) hostPermission(u User, hostID, need string) bool {
 	if u.Role == "viewer" && need != "view" && need != "read_transcript" {
 		return false
 	}
+	// Terminal input arrives per keystroke, so the permission is cached for a
+	// short window. Every grant or role mutation clears the cache, which keeps
+	// revocation immediate for changes made through the hub.
+	key := u.ID + "\x00" + hostID + "\x00" + need
+	now := time.Now()
+	s.permMu.Lock()
+	if entry, ok := s.perms[key]; ok && now.Before(entry.expires) {
+		s.permMu.Unlock()
+		return entry.allowed
+	}
+	s.permMu.Unlock()
+
+	allowed := false
 	host, err := s.store.HostByID(hostID)
 	if err == nil && host.OwnerID == u.ID {
-		return true
+		allowed = true
+	} else if perms, err := s.store.HostGrantPermissions(hostID, u.ID); err == nil {
+		allowed = grantAllows(perms, need) || (need == "view" && perms != "")
 	}
-	perms, err := s.store.HostGrantPermissions(hostID, u.ID)
-	if err != nil {
-		return false
+
+	s.permMu.Lock()
+	if s.perms == nil || len(s.perms) >= 8192 {
+		s.perms = map[string]permissionEntry{}
 	}
-	if grantAllows(perms, need) {
-		return true
-	}
-	// Every grant row grants at least visibility; a row that only names a
-	// write capability (for example "resume") must not hide the host from the
-	// lists while the detail endpoint requires "view".
-	return need == "view" && perms != ""
+	s.perms[key] = permissionEntry{allowed: allowed, expires: now.Add(15 * time.Second)}
+	s.permMu.Unlock()
+	return allowed
+}
+
+// clearPermissionCache is called after grant, role and host-revocation changes
+// so the next check reads the new state immediately.
+func (s *Server) clearPermissionCache() {
+	s.permMu.Lock()
+	s.perms = map[string]permissionEntry{}
+	s.permMu.Unlock()
 }
 
 func (s *Server) sessionPermission(u User, sess protocol.SessionView, need string) bool {
