@@ -127,7 +127,7 @@ export async function pageHosts() {
     } catch (err) { toast(err.message, true); }
   }));
   view.querySelectorAll('[data-revoke-host]').forEach((b) => b.addEventListener('click', () => {
-    confirmDanger('Revoking this host closes its connection and fails active runs. The daemon must be paired again.', async () => {
+    confirmDanger(t('Revoking this host closes its connection and fails active runs. The daemon must be paired again.'), async () => {
       await api(`/hosts/${b.dataset.revokeHost}`, { method: 'DELETE' });
       toast(t('Host revoked'));
       pageHosts();

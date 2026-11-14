@@ -18,8 +18,8 @@ export async function shareHostDialog(host) {
     <h2>${t('Share')} ${esc(host.name)}</h2>
     <p class="hint">${t('The hub grant is only one gate; the host policy still decides which agents, roots and actions are allowed.')}</p>
     <div class="form">
-      <label class="label">${t('User')}<select class="select" id="share-user">${users.users.map((u) => `<option value="${esc(u.id)}">${esc(u.username)}${u.id === state.me.id ? ' (you)' : ''}</option>`).join('')}</select></label>
-      <div class="grid cols-2">${permissions.map((p) => `<label class="split small"><input type="checkbox" data-perm="${p}"> ${p.replaceAll('_',' ')}</label>`).join('')}</div>
+      <label class="label">${t('User')}<select class="select" id="share-user">${users.users.map((u) => `<option value="${esc(u.id)}">${esc(u.username)}${u.id === state.me.id ? ' '+t('(you)') : ''}</option>`).join('')}</select></label>
+      <div class="grid cols-2">${permissions.map((p) => `<label class="split small"><input type="checkbox" data-perm="${p}"> ${t(p.replaceAll('_',' '))}</label>`).join('')}</div>
       <div class="modal-actions">
         <button class="btn danger" type="button" id="remove-grant">${t('Remove access')}</button>
         <button class="btn" type="button" data-close>${t('Cancel')}</button>
@@ -44,7 +44,7 @@ export async function shareHostDialog(host) {
   document.getElementById('remove-grant').addEventListener('click', async () => {
     try {
       await api(`/hosts/${host.id}/grants/${select.value}`, { method: 'DELETE' });
-      toast('Grant removed');
+      toast(t('Grant removed'));
       closeModal();
     } catch (err) { toast(err.message, true); }
   });

@@ -141,12 +141,12 @@ export async function logout() {
 
 export function renderDevicePair(token) {
   authFrame(`
-    <h2 class="mt-0">Pair this device</h2>
-    <p class="hint mb-2">A signed-in device requested this pairing. Give this browser a name and confirm; the link is single-use.</p>
+    <h2 class="mt-0">${t('Pair this device')}</h2>
+    <p class="hint mb-2">${t('A signed-in device requested this pairing. Give this browser a name and confirm; the link is single-use.')}</p>
     <form class="form" id="pair-form">
-      <label class="label">Device name<input class="input" name="name" placeholder="Phone, tablet, second laptop..." required maxlength="80"></label>
-      <button class="btn primary block" type="submit">Pair this device</button>
-    </form>`, 'Device pairing');
+      <label class="label">${t('Device name')}<input class="input" name="name" placeholder="${t('Phone, tablet, second laptop...')}" required maxlength="80"></label>
+      <button class="btn primary block" type="submit">${t('Pair this device')}</button>
+    </form>`, t('Device pairing'));
   document.getElementById('pair-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const name = new FormData(event.target).get('name');
@@ -276,20 +276,23 @@ export async function performStepUp() {
   } else {
     await stepUpPasswordDialog(begin.totp_enabled);
   }
-  toast('Confirmed');
+  toast(t('Confirmed'));
 }
 
 export function stepUpPasswordDialog(totpEnabled) {
+  const hint = totpEnabled
+    ? t('This change needs a fresh confirmation. Enter your password and authenticator code.')
+    : t('This change needs a fresh confirmation. Enter your password.');
   return new Promise((resolve, reject) => {
     modal(`
-      <h2>Confirm it's you</h2>
-      <p class="hint">This change needs a fresh confirmation. Enter your password${totpEnabled ? ' and authenticator code' : ''}.</p>
+      <h2>${t("Confirm it's you")}</h2>
+      <p class="hint">${esc(hint)}</p>
       <form class="form" id="step-up-form">
-        <label class="label">Password<input class="input" type="password" name="password" required autocomplete="current-password"></label>
-        ${totpEnabled ? '<label class="label">One-time code<input class="input" name="totp" inputmode="numeric" autocomplete="one-time-code" required></label>' : ''}
+        <label class="label">${t('Password')}<input class="input" type="password" name="password" required autocomplete="current-password"></label>
+        ${totpEnabled ? `<label class="label">${t('One-time code')}<input class="input" name="totp" inputmode="numeric" autocomplete="one-time-code" required></label>` : ''}
         <div class="modal-actions">
-          <button class="btn ghost" type="button" data-close>Cancel</button>
-          <button class="btn primary" type="submit">Confirm</button>
+          <button class="btn ghost" type="button" data-close>${t('Cancel')}</button>
+          <button class="btn primary" type="submit">${t('Confirm')}</button>
         </div>
       </form>`, () => reject(new Error('step-up cancelled')));
     document.getElementById('step-up-form').addEventListener('submit', async (event) => {

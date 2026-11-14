@@ -20,7 +20,7 @@ export async function pageDevices() {
         <td><b>${esc(d.name)}</b><div class="mono-small">${esc(shortId(d.id))}</div></td>
         <td>${esc(fmtTime(d.created_at))}</td>
         <td>${esc(fmtTime(d.last_seen))}</td>
-        <td class="nowrap">${d.revoked_at ? badge(t('revoked'), 'failed') : (d.id === data.current_device_id ? badge('this device', 'online') : `<button class="btn small danger" data-revoke-device="${esc(d.id)}">${t('Revoke')}</button>`)}</td>
+        <td class="nowrap">${d.revoked_at ? badge(t('revoked'), 'failed') : (d.id === data.current_device_id ? badge(t('this device'), 'online') : `<button class="btn small danger" data-revoke-device="${esc(d.id)}">${t('Revoke')}</button>`)}</td>
       </tr>`).join('')}
       </tbody></table>
     </div>
@@ -43,7 +43,7 @@ export async function pageDevices() {
     </div>
     <p class="small muted mt-2">${t('Passkey login and Argon2id passwords with optional TOTP are available. Session cookies are HttpOnly, SameSite=Strict and Secure when TLS is configured.')}</p>`;
   view.querySelectorAll('[data-revoke-device]').forEach((b) => b.addEventListener('click', () => {
-    confirmDanger('Revoking this device ends all of its signed-in sessions.', async () => {
+    confirmDanger(t('Revoking this device ends all of its signed-in sessions.'), async () => {
       await api(`/devices/${b.dataset.revokeDevice}`, { method: 'DELETE' });
       toast(t('Device revoked'));
       pageDevices();
@@ -64,7 +64,7 @@ export async function pageDevices() {
       modal(`
         <h2>${t('Pair a device')}</h2>
         <p class="hint">${t('Scan this code on a new device. It is single-use and expires in two minutes. The new device gets its own revocable session.')}</p>
-        <div style="text-align:center"><img src="${data.qr}" alt="Device pairing QR code" style="width:min(320px,100%);border-radius:12px;background:#fff;padding:8px"></div>
+        <div style="text-align:center"><img src="${esc(data.qr)}" alt="${t('Device pairing QR code')}" style="width:min(320px,100%);border-radius:12px;background:#fff;padding:8px"></div>
         <div class="secret mt-2">${esc(data.url)}</div>
         <div class="modal-actions">
           <button class="btn" type="button" id="copy-pair">${t('Copy link')}</button>
@@ -83,8 +83,8 @@ export async function pageDevices() {
   document.getElementById('enable-push')?.addEventListener('click', async () => {
     try {
       await enablePush();
-      document.getElementById('push-area').innerHTML = badge('enabled on this device', 'online');
-      toast('Push notifications enabled');
+      document.getElementById('push-area').innerHTML = badge(t('enabled on this device'), 'online');
+      toast(t('Push notifications enabled'));
     } catch (err) {
       toast(err.message, true);
     }
