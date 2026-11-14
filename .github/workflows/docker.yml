@@ -31,6 +31,27 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Validate release tag
+        if: github.event.inputs.release_tag != ''
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Versioned container tags may only be published from main."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::Tag $RELEASE_TAG does not exist."
+            exit 1
+          fi
+          if [ "$(git rev-list -n1 "refs/tags/$RELEASE_TAG")" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag $RELEASE_TAG does not point at the dispatched commit."
+            exit 1
+          fi
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to GHCR
@@ -84,6 +105,27 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Validate release tag
+        if: github.event.inputs.release_tag != ''
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Versioned container tags may only be published from main."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::Tag $RELEASE_TAG does not exist."
+            exit 1
+          fi
+          if [ "$(git rev-list -n1 "refs/tags/$RELEASE_TAG")" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag $RELEASE_TAG does not point at the dispatched commit."
+            exit 1
+          fi
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Check Docker Hub configuration

@@ -124,3 +124,17 @@ func TestP256SignatureMatchesWebCryptoShape(t *testing.T) {
 		t.Fatalf("P1363 signature rejected: %v", err)
 	}
 }
+
+func TestWebSocketPromptSignatureBindsOptions(t *testing.T) {
+	base := protocol.ClientEnvelope{Type: "prompt", RunID: "run-1", Text: "continue", DeviceTimestamp: 1, DeviceNonce: "n1"}
+	withModel := base
+	withModel.Options = &protocol.PromptOptions{Model: "expensive-model"}
+	if wsCommandCanonical(base, 1, "n1") == wsCommandCanonical(withModel, 1, "n1") {
+		t.Fatal("prompt options are not covered by the signature")
+	}
+	withAttachment := base
+	withAttachment.Options = &protocol.PromptOptions{Attachments: []protocol.Attachment{{Name: "a.txt", Data: "aGk="}}}
+	if wsCommandCanonical(base, 1, "n1") == wsCommandCanonical(withAttachment, 1, "n1") {
+		t.Fatal("attachments are not covered by the signature")
+	}
+}

@@ -177,3 +177,15 @@ func TestStopOnFinishedRunDoesNotResurrectIt(t *testing.T) {
 		t.Fatalf("finished run was rewritten: %+v", run)
 	}
 }
+
+func TestViewerGrantIsReducedToReadOnly(t *testing.T) {
+	if got := permissionsForRole("viewer", "manage,resume,view"); got != "view" {
+		t.Fatalf("viewer grant kept write permissions: %q", got)
+	}
+	if got := permissionsForRole("member", "manage,resume,view"); got != "manage,resume,view" {
+		t.Fatalf("member grant was reduced: %q", got)
+	}
+	if got := permissionsForRole("viewer", "manage"); got != "view,read_transcript" {
+		t.Fatalf("viewer grant without read permissions: %q", got)
+	}
+}

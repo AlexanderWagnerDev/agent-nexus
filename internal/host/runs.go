@@ -35,6 +35,18 @@ type Run struct {
 	buffer     *outputBuffer
 }
 
+// closePTYSlave closes the daemon's own copy of the Unix pty slave. go-pty
+// keeps that descriptor open in the parent, so without this the master never
+// reports EOF/EIO after the child exits and a terminal run would stay
+// "running" forever on Linux and macOS.
+func closePTYSlave(p pty.Pty) {
+	if unixPty, ok := p.(pty.UnixPty); ok {
+		if slave := unixPty.Slave(); slave != nil {
+			_ = slave.Close()
+		}
+	}
+}
+
 // outputBuffer keeps the most recent terminal bytes for one run. It is bounded
 // per run, copies every chunk and drops the oldest chunks first. Sequence
 // numbers are never rewritten, so the hub can discard duplicates after a
@@ -267,6 +279,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		fail("cannot start agent: " + err.Error())
 		return
 	}
+	closePTYSlave(p)
 	_ = p.Resize(cols, rows)
 	guard := newProcessGuard()
 	if c.Process != nil {

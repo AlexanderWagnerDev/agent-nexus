@@ -16,12 +16,18 @@ The hub now accepts a command-signing key per device:
 - `DELETE /api/v1/devices/{id}/key` removes it. Revoking the device removes the
   key through the foreign key.
 - Once a device has a key, the hub requires a signature for prompt, approval,
-  terminal input and interrupt messages on the client WebSocket, and for
-  `POST /api/v1/runs/{id}/stop`.
+  terminal input and interrupt messages on the client WebSocket, and for every
+  HTTP write that starts work or delivers a prompt: `POST /runs/{id}/stop`,
+  `POST /sessions/{id}/runs`, `POST /hosts/{id}/runs`, the prompt-queue
+  add/edit/reorder/pause endpoints, task delegation and fan-out. A stolen
+  cookie therefore cannot start or steer work on a keyed device.
 - The signed payload is a newline-separated canonical string:
   - HTTP: `http`, method, path, SHA-256(body), Unix timestamp, nonce.
-  - WebSocket: `ws`, message type, run id, SHA-256(text or approval id +
-    decision or base64 input), Unix timestamp, nonce.
+  - WebSocket: `ws`, message type, run id, SHA-256(text + `\n` + JSON options
+    for a prompt; approval id + decision; base64 input), Unix timestamp, nonce.
+    The prompt options (model, agent mode, attachments) are covered by the
+    signature, so a signed prompt cannot be retargeted to another model or
+    attachment set.
 - Signatures are base64. P-256 accepts both IEEE P1363 (WebCrypto) and ASN.1.
 - A per-device nonce cache plus a ±2 minute timestamp window rejects replays.
 - Operators can set `--require-signed-commands` (or

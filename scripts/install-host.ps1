@@ -278,7 +278,10 @@ try {
   } catch {
     if (Test-Path "$dest.previous") { Copy-Item "$dest.previous" $dest -Force }
     if (Test-Path "$cli.previous") { Copy-Item "$cli.previous" $cli -Force }
-    Fail "Binary replacement failed; the previous installation was restored."
+    if (-not $NoService -and (Test-Path $dest)) {
+      try { & $dest service install | Out-Null } catch { }
+    }
+    Fail "Binary replacement failed; the previous installation was restored and its service reinstalled."
   }
 
   $configFile = Join-Path $env:APPDATA "AgentNexus\nexusd.json"

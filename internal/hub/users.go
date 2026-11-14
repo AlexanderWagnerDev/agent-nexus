@@ -127,6 +127,9 @@ func (s *Server) handleSetHostGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	permissions := normalizePermissions(req.Permissions)
+	if target, err := s.store.UserByID(userID); err == nil {
+		permissions = permissionsForRole(target.Role, permissions)
+	}
 	if err := s.store.SetHostGrant(hostID, userID, permissions); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

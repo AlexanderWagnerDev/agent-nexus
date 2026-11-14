@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -92,7 +93,16 @@ func wsCommandCanonical(msg protocol.ClientEnvelope, timestamp int64, nonce stri
 	payload := ""
 	switch msg.Type {
 	case "prompt":
-		payload = msg.Text
+		// The model, agent mode and attachments are part of the action. Hash
+		// them too, otherwise a replayed signature could be re-used for a
+		// different prompt configuration.
+		options := ""
+		if msg.Options != nil {
+			if raw, err := json.Marshal(msg.Options); err == nil {
+				options = string(raw)
+			}
+		}
+		payload = msg.Text + "\n" + options
 	case "approval":
 		payload = msg.ApprovalID + "\n" + msg.Decision
 	case "input":

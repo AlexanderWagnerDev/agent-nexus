@@ -307,10 +307,18 @@ if [ "$active_runs" -gt 0 ]; then
 fi
 
 stop_service
-if [ -f "$dest" ]; then cp "$dest" "$dest.previous"; fi
-if [ -f "$cli" ]; then cp "$cli" "$cli.previous"; fi
-install -m 0755 "$tmp/nexusd" "$dest"
-if [ -f "$tmp/nexus" ]; then install -m 0755 "$tmp/nexus" "$cli"; fi
+if [ -f "$dest" ]; then cp "$dest" "$dest.previous" || true; fi
+if [ -f "$cli" ]; then cp "$cli" "$cli.previous" || true; fi
+if ! install -m 0755 "$tmp/nexusd" "$dest"; then
+  if [ -f "$dest.previous" ]; then install -m 0755 "$dest.previous" "$dest" || true; fi
+  if [ "$NO_SERVICE" -eq 0 ]; then "$dest" service install >/dev/null 2>&1 || true; fi
+  echo "Binary replacement failed; the previous installation was restored." >&2
+  exit 1
+fi
+if [ -f "$tmp/nexus" ] && ! install -m 0755 "$tmp/nexus" "$cli"; then
+  if [ -f "$cli.previous" ]; then install -m 0755 "$cli.previous" "$cli" || true; fi
+  echo "nexus client replacement failed; the previous client was restored." >&2
+fi
 echo "Installed $dest and $cli"
 
 if [ -n "$CODE" ]; then

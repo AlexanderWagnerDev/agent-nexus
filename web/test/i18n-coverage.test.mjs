@@ -16,13 +16,7 @@ function sourceFiles(dir) {
   return out;
 }
 
-const sources = [
-  'web/assets/app.js',
-  'web/assets/chat-format.js',
-  'web/assets/markdown.js',
-  ...sourceFiles('web/assets/views'),
-  ...sourceFiles('web/assets/components'),
-];
+const sources = sourceFiles('web/assets').filter((file) => !file.includes('/vendor/'));
 
 function unescapeKey(value) {
   return value.replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\');

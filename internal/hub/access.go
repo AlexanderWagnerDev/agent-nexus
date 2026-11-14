@@ -72,6 +72,24 @@ func (s *Server) sessionPermission(u User, sess protocol.SessionView, need strin
 	return s.hostPermission(u, sess.HostID, need)
 }
 
+// permissionsForRole applies the role ceiling to a stored grant. A viewer can
+// never keep write capabilities, even if the request named them.
+func permissionsForRole(role, permissions string) string {
+	if role != "viewer" {
+		return permissions
+	}
+	var kept []string
+	for _, p := range strings.Split(permissions, ",") {
+		if p == "view" || p == "read_transcript" {
+			kept = append(kept, p)
+		}
+	}
+	if len(kept) == 0 {
+		return "view,read_transcript"
+	}
+	return strings.Join(kept, ",")
+}
+
 // isAdminRole reports whether a role may administer users and hosts.
 func isAdminRole(role string) bool {
 	return role == "owner" || role == "admin"
