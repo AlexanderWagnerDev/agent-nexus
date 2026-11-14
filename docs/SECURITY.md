@@ -21,6 +21,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Device revocation | deletes sessions and closes open browser sockets | push subscriptions are not deleted with the device |
 | Rate limiting | login (10 / 5 min per IP+user), pairing (10 / 10 min per IP); `X-Forwarded-For` is only honoured when the direct peer is loopback/private, using the rightmost entry, and password hashing runs in four bounded Argon2 slots | in-memory only, per-process. In a container the peer is always private, so never publish the hub port directly; keep it reachable only through the TLS proxy |
 | RBAC | owner/admin/member/viewer roles; per-host grants (`view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`) | no invitations, no per-user host ownership UI for members beyond grants |
+| Live browser sockets | re-checked against the session store every 60 s; logout, device revocation and a role change close them, and run output is re-authorized against `read_transcript` on every broadcast | a socket can outlive an expired cookie for at most one minute |
 | Web Push | VAPID, content-free payloads, subscriptions bound to user and device; private key encrypted at rest | permission is browser-controlled |
 | Host updates | `nexusd update` downloads releases directly from GitHub, verifies SHA-256 and verifies the cosign keyless bundle when cosign is installed; install is refused while runs are active unless forced | a private release feed needs a read-only GitHub token; hub does not apply updates |
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
@@ -295,7 +296,7 @@ mTLS is intentionally not required so that TLS may terminate at a reverse proxy 
 | `resume` | Resume existing sessions |
 | `create` | Start new sessions |
 | `fork` | Fork sessions |
-| `terminal_input` | Hold the controller lease and send keystrokes/prompts |
+| `terminal_input` | Hold the controller lease, send keystrokes/prompts, interrupt and stop a run |
 | `approve` | Answer approval requests |
 | `manage` | Rename/disable/revoke host, edit grants |
 
@@ -342,6 +343,13 @@ daemon start, and are audited locally.
 
 - `allowed_roots` is checked on the host after path canonicalization (symlinks
   resolved) for terminal, structured, ACP and git actions.
+- For a resumed or forked session, the directory reported by the agent store
+  wins over a directory supplied by the hub; the hub value is only a fallback
+  for agents without a readable session store (a configured ACP command). The
+  chosen directory is always checked against `allowed_roots`.
+- An empty `allowed_roots` list allows nothing. Only `null`/missing falls back
+  to the user's home directory; an explicitly empty array is a deny-all policy
+  for runs, transcripts, search and git.
 - `allowed_agents` is enforced for **new** and resumed sessions in every mode,
   including OpenCode, Codex and ACP structured runs.
 - `forbidden_args` rejects permission-bypass flags even if a future hub or

@@ -12,22 +12,28 @@ flowchart LR
     P[Planning<br/>accepted] --> P0[Phase 0<br/>Foundations & spikes]
     P0 --> P1[Phase 1<br/>Hub, daemon, pairing]
     P1 --> P2[Phase 2<br/>Discovery & transcripts]
-    P2 --> P3[Phase 3<br/>Terminal resume<br/>MVP 0.1]
+    P2 --> P3[Phase 3<br/>Terminal resume]
     P3 --> P4[Phase 4<br/>Structured mode,<br/>approvals, push]
-    P4 --> P5[Phase 5<br/>Hardening, multi-user<br/>1.0]
+    P4 --> P5[Phase 5<br/>Hardening, multi-user]
     P3 --> P6[Phase 6<br/>More agents,<br/>native apps]
     P5 --> P6
 ```
 
-| Phase | Goal | Size | Milestone | Release |
+| Phase | Goal | Size | Milestone | Status |
 | --- | --- | --- | --- | --- |
-| [0](#phase-0--foundations-and-technical-spikes) | Validate all critical assumptions; scaffolding and CI | M | **M0** Spikes done, ADRs final | — |
-| [1](#phase-1--hub-host-daemon-and-pairing) | Secure hub, paired hosts on all three OSes | L | **M1** Hosts online | 0.0.x (internal) |
-| [2](#phase-2--session-discovery-and-transcript-viewer) | See all existing sessions and transcripts | L | **M2** Discovery complete | 0.0.x (internal) |
-| [3](#phase-3--native-resume-in-terminal-mode-mvp) | Natively resume sessions from the browser | L | **M3** MVP | **0.1.0** |
-| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | 0.2.0 – 0.4.0 |
-| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** 1.0 | **1.0.0** |
-| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | 1.x |
+| [0](#phase-0--foundations-and-technical-spikes) | Validate all critical assumptions; scaffolding and CI | M | **M0** Spikes done, ADRs final | done |
+| [1](#phase-1--hub-host-daemon-and-pairing) | Secure hub, paired hosts on all three OSes | L | **M1** Hosts online | implemented |
+| [2](#phase-2--session-discovery-and-transcript-viewer) | See all existing sessions and transcripts | L | **M2** Discovery complete | implemented |
+| [3](#phase-3--native-resume-in-terminal-mode-mvp) | Natively resume sessions from the browser | L | **M3** MVP | implemented |
+| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | largely implemented; continues after v0.1.0 |
+| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.0 |
+| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.0 |
+
+**Versioning:** the first official version is **v0.1.0**. It contains every
+capability marked implemented below; the version number does not gate them.
+Later phases are engineering goals that ship when they are ready. There is no
+obligation to publish intermediate `0.2`/`0.4` versions or a `1.0.0` milestone
+before a capability can be used, and no release candidate series is planned.
 
 ## Implementation status
 
@@ -426,7 +432,7 @@ External dependencies: availability and stability of the agents' interfaces list
 
 ## Phase 3 — Native resume in terminal mode (MVP)
 
-**Goal:** continue any discovered session natively from a browser. **Release 0.1.0.**
+**Goal:** continue any discovered session natively from a browser. **Part of v0.1.0.**
 **Work packages:** WP-3.1 … WP-3.9. **Requirements:** FR-06, FR-20, FR-21, FR-23 … FR-28, FR-44, FR-45, FR-52, FR-53, NFR-03, NFR-07.
 **Depends on:** M2; SP-5 (PTY).
 
@@ -464,9 +470,10 @@ External dependencies: availability and stability of the agents' interfaces list
 - [ ] QR pairing of a second device with SAS confirmation works.
 - [ ] If an agent version outside the supported range is detected, structured mode is disabled for it with a visible warning and terminal mode still works (NFR-08).
 
-## Phase 5 — Hardening, multi-user and 1.0
+## Phase 5 - Hardening, multi-user and operations
 
-**Goal:** production-ready, auditable, multi-user capable. **Release 1.0.0.**
+**Goal:** production-ready, auditable, multi-user capable. **Ongoing; most of it
+is already in v0.1.0 and the remainder ships without a separate major release.**
 **Work packages:** WP-5.1 … WP-5.6. **Requirements:** FR-43 (multi-user), FR-46, FR-50 (PostgreSQL), FR-54, all NFRs.
 **Depends on:** M4.
 

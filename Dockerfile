@@ -15,7 +15,7 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
+RUN VERSION="${VERSION#v}" && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/hub.Version=${VERSION}" \
     -o /out/nexus-hub ./cmd/nexus-hub

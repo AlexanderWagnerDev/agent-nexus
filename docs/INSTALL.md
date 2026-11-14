@@ -104,8 +104,9 @@ Go toolchain are required for a public release.
 
 During alpha there is no public release yet. The development workflow builds
 remain available as an explicit fallback (`-Development` / `--development`);
-that path uses the GitHub CLI and authenticated Actions artifacts and should
-not be mixed with release installations on the same host.
+that path uses the GitHub CLI and authenticated Actions artifacts, installs the
+same two binaries, and should not be mixed with release installations on the
+same host.
 
 Clone the repository once on the machine that runs the installer so the script
 is available locally:

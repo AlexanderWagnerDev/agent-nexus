@@ -6,6 +6,10 @@ data
 *.db-wal
 nexus-hub
 nexusd
+nexus
+nexus-demo
+*.exe
+.env
 bin
 dist
 docs

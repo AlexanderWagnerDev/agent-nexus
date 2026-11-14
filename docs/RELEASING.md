@@ -52,8 +52,10 @@ accurately without turning optional testing into release blockers.
    exactly what the host updater expects.
 4. Publish the draft manually and mark it as the first official release.
 5. Then run **Container** with `release_tag=v0.1.0` (and `publish_latest=true`
-   only after a deliberate decision). Ordinary `main` builds keep publishing
-   `alpha`/`sha-*` and can never overwrite the version tags.
+   only after a deliberate decision). Dispatch it either from `main` while
+   `HEAD` is still the tagged commit, or from the tag itself; both are
+   accepted, while a stale `main` is rejected. Ordinary `main` builds keep
+   publishing `alpha`/`sha-*` and can never overwrite the version tags.
 6. Verify a host update on a disposable installation before announcing it.
 
 ## Leftover artifacts from removed releases

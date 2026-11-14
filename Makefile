@@ -21,7 +21,7 @@ test-race:
 	go test -race ./...
 
 lint:
-	gofmt -l .
+	test -z "$$(gofmt -l .)"
 	go vet ./...
 	node web/scripts/check-syntax.mjs
 
