@@ -246,3 +246,49 @@ func TestLateEventDoesNotReopenAFinishedRun(t *testing.T) {
 		t.Fatalf("in-memory run state = %q", state)
 	}
 }
+
+func TestStaleStartingRunIsFailed(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "start-timeout-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("silent-run", "", hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.failStaleStartingRun("silent-run")
+	run, _, err := hub.store.RunByID("silent-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateFailed || run.ErrorCode != ErrCodeTimeout || run.EndedAt == nil {
+		t.Fatalf("silent run was not failed: %+v", run)
+	}
+	if id, active := hub.store.ActiveRunForSession(run.SessionID); active {
+		t.Fatalf("session stayed blocked by %s", id)
+	}
+}
+
+func TestStartingRunWithEarlyOutputIsNotFailed(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "active-start-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("active-run", "", hostID, protocol.ModeTerminal, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.appendRunOutput("active-run", 1, []byte("booting"))
+	hub.server.failStaleStartingRun("active-run")
+	run, _, err := hub.store.RunByID("active-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateStarting || run.EndedAt != nil {
+		t.Fatalf("a run that already produced output was failed: %+v", run)
+	}
+}

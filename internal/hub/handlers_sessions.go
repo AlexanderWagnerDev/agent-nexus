@@ -603,6 +603,7 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 		return protocol.RunView{}, err
 	}
 	s.setRunState(id, protocol.StateStarting)
+	time.AfterFunc(runStartTimeout, func() { s.failStaleStartingRun(id) })
 	s.audit(u.Username, "run.started", map[string]string{"run_id": id, "host_id": sess.HostID, "agent": sess.Agent, "action": action, "mode": mode})
 	run, _, _ := s.store.RunByID(id)
 	return run, nil

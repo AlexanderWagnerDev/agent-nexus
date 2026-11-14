@@ -87,11 +87,43 @@ func terminalRunState(state string) bool {
 	}
 }
 
+// runStartTimeout bounds how long a run may stay in "starting" before the hub
+// assumes the host never launched it. Without it, a host that accepts the
+// command but never starts the process would block its session forever.
+var runStartTimeout = 2 * time.Minute
+
+// failStaleStartingRun closes a run that never left the starting state.
+func (s *Server) failStaleStartingRun(runID string) {
+	run, _, err := s.store.RunByID(runID)
+	if err != nil || run.State != protocol.StateStarting {
+		return
+	}
+	// A host may report output before its state event; treat any received
+	// event or output as proof that the run is alive.
+	if s.runHasActivity(runID) {
+		return
+	}
+	s.store.SetRunError(runID, ErrCodeTimeout, "host did not start the run in time")
+	s.setRunState(runID, protocol.StateFailed)
+	s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: runID, Error: "host did not start the run in time"})
+	go s.notifyRun(runID, "failed", "Agent run failed", "A run did not start in time. Open AgentNexus for details.")
+	s.log.Warn("run start timed out", "run_id", runID, "host_id", run.HostID)
+}
+
 func (s *Server) runEventCursor(id string) uint64 {
 	rs := s.runState(id)
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 	return rs.eventSeq
+}
+
+// runHasActivity reports whether any event or terminal output arrived for the
+// run. It is used by the start timeout so a slow-but-alive host is not failed.
+func (s *Server) runHasActivity(id string) bool {
+	rs := s.runState(id)
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return rs.eventSeq > 0 || len(rs.chunks) > 0
 }
 
 // pendingApproval returns the newest approval.requested event that has no
