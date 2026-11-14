@@ -33,6 +33,8 @@ type CodexRun struct {
 	guard      *processGuard
 	stdin      io.WriteCloser
 	cancel     context.CancelFunc
+	stdout     *os.File
+	stderr     *os.File
 
 	writeMu        sync.Mutex
 	mu             sync.Mutex
@@ -140,13 +142,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail(err.Error())
 		return
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		fail(err.Error())
-		return
-	}
-	stderr, err := cmd.StderrPipe()
+	stdout, stderr, closeWrite, err := stdioPipes(cmd)
 	if err != nil {
 		cancel()
 		fail(err.Error())
@@ -155,10 +151,14 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	configureProcessGroup(cmd)
 	suspendExecForJob(cmd)
 	if err := cmd.Start(); err != nil {
+		closeWrite()
+		closePipe(stdout)
+		closePipe(stderr)
 		cancel()
 		fail("cannot start codex app-server: " + err.Error())
 		return
 	}
+	closeWrite()
 	guard := newProcessGuard()
 	if err := guard.Attach(cmd.Process.Pid); err != nil {
 		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
@@ -166,10 +166,10 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	cr := &CodexRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: "codex", cwd: cwd,
 		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
+		stdout: stdout, stderr: stderr,
 		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, approvalTimers: map[int64]*time.Timer{}, state: protocol.StateIdle,
 	}
-	readers := make(chan struct{}, 2)
-	go func() { cr.readLoop(stdout); readers <- struct{}{} }()
+	go cr.readLoop(stdout)
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
@@ -178,16 +178,11 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 				d.log.Debug("codex app-server", "line", line)
 			}
 		}
-		readers <- struct{}{}
 	}()
-	// Wait after the pipe readers so their output is not truncated, but on
-	// every path so a failed start does not leak a zombie process.
+	// Plain OS pipes let Wait run immediately; the readers are closed by
+	// markFinished/Stop so an inherited write end cannot keep the run alive.
 	waitExit := make(chan error, 1)
-	go func() {
-		<-readers
-		<-readers
-		waitExit <- cmd.Wait()
-	}()
+	go func() { waitExit <- cmd.Wait() }()
 	if err := cr.initialize(); err != nil {
 		cr.Stop()
 		fail("codex app-server initialization failed: " + err.Error())
@@ -568,6 +563,11 @@ func (r *CodexRun) Options(_ context.Context) (protocol.RunOptions, error) {
 	return out, nil
 }
 
+func (r *CodexRun) closeReaders() {
+	closePipe(r.stdout)
+	closePipe(r.stderr)
+}
+
 func (r *CodexRun) Stop() {
 	r.mu.Lock()
 	if r.closed {
@@ -590,6 +590,7 @@ func (r *CodexRun) Stop() {
 		timer.Stop()
 	}
 	r.cancel()
+	r.closeReaders()
 	if r.cmd != nil && r.cmd.Process != nil {
 		_ = r.cmd.Process.Kill()
 	}
@@ -620,6 +621,7 @@ func (r *CodexRun) markFinished() {
 	for _, timer := range timers {
 		timer.Stop()
 	}
+	r.closeReaders()
 	r.cancel()
 	cleanupPromptAttachments(r.id)
 }

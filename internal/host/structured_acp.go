@@ -30,6 +30,8 @@ type ACPRun struct {
 	stdin      io.WriteCloser
 	conn       *acp.ClientSideConnection
 	cancel     context.CancelFunc
+	stdout     *os.File
+	stderr     *os.File
 
 	mu             sync.Mutex
 	sessionID      acp.SessionId
@@ -137,13 +139,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail(err.Error())
 		return
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		fail(err.Error())
-		return
-	}
-	stderr, err := cmd.StderrPipe()
+	stdout, stderr, closeWrite, err := stdioPipes(cmd)
 	if err != nil {
 		cancel()
 		fail(err.Error())
@@ -152,10 +148,14 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	configureProcessGroup(cmd)
 	suspendExecForJob(cmd)
 	if err := cmd.Start(); err != nil {
+		closeWrite()
+		closePipe(stdout)
+		closePipe(stderr)
 		cancel()
 		fail("cannot start ACP adapter: " + err.Error())
 		return
 	}
+	closeWrite()
 	guard := newProcessGuard()
 	if err := guard.Attach(cmd.Process.Pid); err != nil {
 		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
@@ -163,10 +163,10 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	ar := &ACPRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: spec.Agent, cwd: cwd,
 		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
+		stdout: stdout, stderr: stderr,
 		approvals: map[string]chan string{}, state: protocol.StateIdle,
 	}
 	ar.conn = acp.NewClientSideConnection(ar, stdin, stdout)
-	stderrDone := make(chan struct{}, 1)
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
@@ -175,17 +175,11 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 				d.log.Debug("ACP adapter", "agent", spec.Agent, "line", line)
 			}
 		}
-		stderrDone <- struct{}{}
 	}()
-	// The SDK owns stdout and closes Done on EOF; waiting for that keeps the
-	// final protocol messages intact while still reaping a child that failed
-	// before registration. The stderr reader has no bearing on Wait.
+	// Plain OS pipes let Wait run immediately; the SDK reader and the stderr
+	// scanner are released by markFinished/Stop.
 	waitExit := make(chan error, 1)
-	go func() {
-		<-ar.conn.Done()
-		waitExit <- cmd.Wait()
-		<-stderrDone
-	}()
+	go func() { waitExit <- cmd.Wait() }()
 
 	ctx, cancelInit := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelInit()
@@ -264,6 +258,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()
 		}
+		ar.markFinished()
 		d.runMu.Lock()
 		delete(d.acpRuns, spec.RunID)
 		d.runMu.Unlock()
@@ -533,6 +528,32 @@ func (r *ACPRun) ReplyApproval(id, decision string) error {
 	return nil
 }
 
+func (r *ACPRun) closeReaders() {
+	closePipe(r.stdout)
+	closePipe(r.stderr)
+}
+
+// markFinished records an adapter that exited on its own and releases the
+// readers so a descendant holding a pipe cannot keep the run active.
+func (r *ACPRun) markFinished() {
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return
+	}
+	r.closed = true
+	for id, ch := range r.approvals {
+		delete(r.approvals, id)
+		select {
+		case ch <- "reject":
+		default:
+		}
+	}
+	r.mu.Unlock()
+	r.closeReaders()
+	r.cancel()
+}
+
 func (r *ACPRun) Stop() {
 	r.mu.Lock()
 	if r.closed {
@@ -549,6 +570,7 @@ func (r *ACPRun) Stop() {
 	}
 	r.mu.Unlock()
 	stopProcessTree(r.guard, r.cmd, r.daemon.policy.ProcessGrace())
+	r.closeReaders()
 	r.cancel()
 }
 

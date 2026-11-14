@@ -38,6 +38,8 @@ type StructuredRun struct {
 	guard      *processGuard
 	cancel     context.CancelFunc
 	daemon     *Daemon
+	stdout     *os.File
+	stderr     *os.File
 
 	mu        sync.Mutex
 	calls     map[string]string
@@ -147,13 +149,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	// password when the variable is absent, so waiting for the line would hang
 	// when the daemon environment already defines it.
 	cmd.Env = withEnv(append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1"), "OPENCODE_SERVER_PASSWORD", password)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		fail(err.Error())
-		return
-	}
-	stderr, err := cmd.StderrPipe()
+	stdout, stderr, closeWrite, err := stdioPipes(cmd)
 	if err != nil {
 		cancel()
 		fail(err.Error())
@@ -162,10 +158,14 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	configureProcessGroup(cmd)
 	suspendExecForJob(cmd)
 	if err := cmd.Start(); err != nil {
+		closeWrite()
+		closePipe(stdout)
+		closePipe(stderr)
 		cancel()
 		fail("cannot start opencode server: " + err.Error())
 		return
 	}
+	closeWrite()
 	guard := newProcessGuard()
 	if err := guard.Attach(cmd.Process.Pid); err != nil {
 		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
@@ -177,35 +177,34 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		reasoningStreamed: map[string]bool{},
 		client:            &http.Client{Timeout: 30 * time.Second},
 		readyOnce:         new(sync.Once),
+		stdout:            stdout, stderr: stderr,
 	}
 	ready := make(chan struct{})
-	readers := make(chan struct{}, 2)
-	go func() { sr.scanServerOutput(stdout, ready); readers <- struct{}{} }()
-	go func() { sr.scanServerOutput(stderr, ready); readers <- struct{}{} }()
-	// Wait only after both pipe readers finished: calling Wait earlier closes
-	// the pipes and can truncate the readiness lines. It must still run on
-	// every failure path, otherwise the killed child stays a zombie on Unix.
+	go sr.scanServerOutput(stdout, ready)
+	go sr.scanServerOutput(stderr, ready)
+	// Wait can run immediately because the child uses plain OS pipes; the
+	// readers are released by markFinished/Stop even if a descendant kept the
+	// write end open.
 	waitExit := make(chan error, 1)
-	go func() {
-		<-readers
-		<-readers
-		waitExit <- cmd.Wait()
-	}()
+	go func() { waitExit <- cmd.Wait() }()
 	select {
 	case <-ready:
 	case <-time.After(25 * time.Second):
 		cancel()
 		_ = cmd.Process.Kill()
+		sr.closeReaders()
 		fail("opencode server did not become ready")
 		return
 	case <-parent.Done():
 		cancel()
 		_ = cmd.Process.Kill()
+		sr.closeReaders()
 		return
 	}
 	if sr.baseURL == "" {
 		cancel()
 		_ = cmd.Process.Kill()
+		sr.closeReaders()
 		fail("opencode server did not report its listening address")
 		return
 	}
@@ -579,6 +578,13 @@ func (r *StructuredRun) ReplyApproval(id, decision string) error {
 	return err
 }
 
+// closeReaders releases the stdout/stderr scanners. It is safe to call more
+// than once; errors from an already closed pipe are ignored.
+func (r *StructuredRun) closeReaders() {
+	closePipe(r.stdout)
+	closePipe(r.stderr)
+}
+
 func (r *StructuredRun) Stop() {
 	r.mu.Lock()
 	if r.closed {
@@ -592,6 +598,7 @@ func (r *StructuredRun) Stop() {
 	}
 	r.mu.Unlock()
 	stopProcessTree(r.guard, r.cmd, r.daemon.policy.ProcessGrace())
+	r.closeReaders()
 	r.cancel()
 	cleanupPromptAttachments(r.id)
 }
@@ -611,6 +618,7 @@ func (r *StructuredRun) markFinished() {
 		delete(r.approvals, id)
 	}
 	r.mu.Unlock()
+	r.closeReaders()
 	r.cancel()
 	cleanupPromptAttachments(r.id)
 }
