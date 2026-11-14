@@ -163,6 +163,9 @@ func (a *ClaudeAdapter) scanMetadata(path, nativeID, _ string) (protocol.Session
 		}
 	}
 	s.GitBranch = branch
+	if err := sc.Err(); err != nil {
+		s.Warning = "The native session file could not be read completely; message counts and the title are partial."
+	}
 	if st != nil {
 		s.UpdatedAt = st.ModTime().UTC()
 	}
@@ -212,7 +215,11 @@ func (a *ClaudeAdapter) Transcript(ctx context.Context, nativeID string, offset,
 		all = append(all, tools...)
 		all = append(all, results...)
 	}
-	return pageMessages(all, offset, limit)
+	tr, err := pageMessages(all, offset, limit)
+	if err == nil && sc.Err() != nil {
+		tr.Warning = "The native session file could not be read completely; later messages are missing."
+	}
+	return tr, err
 }
 
 func (a *ClaudeAdapter) findFile(nativeID string) (string, error) {

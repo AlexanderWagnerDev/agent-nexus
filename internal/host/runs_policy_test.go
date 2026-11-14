@@ -36,6 +36,18 @@ func TestValidateRunPolicyEnforcesAgentAllowlistForNewSessions(t *testing.T) {
 	}
 }
 
+func TestValidateRunPolicyRejectsTraversalRunID(t *testing.T) {
+	d := &Daemon{policy: Policy{AllowNew: true, ForbiddenArgs: DefaultForbiddenArgs()}}
+	for _, id := range []string{"../../tmp/evil", "..\\..\\evil", "run/child", "run id", strings.Repeat("a", 65)} {
+		if err := d.validateRunPolicy(protocol.RunSpec{RunID: id, Agent: "codex", Action: protocol.ActionNew}); err == nil {
+			t.Fatalf("run id %q was accepted", id)
+		}
+	}
+	if err := d.validateRunPolicy(protocol.RunSpec{RunID: "0f8fad5b-d9cb-469f-a165-70867728950e", Agent: "codex", Action: protocol.ActionNew}); err != nil {
+		t.Fatalf("valid run id rejected: %v", err)
+	}
+}
+
 func TestValidateRunPolicyRejectsUnknownAction(t *testing.T) {
 	d := &Daemon{policy: DefaultPolicy()}
 	if err := d.validateRunPolicy(protocol.RunSpec{

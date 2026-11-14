@@ -16,6 +16,10 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+// codexApprovalTimeout bounds how long a Codex approval may block a turn. It
+// matches the OpenCode and ACP adapters.
+var codexApprovalTimeout = 10 * time.Minute
+
 // CodexRun drives Codex CLI's experimental app-server over JSONL/JSON-RPC.
 type CodexRun struct {
 	id         string
@@ -30,15 +34,16 @@ type CodexRun struct {
 	stdin      io.WriteCloser
 	cancel     context.CancelFunc
 
-	writeMu       sync.Mutex
-	mu            sync.Mutex
-	pending       map[int64]chan json.RawMessage
-	approvals     map[int64]string
-	nextID        int64
-	closed        bool
-	state         string
-	currentModel  string
-	currentEffort string
+	writeMu        sync.Mutex
+	mu             sync.Mutex
+	pending        map[int64]chan json.RawMessage
+	approvals      map[int64]string
+	approvalTimers map[int64]*time.Timer
+	nextID         int64
+	closed         bool
+	state          string
+	currentModel   string
+	currentEffort  string
 }
 
 type codexEvent struct {
@@ -161,9 +166,10 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	cr := &CodexRun{
 		id: spec.RunID, sessionKey: sessionKey, agent: "codex", cwd: cwd,
 		daemon: d, cmd: cmd, guard: guard, stdin: stdin, cancel: cancel,
-		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, state: protocol.StateIdle,
+		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{}, approvalTimers: map[int64]*time.Timer{}, state: protocol.StateIdle,
 	}
-	go cr.readLoop(stdout)
+	readers := make(chan struct{}, 2)
+	go func() { cr.readLoop(stdout); readers <- struct{}{} }()
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
@@ -172,6 +178,15 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 				d.log.Debug("codex app-server", "line", line)
 			}
 		}
+		readers <- struct{}{}
+	}()
+	// Wait after the pipe readers so their output is not truncated, but on
+	// every path so a failed start does not leak a zombie process.
+	waitExit := make(chan error, 1)
+	go func() {
+		<-readers
+		<-readers
+		waitExit <- cmd.Wait()
 	}()
 	if err := cr.initialize(); err != nil {
 		cr.Stop()
@@ -213,7 +228,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	d.log.Info("codex structured run started", "run_id", spec.RunID, "thread", cr.threadID, "cwd", cwd)
 	hostAudit("codex.structured.started", map[string]any{"run_id": spec.RunID, "cwd": cwd})
 	go func() {
-		err := cmd.Wait()
+		err := <-waitExit
 		code := 0
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()
@@ -287,7 +302,12 @@ func (r *CodexRun) readLoop(reader io.Reader) {
 			ch := r.pending[*ev.ID]
 			r.mu.Unlock()
 			if ch != nil {
-				ch <- ev.Result
+				// A duplicate response for the same id must never block the
+				// only reader of the app-server stream.
+				select {
+				case ch <- ev.Result:
+				default:
+				}
 			}
 			continue
 		}
@@ -424,26 +444,52 @@ func (r *CodexRun) ReplyApproval(id, decision string) error {
 	if err != nil {
 		return err
 	}
+	return r.respondApproval(requestID, decision)
+}
+
+// approvalDecision maps a hub decision onto the Codex response vocabulary.
+func approvalDecision(method, decision string) map[string]any {
 	allow := decision == "once" || decision == "always"
-	r.mu.Lock()
-	method := r.approvals[requestID]
-	delete(r.approvals, requestID)
-	r.mu.Unlock()
 	result := map[string]any{"decision": "decline"}
+	lower := strings.ToLower(method)
+	commandish := strings.Contains(lower, "execcommand") || strings.Contains(lower, "applypatch")
 	if allow {
-		switch {
-		case strings.Contains(strings.ToLower(method), "execcommand"), strings.Contains(strings.ToLower(method), "applypatch"):
+		if commandish {
 			result["decision"] = "approved"
-		default:
+		} else {
 			result["decision"] = "accept"
 		}
-	} else {
-		switch {
-		case strings.Contains(strings.ToLower(method), "execcommand"), strings.Contains(strings.ToLower(method), "applypatch"):
-			result["decision"] = "denied"
-		}
+	} else if commandish {
+		result["decision"] = "denied"
 	}
-	return r.send(map[string]any{"jsonrpc": "2.0", "id": requestID, "result": result})
+	return result
+}
+
+// respondApproval answers one pending server request and reports the
+// resolution to the hub, so the approval card is cleared on every device.
+func (r *CodexRun) respondApproval(requestID int64, decision string) error {
+	r.mu.Lock()
+	method, pending := r.approvals[requestID]
+	delete(r.approvals, requestID)
+	timer := r.approvalTimers[requestID]
+	delete(r.approvalTimers, requestID)
+	closed := r.closed
+	r.mu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
+	if closed {
+		return errors.New("run is closed")
+	}
+	if !pending {
+		return errors.New("approval is no longer pending")
+	}
+	err := r.send(map[string]any{"jsonrpc": "2.0", "id": requestID, "result": approvalDecision(method, decision)})
+	ev := protocol.RunEvent{Type: "approval.resolved", ApprovalID: fmt.Sprintf("%d", requestID), Decision: decision}
+	if err == nil {
+		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
+	}
+	return err
 }
 
 func parseRequestID(id string) (int64, error) {
@@ -528,20 +574,52 @@ func (r *CodexRun) Stop() {
 		return
 	}
 	r.closed = true
+	timers := make([]*time.Timer, 0, len(r.approvalTimers))
+	for id, timer := range r.approvalTimers {
+		timers = append(timers, timer)
+		delete(r.approvalTimers, id)
+	}
+	pending := make([]int64, 0, len(r.approvals))
+	for id := range r.approvals {
+		pending = append(pending, id)
+	}
+	r.approvals = map[int64]string{}
 	r.mu.Unlock()
+	for _, timer := range timers {
+		timer.Stop()
+	}
 	r.cancel()
 	if r.cmd != nil && r.cmd.Process != nil {
 		_ = r.cmd.Process.Kill()
+	}
+	for _, id := range pending {
+		ev := protocol.RunEvent{Type: "approval.resolved", ApprovalID: fmt.Sprintf("%d", id), Decision: "reject", Text: "run stopped"}
+		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 	}
 	cleanupPromptAttachments(r.id)
 }
 
 func (r *CodexRun) handleServerRequest(id int64, method string, params json.RawMessage) {
 	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return
+	}
 	if r.approvals == nil {
 		r.approvals = map[int64]string{}
 	}
+	if r.approvalTimers == nil {
+		r.approvalTimers = map[int64]*time.Timer{}
+	}
+	if timer := r.approvalTimers[id]; timer != nil {
+		timer.Stop()
+	}
 	r.approvals[id] = method
+	r.approvalTimers[id] = time.AfterFunc(codexApprovalTimeout, func() {
+		if err := r.respondApproval(id, "reject"); err == nil {
+			r.daemon.log.Info("codex approval timed out", "run_id", r.id, "approval_id", id)
+		}
+	})
 	r.mu.Unlock()
 	ev := protocol.RunEvent{
 		Type: "approval.requested", ApprovalID: fmt.Sprintf("%d", id),
@@ -588,6 +666,12 @@ func floatNumber(v any) float64 {
 }
 
 func (r *CodexRun) handleNotification(method string, params json.RawMessage) {
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		return
+	}
 	r.daemon.log.Debug("codex event", "run_id", r.id, "type", method)
 	var p map[string]any
 	_ = json.Unmarshal(params, &p)

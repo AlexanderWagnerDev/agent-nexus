@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,27 @@ import (
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
+
+func TestStructuredVersionBandIsEnforcedOnRunStart(t *testing.T) {
+	d := &Daemon{cfg: Config{}, versions: map[string]string{}}
+	d.rememberAgentVersion("opencode", "1.9.4")
+	if err := d.checkStructuredVersion(context.Background(), "opencode"); err == nil {
+		t.Fatal("structured mode accepted an untested OpenCode version")
+	}
+	d.cfg.AllowUntestedAgentVersions = true
+	if err := d.checkStructuredVersion(context.Background(), "opencode"); err != nil {
+		t.Fatalf("explicit override was ignored: %v", err)
+	}
+	d.cfg.AllowUntestedAgentVersions = false
+	d.rememberAgentVersion("opencode", "2.2.7")
+	if err := d.checkStructuredVersion(context.Background(), "opencode"); err != nil {
+		t.Fatalf("tested version rejected: %v", err)
+	}
+	// A generic ACP agent without a matrix entry is not restricted here.
+	if err := d.checkStructuredVersion(context.Background(), "my-acp-agent"); err != nil {
+		t.Fatalf("unknown agent rejected: %v", err)
+	}
+}
 
 func TestCheckAgentVersion(t *testing.T) {
 	cases := []struct {

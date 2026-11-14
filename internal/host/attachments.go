@@ -1,7 +1,9 @@
 package host
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"mime"
@@ -27,8 +29,35 @@ type promptFile struct {
 	Path string
 }
 
+// validRunID bounds the hub-supplied run identifier. It is used as a
+// directory name under the attachment base, so separators, dots and control
+// characters are rejected; the hub's own ids are 32 lowercase hex characters.
+func validRunID(id string) bool {
+	if len(id) == 0 || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func attachmentDir(runID string) string {
-	return filepath.Join(os.TempDir(), "agentnexus-attachments", runID)
+	return filepath.Join(os.TempDir(), "agentnexus-attachments", runDirName(runID))
+}
+
+// runDirName never lets caller-supplied text escape the attachment base, even
+// if a future caller forgets to validate the run id.
+func runDirName(runID string) string {
+	if validRunID(runID) {
+		return runID
+	}
+	sum := sha256.Sum256([]byte(runID))
+	return hex.EncodeToString(sum[:16])
 }
 
 // writePromptAttachments materialises browser uploads inside a private

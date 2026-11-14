@@ -30,6 +30,29 @@ func TestSafeAttachmentName(t *testing.T) {
 	}
 }
 
+func TestAttachmentDirStaysInsideBase(t *testing.T) {
+	base := filepath.Join(os.TempDir(), "agentnexus-attachments")
+	// The hub is treated as untrusted here: a traversal in the run id must not
+	// reach a directory that cleanupPromptAttachments would later RemoveAll.
+	for _, id := range []string{
+		"../../../../etc",
+		"..\\..\\..\\Windows\\System32",
+		"/absolute/path",
+		"C:\\Windows",
+		"run/../../escape",
+		"",
+	} {
+		dir := attachmentDir(id)
+		rel, err := filepath.Rel(base, dir)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			t.Fatalf("attachment dir for %q escaped the base: %q", id, dir)
+		}
+	}
+	if got := attachmentDir("abc123"); got != filepath.Join(base, "abc123") {
+		t.Fatalf("valid run id changed the directory: %q", got)
+	}
+}
+
 func TestValidateAttachmentMIME(t *testing.T) {
 	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}
 	if err := validateAttachmentMIME("a.png", "image/png", png); err != nil {

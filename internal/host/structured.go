@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,6 +61,10 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		return
 	}
 	if err := d.validateRunPolicy(spec); err != nil {
+		fail(err.Error())
+		return
+	}
+	if err := d.checkStructuredVersion(parent, spec.Agent); err != nil {
 		fail(err.Error())
 		return
 	}
@@ -176,8 +179,18 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		readyOnce:         new(sync.Once),
 	}
 	ready := make(chan struct{})
-	go sr.scanServerOutput(stdout, ready)
-	go sr.scanServerOutput(stderr, ready)
+	readers := make(chan struct{}, 2)
+	go func() { sr.scanServerOutput(stdout, ready); readers <- struct{}{} }()
+	go func() { sr.scanServerOutput(stderr, ready); readers <- struct{}{} }()
+	// Wait only after both pipe readers finished: calling Wait earlier closes
+	// the pipes and can truncate the readiness lines. It must still run on
+	// every failure path, otherwise the killed child stays a zombie on Unix.
+	waitExit := make(chan error, 1)
+	go func() {
+		<-readers
+		<-readers
+		waitExit <- cmd.Wait()
+	}()
 	select {
 	case <-ready:
 	case <-time.After(25 * time.Second):
@@ -236,11 +249,12 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	}})
 	go sr.streamEvents(runCtx)
 	go func() {
-		err := cmd.Wait()
+		err := <-waitExit
 		code := 0
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()
 		}
+		sr.markFinished()
 		d.runMu.Lock()
 		delete(d.structured, spec.RunID)
 		d.runMu.Unlock()
@@ -341,11 +355,14 @@ func (r *StructuredRun) request(ctx context.Context, method, path string, body a
 		}
 		reader = strings.NewReader(string(raw))
 	}
-	req, err := http.NewRequestWithContext(ctx, method, r.baseURL+path, reader)
+	r.mu.Lock()
+	baseURL, password := r.baseURL, r.password
+	r.mu.Unlock()
+	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reader)
 	if err != nil {
 		return nil, 0, err
 	}
-	req.SetBasicAuth("opencode", r.password)
+	req.SetBasicAuth("opencode", password)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -433,7 +450,7 @@ func (r *StructuredRun) Prompt(text string, options *protocol.PromptOptions) err
 		}
 		promptFiles := make([]map[string]any, 0, len(files))
 		for _, file := range files {
-			uri := "file://" + filepath.ToSlash(file.Path)
+			uri := fileURI(file.Path)
 			promptFiles = append(promptFiles, map[string]any{
 				"uri": uri, "name": file.Name,
 				"source": map[string]any{"type": "uri", "uri": uri},
@@ -579,18 +596,71 @@ func (r *StructuredRun) Stop() {
 	cleanupPromptAttachments(r.id)
 }
 
-func (r *StructuredRun) streamEvents(ctx context.Context) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.baseURL+"/api/event", nil)
-	if err != nil {
+// markFinished records a child that exited on its own. It stops the event
+// stream and approval timers without killing an already dead process and
+// without treating the exit as a failure.
+func (r *StructuredRun) markFinished() {
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
 		return
 	}
-	req.SetBasicAuth("opencode", r.password)
+	r.closed = true
+	for id, timer := range r.approvals {
+		timer.Stop()
+		delete(r.approvals, id)
+	}
+	r.mu.Unlock()
+	r.cancel()
+	cleanupPromptAttachments(r.id)
+}
+
+func (r *StructuredRun) streamEvents(ctx context.Context) {
+	attempt := 0
+	for {
+		attempt++
+		err := r.streamEventsOnce(ctx)
+		r.mu.Lock()
+		closed := r.closed
+		r.mu.Unlock()
+		if closed || ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			r.daemon.log.Warn("structured event stream failed", "run_id", r.id, "error", err, "attempt", attempt)
+		} else {
+			r.daemon.log.Warn("structured event stream ended", "run_id", r.id, "attempt", attempt)
+		}
+		if attempt >= 5 {
+			ev := protocol.RunEvent{Type: "run.error", Error: "opencode event stream stopped; the run is no longer receiving events"}
+			_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(attempt) * 500 * time.Millisecond):
+		}
+	}
+}
+
+func (r *StructuredRun) streamEventsOnce(ctx context.Context) error {
+	r.mu.Lock()
+	baseURL, password := r.baseURL, r.password
+	r.mu.Unlock()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/event", nil)
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth("opencode", password)
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
-		r.daemon.log.Warn("structured event stream failed", "run_id", r.id, "error", err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("opencode event stream returned HTTP %d", resp.StatusCode)
+	}
 	r.daemon.log.Info("structured event stream connected", "run_id", r.id, "status", resp.StatusCode)
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 64*1024), 4<<20)
@@ -620,6 +690,7 @@ func (r *StructuredRun) streamEvents(ctx context.Context) {
 		r.daemon.log.Debug("structured event", "run_id", r.id, "type", event.Type)
 		r.handleEvent(event.Type, data)
 	}
+	return sc.Err()
 }
 
 func (r *StructuredRun) currentState() string {
@@ -632,6 +703,14 @@ func (r *StructuredRun) currentState() string {
 }
 
 func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		// A late event from a stopped run must not resurrect it or register
+		// new approval timers.
+		return
+	}
 	send := func(ev protocol.RunEvent) {
 		if ev.Type == "run.state" {
 			r.mu.Lock()

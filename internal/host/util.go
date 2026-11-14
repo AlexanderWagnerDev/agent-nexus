@@ -3,6 +3,7 @@ package host
 import (
 	"bufio"
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,4 +126,15 @@ func sliceContains(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// fileURI renders a local path as a standards-compliant file URL. Windows
+// drive letters need the empty authority form (file:///C:/...), otherwise a
+// parser treats the drive letter as the host.
+func fileURI(path string) string {
+	slash := filepath.ToSlash(path)
+	if len(slash) >= 2 && slash[1] == ':' {
+		return "file:///" + slash
+	}
+	return (&url.URL{Scheme: "file", Path: slash}).String()
 }

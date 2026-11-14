@@ -52,20 +52,16 @@ func (d *Daemon) activeElsewhere(ctx context.Context, agent, nativeID string) bo
 	if nativeID == "" {
 		return false
 	}
-	a := d.adapter(agent)
-	if a == nil {
+	return activeElsewhereIn(processCommandLines(ctx), agent, nativeID)
+}
+
+// activeElsewhereIn is the pure matcher behind activeElsewhere.
+func activeElsewhereIn(lines []string, agent, nativeID string) bool {
+	if len(lines) == 0 || nativeID == "" {
 		return false
 	}
-	sessions, err := a.ListSessions(ctx)
-	if err != nil {
-		return false
-	}
-	for _, s := range sessions {
-		if s.NativeID == nativeID && s.ActiveElsewhere {
-			return true
-		}
-	}
-	return false
+	key := agent + ":" + nativeID
+	return matchActiveSessions(lines, []protocol.Session{{Agent: agent, NativeID: nativeID}})[key]
 }
 
 var processCache struct {

@@ -58,6 +58,9 @@ type Daemon struct {
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
 	index       *SearchIndex
+
+	versionMu sync.Mutex
+	versions  map[string]string
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
@@ -76,6 +79,7 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		hubNonces:    map[string]time.Time{},
 		gitBranches:  map[string]gitRepoCache{},
 		updateWake:   make(chan struct{}, 1),
+		versions:     map[string]string{},
 	}
 	d.adapters = DetectAdapters(logger)
 	return d
@@ -446,6 +450,7 @@ func (d *Daemon) inventoryAgents() []protocol.AgentInfo {
 			continue
 		}
 		d.applyVersionPolicy(&info)
+		d.rememberAgentVersion(info.Name, info.Version)
 		if d.cfg.ACPCommand(info.Name) != "" && !sliceContains(info.Capabilities, "structured") &&
 			(!info.Untested || d.cfg.AllowUntestedAgentVersions) {
 			info.Capabilities = append(info.Capabilities, "structured")
@@ -929,6 +934,9 @@ func (d *Daemon) runActiveLocked(id string) bool {
 // any process is started. It is deliberately independent of the hub: a
 // compromised hub must not be able to bypass host policy.
 func (d *Daemon) validateRunPolicy(spec protocol.RunSpec) error {
+	if spec.RunID != "" && !validRunID(spec.RunID) {
+		return errors.New("invalid run id")
+	}
 	if spec.Force && !d.policy.ForceResumeAllowed() {
 		hostAudit("run.force_resume_rejected", map[string]any{
 			"run_id": spec.RunID, "agent": spec.Agent, "action": spec.Action,

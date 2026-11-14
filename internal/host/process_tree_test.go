@@ -68,3 +68,19 @@ func TestProcessGuardKillsDescendants(t *testing.T) {
 	}
 	t.Fatalf("processes survived the guard: parent=%v child=%v", processAlive(parent), processAlive(child))
 }
+
+func TestActiveElsewhereMatchesNativeProcess(t *testing.T) {
+	lines := []string{
+		"node /usr/local/bin/claude --resume 0f8fad5b-d9cb-469f-a165-70867728950e",
+		"/usr/bin/codex resume other-session",
+	}
+	if !activeElsewhereIn(lines, "claude", "0f8fad5b-d9cb-469f-a165-70867728950e") {
+		t.Fatal("resume of a session that is open in a native terminal was not detected")
+	}
+	if activeElsewhereIn(lines, "codex", "0f8fad5b-d9cb-469f-a165-70867728950e") {
+		t.Fatal("a different agent with the same id was reported active")
+	}
+	if activeElsewhereIn(lines, "claude", "unknown-session") {
+		t.Fatal("an unrelated session was reported active")
+	}
+}

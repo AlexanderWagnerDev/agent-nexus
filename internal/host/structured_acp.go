@@ -166,6 +166,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		approvals: map[string]chan string{}, state: protocol.StateIdle,
 	}
 	ar.conn = acp.NewClientSideConnection(ar, stdin, stdout)
+	stderrDone := make(chan struct{}, 1)
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
@@ -174,6 +175,16 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 				d.log.Debug("ACP adapter", "agent", spec.Agent, "line", line)
 			}
 		}
+		stderrDone <- struct{}{}
+	}()
+	// The SDK owns stdout and closes Done on EOF; waiting for that keeps the
+	// final protocol messages intact while still reaping a child that failed
+	// before registration. The stderr reader has no bearing on Wait.
+	waitExit := make(chan error, 1)
+	go func() {
+		<-ar.conn.Done()
+		waitExit <- cmd.Wait()
+		<-stderrDone
 	}()
 
 	ctx, cancelInit := context.WithTimeout(context.Background(), 30*time.Second)
@@ -248,7 +259,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	d.log.Info("ACP structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", ar.sessionID, "cwd", cwd)
 	hostAudit("acp.structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
 	go func() {
-		err := cmd.Wait()
+		err := <-waitExit
 		code := 0
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()

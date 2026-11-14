@@ -154,6 +154,9 @@ func (a *CodexAdapter) scanMetadata(path string) (protocol.Session, error) {
 			}
 		}
 	}
+	if err := sc.Err(); err != nil {
+		s.Warning = "The native session file could not be read completely; message counts and the title are partial."
+	}
 	if st != nil {
 		s.UpdatedAt = st.ModTime().UTC()
 	}
@@ -216,7 +219,11 @@ func (a *CodexAdapter) Transcript(ctx context.Context, nativeID string, offset, 
 			all = append(all, protocol.Message{Role: "tool", Kind: "tool_result", ToolOutput: truncate(p.Output, 8000), Timestamp: ts})
 		}
 	}
-	return pageMessages(all, offset, limit)
+	tr, err := pageMessages(all, offset, limit)
+	if err == nil && sc.Err() != nil {
+		tr.Warning = "The native session file could not be read completely; later messages are missing."
+	}
+	return tr, err
 }
 
 func (a *CodexAdapter) findFile(nativeID string) (string, error) {
@@ -227,7 +234,8 @@ func (a *CodexAdapter) findFile(nativeID string) (string, error) {
 			return nil
 		}
 		name := d.Name()
-		if strings.HasPrefix(name, "rollout-") && strings.Contains(name, nativeID) {
+		stem := strings.TrimSuffix(strings.TrimSuffix(name, ".zst"), ".jsonl")
+		if strings.HasPrefix(name, "rollout-") && strings.HasSuffix(stem, "-"+nativeID) {
 			found = path
 			return filepath.SkipAll
 		}

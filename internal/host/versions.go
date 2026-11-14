@@ -142,6 +142,58 @@ func agentVersionRange(agent string) (AgentVersionRange, bool) {
 	return AgentVersionRange{}, false
 }
 
+// rememberAgentVersion caches the version seen during inventory so a run start
+// does not spawn another `--version` process.
+func (d *Daemon) rememberAgentVersion(agent, version string) {
+	if agent == "" || version == "" {
+		return
+	}
+	d.versionMu.Lock()
+	if d.versions == nil {
+		d.versions = map[string]string{}
+	}
+	d.versions[agent] = version
+	d.versionMu.Unlock()
+}
+
+func (d *Daemon) cachedAgentVersion(agent string) (string, bool) {
+	d.versionMu.Lock()
+	defer d.versionMu.Unlock()
+	version, ok := d.versions[agent]
+	return version, ok
+}
+
+// checkStructuredVersion refuses structured mode for a detected version that
+// is outside the tested band, unless the operator allowed untested versions.
+// The inventory hides the capability, but the hub (or a stale UI) could still
+// send run.start; this keeps the contract enforced on the host.
+func (d *Daemon) checkStructuredVersion(ctx context.Context, agent string) error {
+	if d.cfg.AllowUntestedAgentVersions {
+		return nil
+	}
+	version, ok := d.cachedAgentVersion(agent)
+	if !ok {
+		a := d.adapter(agent)
+		if a == nil {
+			// A configured ACP command without a local adapter is not covered
+			// by the version matrix; the operator opted in explicitly.
+			return nil
+		}
+		info, err := a.Detect(ctx)
+		if err != nil {
+			return nil
+		}
+		version = info.Version
+		d.rememberAgentVersion(agent, version)
+	}
+	tested, recognized := CheckAgentVersion(agent, version)
+	if !recognized || tested {
+		return nil
+	}
+	band, _ := agentVersionRange(agent)
+	return fmt.Errorf("agent version %s is outside the tested structured range %s; terminal mode still works", version, band.TestedRange())
+}
+
 // auditVersionOverrides records once per daemon start when the override is on
 // and a detected agent is outside its tested range.
 func (d *Daemon) auditVersionOverrides() {

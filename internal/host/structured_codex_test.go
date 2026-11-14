@@ -157,3 +157,67 @@ func TestCodexRunJSONRPC(t *testing.T) {
 		t.Fatal("model/list was not sent")
 	}
 }
+
+func TestCodexApprovalResolvesAndTimesOut(t *testing.T) {
+	stdinReader, stdinWriter := io.Pipe()
+	defer stdinWriter.Close()
+	run := &CodexRun{
+		id: "run-approval", threadID: "thread-1", agent: "codex", cwd: t.TempDir(), stdin: stdinWriter,
+		pending: map[int64]chan json.RawMessage{}, approvals: map[int64]string{},
+		approvalTimers: map[int64]*time.Timer{},
+		daemon:         &Daemon{log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+	}
+	run.cancel = func() {}
+	lines := make(chan map[string]any, 4)
+	go func() {
+		scanner := bufio.NewScanner(stdinReader)
+		for scanner.Scan() {
+			var msg map[string]any
+			if json.Unmarshal(scanner.Bytes(), &msg) == nil {
+				lines <- msg
+			}
+		}
+	}()
+
+	run.handleServerRequest(7, "item/commandExecution/requestApproval", json.RawMessage(`{"command":"ls"}`))
+	if err := run.ReplyApproval("7", "once"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case msg := <-lines:
+		result, _ := msg["result"].(map[string]any)
+		if result["decision"] != "accept" {
+			t.Fatalf("approval response: %v", msg)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("approval response was not written")
+	}
+	run.mu.Lock()
+	_, stillPending := run.approvals[7]
+	_, timerLeft := run.approvalTimers[7]
+	run.mu.Unlock()
+	if stillPending || timerLeft {
+		t.Fatal("resolved approval kept state")
+	}
+
+	// An unanswered approval must not block the turn forever.
+	previous := codexApprovalTimeout
+	codexApprovalTimeout = 20 * time.Millisecond
+	defer func() { codexApprovalTimeout = previous }()
+	run.handleServerRequest(9, "item/commandExecution/requestApproval", json.RawMessage(`{"command":"rm"}`))
+	select {
+	case msg := <-lines:
+		result, _ := msg["result"].(map[string]any)
+		if result["decision"] != "decline" {
+			t.Fatalf("timed-out approval response: %v", msg)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed-out approval was not answered")
+	}
+	run.mu.Lock()
+	_, stillPending = run.approvals[9]
+	run.mu.Unlock()
+	if stillPending {
+		t.Fatal("timed-out approval kept pending state")
+	}
+}
