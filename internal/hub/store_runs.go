@@ -67,6 +67,34 @@ func (s *Store) UpdateRunState(id, state string) {
 	s.db.Exec(`UPDATE runs SET state=? WHERE id=?`, state, id)
 }
 
+// RecoverStaleRuns closes runs that a previous hub process left active. The
+// host is authoritative about whether the agent process survived, so a
+// reconnecting host re-adopts the run through AdoptRunState. Without this,
+// a hub restart while a host is offline would block its sessions forever.
+func (s *Store) RecoverStaleRuns() int {
+	res, err := s.db.Exec(`UPDATE runs SET state=?, ended_at=?, error_code=?, error_message=?
+		WHERE ended_at IS NULL`,
+		protocol.StateFailed, ms(time.Now()), ErrCodeNetwork,
+		"hub restarted before the host re-adopted the run")
+	if err != nil {
+		return 0
+	}
+	n, _ := res.RowsAffected()
+	return int(n)
+}
+
+// AdoptRunState records the state a host reports for a run it still owns. It
+// clears a previous terminal state so an agent process that survived a hub
+// restart or host reconnect is active again in the database, which keeps the
+// per-session uniqueness check effective.
+func (s *Store) AdoptRunState(id, state string) {
+	if state == protocol.StateExited || state == protocol.StateFailed || state == protocol.StateCompleted {
+		s.db.Exec(`UPDATE runs SET state=?, ended_at=? WHERE id=?`, state, ms(time.Now()), id)
+		return
+	}
+	s.db.Exec(`UPDATE runs SET state=?, ended_at=NULL, error_code='', error_message='' WHERE id=?`, state, id)
+}
+
 // SetRunError stores a stable classification and a bounded message. Callers
 // pass text that agents or the host reported; the hub does not synthesize
 // errors for successful runs.

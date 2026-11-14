@@ -16,7 +16,7 @@ import (
 const (
 	ed25519PublicKeySize = 32
 	hostReadLimit        = 32 << 20
-	clientReadLimit      = 4 << 20 // terminal input is capped at 2 MiB base64
+	clientReadLimit      = 24 << 20 // a prompt with 6 attachments of 8 MiB, base64-encoded
 	runBufferBytes       = 4 << 20
 	hostSendQueue        = 256
 	clientSendQueue      = 512
@@ -110,6 +110,11 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	}
 	s.ensureVAPID()
 	store.RecoverPromptQueue()
+	// Close runs left active by a previous process before tasks are
+	// reconciled, so a crashed delegation is not left "running" forever.
+	if n := store.RecoverStaleRuns(); n > 0 {
+		logger.Info("closed runs left active by the previous hub process", "runs", n)
+	}
 	store.ReconcileTasks()
 	store.PurgeExpiredSessions()
 	store.ResetTransientSessionStates()

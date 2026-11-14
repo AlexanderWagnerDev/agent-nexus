@@ -178,6 +178,9 @@ func (s *Server) adoptHostRuns(hostID string, reported []protocol.RunInfo) {
 		if state == "" {
 			state = protocol.StateRunning
 		}
+		// The host owns the process, so an adopted run becomes active again
+		// even if the hub closed it after a restart or an earlier disconnect.
+		s.store.AdoptRunState(info.RunID, state)
 		s.setRunState(info.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: info.RunID, State: state, Epoch: s.epoch})
 	}
@@ -214,7 +217,7 @@ func (s *Server) hostOwnsRun(hostID, runID string) bool {
 
 func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protocol.Envelope) {
 	if msg.Type == "run.started" || msg.Type == "run.output" || msg.Type == "run.event" ||
-		msg.Type == "run.exit" || msg.Type == "run.error" {
+		msg.Type == "run.exit" || msg.Type == "run.error" || msg.Type == "run.usage" {
 		if !s.hostOwnsRun(hc.id, msg.RunID) {
 			s.log.Warn("host attempted to update a run it does not own",
 				"host_id", hc.id, "run_id", msg.RunID, "type", msg.Type)
@@ -506,7 +509,34 @@ func (s *Server) broadcastHostUpdate(id string) {
 	}
 	s.updateMu.Unlock()
 	hv.Index = s.hostIndexStatus(id)
-	s.broadcast(protocol.ServerEnvelope{Type: "host.updated", Host: &hv})
+	s.broadcastHostView(id, protocol.ServerEnvelope{Type: "host.updated", Host: &hv})
+}
+
+// broadcastHostView delivers host metadata only to clients that may see the
+// host. The projection contains agent inventory, policy roots and update
+// state, so a plain broadcast would leak it to users without a grant. The
+// visibility set is resolved once per broadcast instead of once per client.
+func (s *Server) broadcastHostView(hostID string, msg protocol.ServerEnvelope) {
+	host, err := s.store.HostByID(hostID)
+	if err != nil {
+		return
+	}
+	grants, _ := s.store.ListHostGrants(hostID)
+	granted := make(map[string]bool, len(grants))
+	for _, grant := range grants {
+		granted[grant.UserID] = true
+	}
+	s.mu.RLock()
+	clients := make([]*clientConn, 0, len(s.clients))
+	for c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.mu.RUnlock()
+	for _, c := range clients {
+		if isAdminRole(c.user.Role) || host.OwnerID == c.user.ID || granted[c.user.ID] {
+			c.push(msg)
+		}
+	}
 }
 
 // hostRequest sends one request to a host and waits for the matching result.

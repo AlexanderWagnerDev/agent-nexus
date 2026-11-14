@@ -23,8 +23,7 @@ type fanoutRequest struct {
 func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	var req fanoutRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if msg := validQueuedPrompt(req.Prompt, nil); msg != "" {
@@ -73,6 +72,10 @@ func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 		}
 		if !s.hostPermission(u, target.HostID, "create") {
 			writeError(w, http.StatusForbidden, "create permission required for every target host")
+			return
+		}
+		if !s.hostPermission(u, target.HostID, "terminal_input") {
+			writeError(w, http.StatusForbidden, "terminal_input permission required for every target host")
 			return
 		}
 		if !s.hostOnline(target.HostID) {

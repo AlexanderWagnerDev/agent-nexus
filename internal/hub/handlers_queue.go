@@ -90,6 +90,10 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 		return u, run, sess, false
 	}
 	if needLease {
+		if !s.hostPermission(u, sess.HostID, "terminal_input") {
+			writeError(w, http.StatusForbidden, "terminal_input permission required")
+			return u, run, sess, false
+		}
 		device := deviceFrom(r)
 		if run.LeaseDeviceID == "" || run.LeaseDeviceID != device.ID {
 			writeJSON(w, http.StatusConflict, map[string]any{
@@ -121,8 +125,7 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req queueAddRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if msg := validQueuedPrompt(req.Text, req.Options); msg != "" {
@@ -156,8 +159,7 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req queueEditRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if msg := validQueuedPrompt(req.Text, nil); msg != "" {
@@ -203,7 +205,10 @@ func (s *Server) handleReorderPromptQueue(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req queueOrderRequest
-	if err := decodeJSON(r, &req); err != nil || len(req.IDs) == 0 {
+	if !s.decodeSignedJSON(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
 		writeError(w, http.StatusBadRequest, "ids are required")
 		return
 	}
@@ -222,8 +227,7 @@ func (s *Server) handlePausePromptQueue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var req queuePauseRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if err := s.store.SetPromptQueuePaused(run.ID, req.Paused); err != nil {

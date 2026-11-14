@@ -278,8 +278,7 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req taskDelegateRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if task.Status == protocol.TaskRunning || task.Status == protocol.TaskWaitingApproval {
@@ -362,6 +361,10 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.hostOnline(hostID) {
 		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	if !s.hostPermission(u, hostID, "terminal_input") {
+		writeError(w, http.StatusForbidden, "terminal_input permission required")
 		return
 	}
 	prompt := strings.TrimSpace(req.Prompt)

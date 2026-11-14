@@ -321,11 +321,15 @@ func (s *Store) ListDevices(userID string) ([]Device, error) {
 
 func (s *Store) RevokeDevice(userID, deviceID string) error {
 	now := ms(time.Now())
-	if _, err := s.db.Exec(`UPDATE devices SET revoked_at=? WHERE id=? AND user_id=?`, now, deviceID, userID); err != nil {
+	res, err := s.db.Exec(`UPDATE devices SET revoked_at=? WHERE id=? AND user_id=?`, now, deviceID, userID)
+	if err != nil {
 		return err
 	}
-	_, _ = s.db.Exec(`DELETE FROM push_subscriptions WHERE device_id=?`, deviceID)
-	_, err := s.db.Exec(`DELETE FROM auth_sessions WHERE device_id=?`, deviceID)
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	_, _ = s.db.Exec(`DELETE FROM push_subscriptions WHERE device_id IN (SELECT id FROM devices WHERE id=? AND user_id=?)`, deviceID, userID)
+	_, err = s.db.Exec(`DELETE FROM auth_sessions WHERE device_id IN (SELECT id FROM devices WHERE id=? AND user_id=?)`, deviceID, userID)
 	return err
 }
 

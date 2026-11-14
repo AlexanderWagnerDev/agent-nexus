@@ -46,12 +46,26 @@ func (s *Server) hostPermission(u User, hostID, need string) bool {
 	if isAdminRole(u.Role) {
 		return true
 	}
+	// A viewer never gains write capabilities through a grant, even if an
+	// administrator stored one; docs/ADMIN.md defines viewer as read-only.
+	if u.Role == "viewer" && need != "view" && need != "read_transcript" {
+		return false
+	}
 	host, err := s.store.HostByID(hostID)
 	if err == nil && host.OwnerID == u.ID {
 		return true
 	}
 	perms, err := s.store.HostGrantPermissions(hostID, u.ID)
-	return err == nil && grantAllows(perms, need)
+	if err != nil {
+		return false
+	}
+	if grantAllows(perms, need) {
+		return true
+	}
+	// Every grant row grants at least visibility; a row that only names a
+	// write capability (for example "resume") must not hide the host from the
+	// lists while the detail endpoint requires "view".
+	return need == "view" && perms != ""
 }
 
 func (s *Server) sessionPermission(u User, sess protocol.SessionView, need string) bool {

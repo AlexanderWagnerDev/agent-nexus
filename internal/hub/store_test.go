@@ -74,6 +74,117 @@ func TestHubRestartClearsStaleSessionState(t *testing.T) {
 	}
 }
 
+func TestHubRestartClearsStaleRunsAndSessionsCanBeResumed(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "restart-runs", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "codex", NativeID: "restart-run-session", Title: "Restart run", Cwd: "/work/restart",
+		CreatedAt: now, UpdatedAt: now, MessageCount: 1, State: protocol.StateIdle,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := hub.store.SessionByNativeID(owner.ID, hostID, "codex", "restart-run-session", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRunAt("stale-run", sess.ID, hostID, "/work/restart", protocol.ModeTerminal, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.setRunState("stale-run", protocol.StateRunning)
+
+	// A second Server on the same store simulates a hub restart while the
+	// host stays offline.
+	restarted := NewServer(Config{}, hub.store, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	run, _, err := restarted.store.RunByID("stale-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateFailed || run.EndedAt == nil || run.ErrorCode != ErrCodeNetwork {
+		t.Fatalf("stale run was not closed: %+v", run)
+	}
+	if id, active := restarted.store.ActiveRunForSession(sess.ID); active {
+		t.Fatalf("session is still blocked by run %s", id)
+	}
+}
+
+func TestHostReconnectReactivatesAdoptedRun(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "adopt-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "codex", NativeID: "adopt-session", Title: "Adopt", Cwd: "/work/adopt",
+		CreatedAt: now, UpdatedAt: now, MessageCount: 1, State: protocol.StateIdle,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := hub.store.SessionByNativeID(owner.ID, hostID, "codex", "adopt-session", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRunAt("adopt-run", sess.ID, hostID, "/work/adopt", protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	// A disconnect closes the run; the host then proves the process survived.
+	hub.server.setRunState("adopt-run", protocol.StateFailed)
+	hub.server.adoptHostRuns(hostID, []protocol.RunInfo{{RunID: "adopt-run", SessionID: sess.ID, State: protocol.StateRunning}})
+
+	run, _, err := hub.store.RunByID("adopt-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateRunning || run.EndedAt != nil {
+		t.Fatalf("adopted run is not active again: %+v", run)
+	}
+	if id, active := hub.store.ActiveRunForSession(sess.ID); !active || id != "adopt-run" {
+		t.Fatalf("adopted run does not block a second writer: %q %v", id, active)
+	}
+}
+
+func TestFinishedRunStateIsReleased(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "memory-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("memory-run", "", hostID, protocol.ModeTerminal, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.appendRunOutput("memory-run", 1, []byte("buffered terminal output"))
+	hub.server.setRunState("memory-run", protocol.StateIdle)
+
+	// A live run must keep its replay buffer.
+	hub.server.cleanupRunState("memory-run")
+	hub.server.mu.Lock()
+	_, kept := hub.server.runs["memory-run"]
+	hub.server.mu.Unlock()
+	if !kept {
+		t.Fatal("cleanup dropped the state of a live run")
+	}
+
+	hub.server.setRunState("memory-run", protocol.StateExited)
+	hub.server.cleanupRunState("memory-run")
+	hub.server.mu.Lock()
+	_, keptRun := hub.server.runs["memory-run"]
+	_, keptHost := hub.server.runHosts["memory-run"]
+	hub.server.mu.Unlock()
+	if keptRun || keptHost {
+		t.Fatalf("finished run was not released: runs=%v runHosts=%v", keptRun, keptHost)
+	}
+}
+
 func TestStoreSessionsAndAudit(t *testing.T) {
 	s, err := OpenStore(t.TempDir() + "/hub.db")
 	if err != nil {

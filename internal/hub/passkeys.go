@@ -36,19 +36,29 @@ type passkeySessionStore struct {
 	data map[string]passkeySession
 }
 
-func (p *passkeySessionStore) put(v passkeySession) string {
+const maxPasskeySessions = 512
+
+// put stores one WebAuthn challenge. The map is bounded and expired entries
+// are only swept when the map grows, so an unauthenticated caller cannot turn
+// every request into a full-map scan.
+func (p *passkeySessionStore) put(v passkeySession) (string, error) {
 	id := randomToken(24)
-	v.expires = time.Now().Add(5 * time.Minute)
+	now := time.Now()
+	v.expires = now.Add(5 * time.Minute)
 	p.mu.Lock()
-	p.data[id] = v
-	// Opportunistic cleanup.
-	for k, old := range p.data {
-		if time.Now().After(old.expires) {
-			delete(p.data, k)
+	defer p.mu.Unlock()
+	if len(p.data) >= maxPasskeySessions {
+		for k, old := range p.data {
+			if now.After(old.expires) {
+				delete(p.data, k)
+			}
+		}
+		if len(p.data) >= maxPasskeySessions {
+			return "", errors.New("too many pending passkey challenges")
 		}
 	}
-	p.mu.Unlock()
-	return id
+	p.data[id] = v
+	return id, nil
 }
 
 func (p *passkeySessionStore) take(id, kind string) (passkeySession, bool) {
@@ -138,7 +148,11 @@ func (s *Server) handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	id := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "register", data: *session})
+	id, err := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "register", data: *session})
+	if err != nil {
+		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"session_id": id, "publicKey": creation.Response})
 }
 
@@ -182,6 +196,11 @@ type passkeyLoginBeginRequest struct {
 }
 
 func (s *Server) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Request) {
+	if !s.loginLimiter.allow("passkey|" + clientIP(r)) {
+		w.Header().Set("Retry-After", "60")
+		writeError(w, http.StatusTooManyRequests, "too many attempts; try again later")
+		return
+	}
 	var req passkeyLoginBeginRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
@@ -207,7 +226,11 @@ func (s *Server) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	id := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "login", data: *session})
+	id, err := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "login", data: *session})
+	if err != nil {
+		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"session_id": id, "publicKey": assertion.Response})
 }
 

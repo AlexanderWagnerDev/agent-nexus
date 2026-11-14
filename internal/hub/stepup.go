@@ -45,7 +45,11 @@ func (s *Server) handleStepUpBegin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	id := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "stepup", data: *session})
+	id, err := s.passkeySessions.put(passkeySession{userID: u.ID, kind: "stepup", data: *session})
+	if err != nil {
+		writeError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"method": "passkey", "session_id": id, "publicKey": assertion.Response})
 }
 

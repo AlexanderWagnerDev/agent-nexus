@@ -1,20 +1,30 @@
 package hub
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"strings"
 )
 
-// maxRequestBody bounds JSON request bodies. Attachments travel inside host
-// links, not through the hub's HTTP API, so 1 MiB is generous.
-const maxRequestBody = 1 << 20
+// maxRequestBody bounds JSON request bodies. Attachments are only accepted by
+// the prompt-queue endpoint, which has its own bound.
+const (
+	maxRequestBody       = 1 << 20
+	maxPromptRequestBody = 24 << 20 // 6 attachments, 8 MiB each, base64-encoded
+)
 
 // bodyLimit rejects oversized request bodies before a handler decodes them.
 func bodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
-			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+			limit := int64(maxRequestBody)
+			if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/runs/") && strings.HasSuffix(r.URL.Path, "/queue") {
+				limit = maxPromptRequestBody
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -40,18 +50,59 @@ func decodeJSON(r *http.Request, v any) error {
 	return dec.Decode(v)
 }
 
+// decodeSignedJSON decodes a JSON object and verifies the device signature over
+// the exact request body when signed writes are required for this device. The
+// signature therefore binds the whole action, not only the URL.
+func (s *Server) decodeSignedJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	body, err := io.ReadAll(r.Body)
+	_ = r.Body.Close()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return false
+	}
+	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, body) {
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return false
+	}
+	return true
+}
+
+// clientIP returns the address used for rate limits and audit entries. A
+// reverse proxy runs on a loopback or private address and may forward the
+// client in X-Forwarded-For; a direct public client can therefore not spoof
+// the header to escape per-IP limits. The rightmost entry is the one the last
+// proxy observed, so prepended fake values are ignored.
 func clientIP(r *http.Request) string {
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		if i := strings.IndexByte(v, ','); i > 0 {
-			return strings.TrimSpace(v[:i])
+	remote := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		remote = host
+	}
+	remote = strings.Trim(remote, "[]")
+	if proxyPeer(remote) {
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			parts := strings.Split(forwarded, ",")
+			candidate := strings.TrimSpace(parts[len(parts)-1])
+			if net.ParseIP(candidate) != nil {
+				return candidate
+			}
 		}
-		return strings.TrimSpace(v)
 	}
-	host := r.RemoteAddr
-	if i := strings.LastIndexByte(host, ':'); i > 0 {
-		host = host[:i]
+	return remote
+}
+
+// proxyPeer reports whether the direct peer is local or private, which is
+// where a reverse proxy sits in the documented deployments.
+func proxyPeer(addr string) bool {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return false
 	}
-	return host
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 func deviceName(r *http.Request) string {

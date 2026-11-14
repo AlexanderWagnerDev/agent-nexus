@@ -250,7 +250,11 @@ func (s *Server) handleHostUpdateSettings(w http.ResponseWriter, r *http.Request
 			}
 			go func() {
 				time.Sleep(2 * time.Second)
-				s.dropHost(id, "host disabled")
+				// The host may have been re-enabled in the meantime; a delayed
+				// close must not kill a fresh, authorized connection.
+				if current, err := s.store.HostByID(id); err == nil && current.DisabledAt != nil {
+					s.dropHost(id, "host disabled")
+				}
 				s.broadcastHostUpdate(id)
 			}()
 		} else {

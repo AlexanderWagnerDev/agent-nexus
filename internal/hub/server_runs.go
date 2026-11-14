@@ -1,16 +1,57 @@
 package hub
 
-import "github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
+import (
+	"time"
+
+	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
+)
 
 func (s *Server) runState(id string) *runState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rs := s.runs[id]
 	if rs == nil {
-		rs = &runState{state: protocol.StateStarting}
+		rs = &runState{}
 		s.runs[id] = rs
 	}
 	return rs
+}
+
+// runStateRetention bounds how long a finished run keeps its in-memory output
+// and events for reconnects. Without it every historical run would retain up
+// to its replay buffer for the lifetime of the hub process.
+const runStateRetention = 15 * time.Minute
+
+// scheduleRunCleanup releases the in-memory buffers of a terminal run. A
+// non-terminal run keeps them; the timer simply expires.
+func (s *Server) scheduleRunCleanup(runID string) {
+	time.AfterFunc(runStateRetention, func() { s.cleanupRunState(runID) })
+}
+
+// cleanupRunState drops the retained events and output of one finished run.
+// Live runs are never touched, so a delayed timer cannot affect them.
+func (s *Server) cleanupRunState(runID string) {
+	s.mu.Lock()
+	rs, ok := s.runs[runID]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	rs.mu.Lock()
+	finished := terminalRunState(rs.state)
+	rs.mu.Unlock()
+	if !finished {
+		return
+	}
+	s.mu.Lock()
+	if current, exists := s.runs[runID]; exists && current == rs {
+		delete(s.runs, runID)
+		delete(s.runHosts, runID)
+	}
+	s.mu.Unlock()
+	s.queueMu.Lock()
+	delete(s.queueArmed, runID)
+	s.queueMu.Unlock()
 }
 
 func (s *Server) setRunState(id, state string) {
@@ -33,6 +74,7 @@ func (s *Server) setRunState(id, state string) {
 		s.metrics.approvalsEnded(id)
 		s.store.FailPendingPromptQueue(id, "run ended before the queued prompt was sent")
 		s.disarmQueue(id)
+		s.scheduleRunCleanup(id)
 	}
 }
 
@@ -121,6 +163,7 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 		case terminalRunState(ev.State):
 			s.store.FailPendingPromptQueue(runID, "run ended before the queued prompt was sent")
 			s.disarmQueue(runID)
+			s.scheduleRunCleanup(runID)
 		case ev.State == protocol.StateIdle:
 			if previousState != protocol.StateIdle && s.store.HasQueuedPromptsForRun(runID) {
 				s.armQueue(runID)

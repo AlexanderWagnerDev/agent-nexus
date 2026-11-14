@@ -466,8 +466,7 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req runRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if runID, active := s.store.ActiveRunForSession(sess.ID); active {
@@ -548,8 +547,7 @@ func (s *Server) handleNewRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req runRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+	if !s.decodeSignedJSON(w, r, &req) {
 		return
 	}
 	if req.Agent == "" || req.Cwd == "" {
@@ -587,6 +585,11 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 	}
 	if err := s.store.CreateRunAt(id, sess.ID, sess.HostID, cwd, mode, u.ID, d.ID); err != nil {
 		return protocol.RunView{}, err
+	}
+	// The lease is the write lock for terminal input and prompts. A user who
+	// may resume or create a run but not type into it starts read-only.
+	if !s.hostPermission(u, sess.HostID, "terminal_input") {
+		_, _ = s.store.db.Exec(`UPDATE runs SET lease_device_id='' WHERE id=?`, id)
 	}
 	spec := protocol.RunSpec{
 		RunID: id, SessionID: sess.ID, Agent: sess.Agent, NativeID: sess.NativeID,
@@ -676,6 +679,12 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "run not found")
 		return
 	}
+	if terminalRunState(run.State) {
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "run has already ended", "state": run.State,
+		})
+		return
+	}
 	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, nil) {
 		return
 	}
@@ -697,6 +706,10 @@ func (s *Server) handleLease(w http.ResponseWriter, r *http.Request) {
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
 	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
 		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	if !s.hostPermission(u, run.HostID, "terminal_input") {
+		writeError(w, http.StatusForbidden, "terminal_input permission required")
 		return
 	}
 	d := deviceFrom(r)

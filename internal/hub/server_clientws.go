@@ -152,7 +152,9 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		var events []protocol.ServerEnvelope
 		if rs != nil {
 			rs.mu.Lock()
-			state = rs.state
+			if rs.state != "" {
+				state = rs.state
+			}
 			for _, ch := range coalesceChunks(rs.chunks, msg.LastSeq, replayBatchBytes) {
 				chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
 			}
@@ -185,6 +187,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run not found"})
 			return
 		}
+		if !s.hostPermission(c.user, run.HostID, "terminal_input") {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "terminal_input permission required"})
+			return
+		}
 		if run.LeaseDeviceID != c.device.ID {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
 			return
@@ -200,6 +206,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		}
 		if run.Mode != protocol.ModeStructured {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "run is not in structured mode"})
+			return
+		}
+		if !s.hostPermission(c.user, run.HostID, "terminal_input") {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "terminal_input permission required"})
 			return
 		}
 		if run.LeaseDeviceID != c.device.ID {
@@ -223,6 +233,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
 			return
 		}
+		if !s.hostPermission(c.user, run.HostID, "approve") {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "approve permission required"})
+			return
+		}
 		if msg.Decision != "once" && msg.Decision != "always" && msg.Decision != "reject" {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "invalid approval decision"})
 			return
@@ -240,6 +254,10 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		}
 		if run.LeaseDeviceID != c.device.ID {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "you do not hold the controller lease"})
+			return
+		}
+		if !s.hostPermission(c.user, run.HostID, "terminal_input") {
+			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "terminal_input permission required"})
 			return
 		}
 		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.interrupt", RunID: msg.RunID}); err != nil {
@@ -260,19 +278,23 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 }
 
 func (s *Server) broadcast(msg protocol.ServerEnvelope) {
-	if msg.RunID != "" && (msg.Type == "run.output" || msg.Type == "run.event") {
-		s.mu.RLock()
-		clients := make([]*clientConn, 0, len(s.clients))
-		for c := range s.clients {
-			clients = append(clients, c)
+	if msg.RunID != "" {
+		switch msg.Type {
+		case "run.output", "run.event":
+			s.broadcastToSubscribers(msg)
+			return
+		case "run.prompt.sent":
+			// The message carries the full prompt text, so only clients that
+			// subscribed to this run may receive it.
+			s.broadcastToRunOwner(msg, true)
+			return
+		default:
+			// Run ids, states, errors, exit reasons and usage belong to the
+			// user who started the run (and administrators), not to every
+			// authenticated viewer.
+			s.broadcastToRunOwner(msg, false)
+			return
 		}
-		s.mu.RUnlock()
-		for _, c := range clients {
-			if c.subscribed(msg.RunID) {
-				c.push(msg)
-			}
-		}
-		return
 	}
 	s.mu.RLock()
 	clients := make([]*clientConn, 0, len(s.clients))
@@ -282,6 +304,41 @@ func (s *Server) broadcast(msg protocol.ServerEnvelope) {
 	s.mu.RUnlock()
 	for _, c := range clients {
 		c.push(msg)
+	}
+}
+
+func (s *Server) broadcastToSubscribers(msg protocol.ServerEnvelope) {
+	s.mu.RLock()
+	clients := make([]*clientConn, 0, len(s.clients))
+	for c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.mu.RUnlock()
+	for _, c := range clients {
+		if c.subscribed(msg.RunID) {
+			c.push(msg)
+		}
+	}
+}
+
+// broadcastToRunOwner filters a run-scoped message by run ownership. Passing
+// subscribersOnly restricts delivery to clients already subscribed to the run,
+// which is required for messages that carry prompt or transcript content.
+func (s *Server) broadcastToRunOwner(msg protocol.ServerEnvelope, subscribersOnly bool) {
+	_, startedBy, err := s.store.RunByID(msg.RunID)
+	if err != nil {
+		return
+	}
+	s.mu.RLock()
+	clients := make([]*clientConn, 0, len(s.clients))
+	for c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.mu.RUnlock()
+	for _, c := range clients {
+		if c.subscribed(msg.RunID) || (!subscribersOnly && (startedBy == c.user.ID || isAdminRole(c.user.Role))) {
+			c.push(msg)
+		}
 	}
 }
 

@@ -175,6 +175,9 @@ CREATE TABLE IF NOT EXISTS runs (
   error_message TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_host_idx ON runs(host_id, state);
+CREATE INDEX IF NOT EXISTS runs_stale_idx ON runs(ended_at);
+CREATE INDEX IF NOT EXISTS runs_session_idx ON runs(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS runs_started_by_idx ON runs(started_by, created_at DESC);
 CREATE TABLE IF NOT EXISTS prompt_queue (
   id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,

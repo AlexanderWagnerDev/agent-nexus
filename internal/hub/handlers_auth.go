@@ -407,6 +407,10 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	u := userFrom(r)
 	if err := s.store.RevokeDevice(u.ID, id); err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, http.StatusNotFound, "device not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
