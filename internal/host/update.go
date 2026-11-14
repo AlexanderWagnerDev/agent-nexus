@@ -195,6 +195,9 @@ func CheckForUpdateCached(ctx context.Context, currentVersion, channel, etag str
 	if info.Available && info.DownloadURL == "" {
 		return info, newETag, false, fmt.Errorf("release %s has no asset %s", version, name)
 	}
+	if info.Available && info.ChecksumURL == "" {
+		return info, newETag, false, fmt.Errorf("release %s has no checksums.txt; refusing an unverifiable update", version)
+	}
 	return info, newETag, false, nil
 }
 

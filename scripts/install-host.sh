@@ -75,6 +75,13 @@ case "$CHANNEL" in
   stable|prerelease|development) ;;
   *) echo "unsupported channel: $CHANNEL (use stable, prerelease or development)" >&2; exit 2 ;;
 esac
+if [ "$CHANNEL" = "development" ]; then
+  DEVELOPMENT=1
+fi
+if [ "$DEVELOPMENT" -eq 1 ] && [ -n "$VERSION" ]; then
+  echo "--version cannot be combined with --development or --channel development" >&2
+  exit 2
+fi
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in
@@ -121,16 +128,39 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 download() {
-  # shellcheck disable=SC2086
+  # The GitHub token is passed through a curl config on stdin so it never
+  # appears in /proc/<pid>/cmdline.
   if [ -n "${NEXUS_GITHUB_TOKEN:-}" ]; then
     case "$1" in
       https://api.github.com/*|https://github.com/*)
-        curl -fsSL --retry 3 --connect-timeout 20 -H "Authorization: Bearer $NEXUS_GITHUB_TOKEN" -o "$2" "$1" ;;
-      *) curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1" ;;
+        printf 'header = "Authorization: Bearer %s"\n' "$NEXUS_GITHUB_TOKEN" |
+          curl -fsSL --retry 3 --connect-timeout 20 -K - -o "$2" "$1"
+        return $?
+        ;;
     esac
-  else
-    curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1"
   fi
+  curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1"
+}
+
+# Print the final HTTP status into $HTTP_CODE. Returns non-zero on a transport
+# failure. Without -f, a 404 is reported as 404 instead of an indistinguishable
+# failure, so the caller can tell "asset does not exist" from "download broke".
+HTTP_CODE=""
+fetch_status() {
+  local url="$1" out="$2" rc=0
+  if [ -n "${NEXUS_GITHUB_TOKEN:-}" ]; then
+    case "$url" in
+      https://api.github.com/*|https://github.com/*)
+        printf 'header = "Authorization: Bearer %s"\n' "$NEXUS_GITHUB_TOKEN" |
+          curl -sSL --retry 3 --connect-timeout 20 -K - -o "$out" -w '%{http_code}' "$url" > "$tmp/http_code" || rc=$?
+        HTTP_CODE="$(cat "$tmp/http_code" 2>/dev/null || true)"
+        return $rc
+        ;;
+    esac
+  fi
+  curl -sSL --retry 3 --connect-timeout 20 -o "$out" -w '%{http_code}' "$url" > "$tmp/http_code" || rc=$?
+  HTTP_CODE="$(cat "$tmp/http_code" 2>/dev/null || true)"
+  return $rc
 }
 
 install_development() {
@@ -207,18 +237,31 @@ else
   verify_checksum "$tmp/$asset" "$expected"
 
   if command -v cosign >/dev/null 2>&1; then
-    if download "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json"; then
-      cosign verify-blob \
-        --bundle "$tmp/checksums.txt.sigstore.json" \
-        --certificate-identity-regexp "^https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/" \
-        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-        "$tmp/checksums.txt" >/dev/null
-      echo "Checksum and cosign signature verified."
-    elif [ "$REQUIRE_SIGNATURE" -eq 1 ]; then
-      echo "The release has no cosign bundle and --require-signature was set." >&2
-      exit 1
+    if fetch_status "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json"; then
+      case "$HTTP_CODE" in
+        200)
+          cosign verify-blob \
+            --bundle "$tmp/checksums.txt.sigstore.json" \
+            --certificate-identity-regexp "^https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$tmp/checksums.txt" >/dev/null
+          echo "Checksum and cosign signature verified."
+          ;;
+        404)
+          if [ "$REQUIRE_SIGNATURE" -eq 1 ]; then
+            echo "The release has no cosign bundle and --require-signature was set." >&2
+            exit 1
+          fi
+          echo "Warning: release has no cosign bundle; SHA-256 only." >&2
+          ;;
+        *)
+          echo "Cannot download the cosign bundle (HTTP $HTTP_CODE); refusing to fall back to checksum-only." >&2
+          exit 1
+          ;;
+      esac
     else
-      echo "Warning: release has no cosign bundle; SHA-256 only." >&2
+      echo "Cannot download the cosign bundle (transport error); refusing to fall back to checksum-only." >&2
+      exit 1
     fi
   elif [ "$REQUIRE_SIGNATURE" -eq 1 ]; then
     echo "cosign is required by --require-signature but was not found." >&2

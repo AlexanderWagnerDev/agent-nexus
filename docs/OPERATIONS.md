@@ -103,8 +103,8 @@ plain copy of `hub.db` and `secret.key` is also consistent. For Docker, execute
 the snapshot inside the container so `/data` is the mounted volume:
 
 ```bash
-docker compose exec nexus-hub /nexus-hub --data-dir /data --backup /data/backup-$(date +%F).db
-docker compose cp nexus-hub:/data/secret.key backup/secret.key
+docker compose exec hub /nexus-hub --data-dir /data --backup /data/backup-$(date +%F).db
+docker compose cp hub:/data/secret.key backup/secret.key
 ```
 
 Restore (stop the hub first and restore both files):
@@ -196,8 +196,8 @@ runs. Do not use it in an automatic maintenance task.
 signature mode, last check, last success, update state and any error. A manager
 can request installation from the host page only when `allow_remote_install` is
 enabled locally; the host still applies its own channel, signature and idle
-policy. Keep the hub and host protocol majors compatible and upgrade the hub
-before the hosts.
+policy. Keep the hub and host protocol majors compatible: if a release changes
+the host-link major version, update hosts before or together with the hub.
 
 ## Upgrade
 

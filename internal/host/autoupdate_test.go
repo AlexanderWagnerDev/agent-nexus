@@ -309,3 +309,77 @@ func TestVerifyStagedBinaryRejectsMissingFile(t *testing.T) {
 		t.Fatal("missing staged binary passed the version check")
 	}
 }
+
+func TestResumeUpdateVerificationFirstStartIsNotAFailure(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	d := silentDaemon(echoTestAdapter{})
+	if err := saveUpdateState(updateState{
+		Phase: UpdatePhaseInstalling, TargetVersion: Version,
+		PhaseAt: time.Now().UTC(), Attempts: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	d.resumeUpdateVerification(context.Background())
+	loaded, err := loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Phase != UpdatePhaseVerifying || loaded.Attempts != 1 {
+		t.Fatalf("first start of the new binary was treated as a failure: %+v", loaded)
+	}
+	if loaded.VerifiedAt.IsZero() {
+		t.Fatal("the first verified start was not recorded")
+	}
+	// A single extra restart is counted but must not roll back yet.
+	d.resumeUpdateVerification(context.Background())
+	loaded, err = loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Attempts != 2 || loaded.Phase == UpdatePhaseRolledBack {
+		t.Fatalf("extra restart handling: %+v", loaded)
+	}
+}
+
+func TestResumeInterruptedInstallDoesNotBlockTheVersion(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	d := silentDaemon(echoTestAdapter{})
+	if err := saveUpdateState(updateState{
+		Phase: UpdatePhaseInstalling, TargetVersion: "9.9.9",
+		PhaseAt: time.Now().UTC(), Attempts: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	d.resumeUpdateVerification(context.Background())
+	loaded, err := loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Phase == UpdatePhaseBlocked || loaded.BlockedVersion != "" {
+		t.Fatalf("an interrupted install blocked the release: %+v", loaded)
+	}
+	if loaded.Phase != UpdatePhaseFailed {
+		t.Fatalf("interrupted install state = %q", loaded.Phase)
+	}
+}
+
+func TestRecordRollbackBlockPersistsState(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("HOME", dir)
+	recordRollbackBlock("v1.2.3")
+	loaded, err := loadUpdateState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.BlockedVersion != "1.2.3" || loaded.Phase != UpdatePhaseRolledBack {
+		t.Fatalf("rollback block not recorded: %+v", loaded)
+	}
+}

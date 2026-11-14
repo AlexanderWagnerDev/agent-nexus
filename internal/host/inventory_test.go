@@ -1,6 +1,11 @@
 package host
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
+)
 
 // A configured ACP adapter is the capability source for agents whose native
 // adapter does not advertise structured mode (Gemini today). The inventory
@@ -29,5 +34,34 @@ func TestInventoryDoesNotInventStructuredWithoutACP(t *testing.T) {
 	}
 	if sliceContains(agents[0].Capabilities, "structured") {
 		t.Fatalf("structured was advertised without an ACP adapter: %+v", agents[0])
+	}
+}
+
+func TestSessionWithinRootsAppliesToTranscriptReads(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, "repo")
+	outside := filepath.Join(filepath.Dir(root), "private")
+	d := &Daemon{
+		policy: Policy{AllowedRoots: []string{root}},
+		lastByAgent: map[string][]protocol.Session{
+			"claude": {
+				{NativeID: "inside", Agent: "claude", Cwd: inside},
+				{NativeID: "outside", Agent: "claude", Cwd: outside},
+			},
+		},
+	}
+	if !d.sessionWithinRoots("claude", "inside") {
+		t.Fatal("session inside the allowed root was rejected")
+	}
+	if d.sessionWithinRoots("claude", "outside") {
+		t.Fatal("session outside the allowed root was readable")
+	}
+	if d.sessionWithinRoots("claude", "unknown") {
+		t.Fatal("an undiscovered session failed open")
+	}
+	// Without a restriction every session remains readable.
+	d.policy.AllowedRoots = nil
+	if !d.sessionWithinRoots("claude", "unknown") {
+		t.Fatal("unrestricted host rejected a session")
 	}
 }

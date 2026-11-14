@@ -72,22 +72,27 @@ try {
 } catch {
   Write-Log "update failed: $_"
   $previous = "$Target.previous"
+  $restored = $false
   if (Test-Path -LiteralPath $previous) {
     schtasks.exe /End /TN $Task | Out-Null
     Wait-TaskState "Ready" | Out-Null
     for ($i = 0; $i -lt 20; $i++) {
       try {
         Copy-Item -LiteralPath $previous -Destination $Target -Force -ErrorAction Stop
+        $restored = $true
         break
       } catch {
         Start-Sleep -Seconds 1
       }
     }
-    schtasks.exe /Run /TN $Task | Out-Null
-    Write-Log "rolled back to the previous binary"
+    if ($restored) { Write-Log "rolled back to the previous binary" }
+    else { Write-Log "rollback failed: the previous binary could not be restored" }
   } else {
     Write-Log "no previous binary was available for rollback"
   }
+  # Always restart the task: without a successful restore it runs the new
+  # binary (and its own restart logic), with a restore it runs the old one.
+  schtasks.exe /Run /TN $Task | Out-Null
   exit 1
 }`
 	if err := os.WriteFile(script, []byte(content), 0o600); err != nil {

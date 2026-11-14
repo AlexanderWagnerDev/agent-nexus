@@ -220,6 +220,14 @@ func TestDispatchSearchUsesReadyIndexAndFallsBackWhileBuilding(t *testing.T) {
 	d := NewDaemonWithAdapters(Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)), []Adapter{adapter})
 	d.policy = policy
 	d.index = index
+	// The fallback adapter invents a hit for "fallback"; the daemon must have
+	// discovered its working directory to apply allowed_roots.
+	d.sessionsMu.Lock()
+	d.lastByAgent["opencode"] = []protocol.Session{
+		{NativeID: "inside", Agent: "opencode", Cwd: filepath.Join(root, "project")},
+		{NativeID: "fallback", Agent: "opencode", Cwd: filepath.Join(root, "project")},
+	}
+	d.sessionsMu.Unlock()
 	raw := []byte(`{"query":"upload retry","limit":10}`)
 	result, err := d.dispatchRequest("search", raw)
 	if err != nil {

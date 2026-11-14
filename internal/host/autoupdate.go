@@ -54,12 +54,16 @@ type updateState struct {
 	TargetVersion   string     `json:"target_version,omitempty"`
 	PreviousVersion string     `json:"previous_version,omitempty"`
 	VerifyAt        time.Time  `json:"verify_at,omitempty"`
-	Attempts        int        `json:"attempts,omitempty"`
-	Failures        int        `json:"consecutive_failures,omitempty"`
-	InstallFailures int        `json:"install_failures,omitempty"`
-	BlockedVersion  string     `json:"blocked_version,omitempty"`
-	Blocked         []string   `json:"blocked_versions,omitempty"`
-	Rollback        bool       `json:"rollback,omitempty"`
+	// VerifiedAt records the first start of the new binary after an install.
+	// Only restarts after that first start count as failed starts; otherwise a
+	// healthy update would be rolled back by its own expected restart.
+	VerifiedAt      time.Time `json:"verified_at,omitempty"`
+	Attempts        int       `json:"attempts,omitempty"`
+	Failures        int       `json:"consecutive_failures,omitempty"`
+	InstallFailures int       `json:"install_failures,omitempty"`
+	BlockedVersion  string    `json:"blocked_version,omitempty"`
+	Blocked         []string  `json:"blocked_versions,omitempty"`
+	Rollback        bool      `json:"rollback,omitempty"`
 }
 
 func updateStatePath() (string, error) {
@@ -330,6 +334,7 @@ func (d *Daemon) autoInstall(ctx context.Context, prefs UpdateSettings, state up
 	state.Phase = UpdatePhaseDownloading
 	state.Message = "downloading and verifying " + info.Latest
 	state.LastAttempt = time.Now().UTC()
+	state.VerifiedAt = time.Time{}
 	d.saveUpdateState(state)
 	d.reportUpdateStatus()
 
@@ -478,6 +483,32 @@ func ClearUpdateBlock(version string) {
 	_ = saveUpdateState(state)
 }
 
+// recordRollbackBlock keeps a version that an operator rolled back from out of
+// the automatic update path. Without it the next six-hour check would install
+// the same broken release again.
+func recordRollbackBlock(version string) {
+	version = strings.TrimSpace(version)
+	if version == "" || !validReleaseVersion(version) {
+		return
+	}
+	normalized := strings.TrimPrefix(version, "v")
+	if cfg, err := LoadConfig(); err == nil {
+		prefs := cfg.UpdatePrefs()
+		prefs.BlockedVersions = appendUnique(prefs.BlockedVersions, normalized)
+		_ = SaveUpdatePrefs(prefs)
+	}
+	state, err := loadUpdateState()
+	if err != nil {
+		state = updateState{Phase: UpdatePhaseIdle}
+	}
+	state.Phase = UpdatePhaseRolledBack
+	state.Rollback = true
+	state.BlockedVersion = normalized
+	state.Blocked = appendUnique(state.Blocked, normalized)
+	state.Message = "rolled back from " + normalized + "; the version is blocked until updates.blocked_versions is edited"
+	_ = saveUpdateState(state)
+}
+
 func sameVersion(a, b string) bool {
 	return strings.TrimPrefix(strings.TrimSpace(a), "v") == strings.TrimPrefix(strings.TrimSpace(b), "v") &&
 		strings.TrimPrefix(strings.TrimSpace(a), "v") != ""
@@ -536,7 +567,7 @@ func (d *Daemon) resumeUpdateVerification(ctx context.Context) {
 		return
 	}
 	if current != target {
-		if state.Phase == UpdatePhaseInstalling || state.Phase == UpdatePhaseVerifying {
+		if state.Phase == UpdatePhaseVerifying {
 			state.Phase = UpdatePhaseBlocked
 			state.LastError = "installed version does not match the pending update"
 			state.Message = "update " + target + " is blocked because the expected version did not start; remove it from updates.blocked_versions to retry"
@@ -548,21 +579,34 @@ func (d *Daemon) resumeUpdateVerification(ctx context.Context) {
 			_ = SaveUpdatePrefs(prefs)
 			d.saveUpdateState(state)
 			d.reportUpdateStatus()
+			return
 		}
+		// The process died between recording "installing" and replacing the
+		// binary. Nothing was installed, so this is a retryable interruption
+		// and must not block the release.
+		state.Phase = UpdatePhaseFailed
+		state.LastError = "the update was interrupted before the binary was replaced"
+		state.Message = "update " + target + " was interrupted; the next check can retry it"
+		state.VerifiedAt = time.Time{}
+		d.saveUpdateState(state)
+		d.reportUpdateStatus()
 		return
 	}
 	now := time.Now().UTC()
-	if state.Phase == UpdatePhaseInstalling {
+	if state.VerifiedAt.IsZero() {
+		// This is the expected first start of the new binary, not a failed
+		// start. Start the verification window from here.
 		state.Attempts = 1
 		state.Phase = UpdatePhaseVerifying
 		state.PhaseAt = now
 		state.VerifyAt = now.Add(updateVerifyWindow)
+		state.VerifiedAt = now
 		d.saveUpdateState(state)
 		go d.confirmUpdate(target, 1)
 		return
 	}
 	// A restart inside the verification window is treated as a failed start.
-	if now.Sub(state.PhaseAt) < 2*updateVerifyWindow {
+	if now.Sub(state.VerifiedAt) < 2*updateVerifyWindow {
 		state.Attempts++
 		if state.Attempts >= updateMaxAttempts {
 			state.Rollback = true

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -151,11 +152,13 @@ func RollbackUpdate(force bool) error {
 	// installed binary over target.previous, which would replace the rollback
 	// binary with the broken one before restoring it.
 	if runtime.GOOS == "windows" {
+		recordRollbackBlock(Version)
 		return scheduleWindowsUpdate(previous, target)
 	}
 	if err := copyFile(previous, target, 0o755); err != nil {
 		return err
 	}
+	recordRollbackBlock(Version)
 	return restartUnixService()
 }
 
@@ -192,6 +195,10 @@ func acquireUpdateLock() (func(), error) {
 // clearStaleUpdateLock removes an update lock left behind by a daemon that was
 // replaced while holding it. The 30-minute guard in acquireUpdateLock still
 // protects a genuinely running installer.
+// clearStaleUpdateLock removes an update lock left behind by a daemon that was
+// killed mid-install. A lock whose recorded process is still alive is left in
+// place, even at startup: deleting it would let a second installer replace the
+// binary concurrently. The age limit still recovers from PID reuse.
 func clearStaleUpdateLock(maxAge time.Duration) {
 	dir, err := ConfigDir()
 	if err != nil {
@@ -202,7 +209,26 @@ func clearStaleUpdateLock(maxAge time.Duration) {
 	if err != nil {
 		return
 	}
-	if time.Since(info.ModTime()) > maxAge {
+	age := time.Since(info.ModTime())
+	if maxAge > 0 && age > maxAge {
+		_ = os.Remove(path)
+		return
+	}
+	if age > 30*time.Minute {
+		_ = os.Remove(path)
+		return
+	}
+	data, _ := os.ReadFile(path)
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		// Unreadable lock: only discard it when it is old enough to be stale.
+		if age > time.Minute {
+			_ = os.Remove(path)
+		}
+		return
+	}
+	pid, err := strconv.Atoi(fields[0])
+	if err != nil || !processAlive(pid) {
 		_ = os.Remove(path)
 	}
 }

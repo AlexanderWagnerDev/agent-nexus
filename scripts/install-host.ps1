@@ -71,11 +71,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($Channel -eq "development") { $Development = $true }
 $Api = if ($env:NEXUS_UPDATE_API) { $env:NEXUS_UPDATE_API.TrimEnd("/") } else { "https://api.github.com" }
 
 function Fail([string]$Message) {
   Write-Error $Message
   exit 1
+}
+
+if ($Development -and $Version) {
+  Fail "-Version cannot be combined with -Development or -Channel development."
 }
 
 function Get-Headers {
@@ -90,6 +95,25 @@ function Download-File([string]$Uri, [string]$Path) {
     $headers["Authorization"] = "Bearer $env:NEXUS_GITHUB_TOKEN"
   }
   Invoke-WebRequest -Uri $Uri -OutFile $Path -Headers $headers -UseBasicParsing -TimeoutSec 300
+}
+
+# Returns $true when the asset exists, $false only for a definitive HTTP 404,
+# and aborts on any other failure. A transport error must never silently fall
+# back to checksum-only verification.
+function Download-FileIfPresent([string]$Uri, [string]$Path) {
+  try {
+    Download-File $Uri $Path
+    return $true
+  } catch {
+    $status = -1
+    try {
+      if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+        $status = [int]$_.Exception.Response.StatusCode
+      }
+    } catch { }
+    if ($status -eq 404) { return $false }
+    Fail "Cannot download $Uri (HTTP $status): $($_.Exception.Message)"
+  }
 }
 
 function Get-ReleaseTag {
@@ -183,8 +207,8 @@ try {
 
     if (Get-Command cosign -ErrorAction SilentlyContinue) {
       $bundle = Join-Path $temp "checksums.txt.sigstore.json"
-      try { Download-File "$base/checksums.txt.sigstore.json" $bundle } catch { $bundle = $null }
-      if (-not $bundle) {
+      $hasBundle = Download-FileIfPresent "$base/checksums.txt.sigstore.json" $bundle
+      if (-not $hasBundle) {
         if ($RequireSignature) { Fail "The release has no cosign bundle and -RequireSignature was set." }
         Write-Warning "The release has no cosign bundle; SHA-256 only."
       } else {

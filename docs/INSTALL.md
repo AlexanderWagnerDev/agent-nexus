@@ -315,7 +315,9 @@ WebSocket path through the proxy.
 
 1. Back up `hub.db`, `secret.key` and `hub-signing.key`
    (see [OPERATIONS.md](OPERATIONS.md)).
-2. Change `NEXUS_TAG` to the new image tag and run `docker compose up -d`.
+2. Change `NEXUS_TAG` to the new image tag, run `docker compose pull`, then
+   `docker compose up -d`. The default compose file only pulls; add
+   `-f compose.build.yaml` only if you intentionally build from a checkout.
 3. Host daemons update themselves on the configured channel when idle. Check
    `nexusd update --status` and `nexusd doctor` afterwards. To update a specific
    host immediately, run `nexusd update --install`; it refuses while agent runs

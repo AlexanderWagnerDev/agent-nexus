@@ -443,7 +443,7 @@ func updateCmd(args []string) {
 	if err := host.InstallOwnUpdate(staged); err != nil {
 		fail(err)
 	}
-	fmt.Println("nexus client updated; the daemon and host config were not touched")
+	fmt.Println("nexus client replacement scheduled; restart the client to use the new binary (the daemon and host config were not touched)")
 }
 
 func truncate(value string, limit int) string {

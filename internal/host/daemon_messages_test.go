@@ -91,6 +91,9 @@ func TestDispatchRequest(t *testing.T) {
 	root := t.TempDir()
 	d := silentDaemon(echoTestAdapter{})
 	d.policy = Policy{AllowedRoots: []string{root}}
+	d.sessionsMu.Lock()
+	d.lastByAgent["echo"] = []protocol.Session{{NativeID: "n1", Agent: "echo", Cwd: root}}
+	d.sessionsMu.Unlock()
 
 	raw, _ := json.Marshal(map[string]any{"native_id": "n1", "agent": "echo", "offset": 0, "limit": 10})
 	if _, err := d.dispatchRequest("transcript", raw); err != nil {

@@ -395,9 +395,10 @@ func updateCmd(args []string) {
 			prefs.RequireSignature = &value
 		}
 		if *unblock != "" {
+			want := strings.TrimPrefix(strings.TrimSpace(*unblock), "v")
 			kept := prefs.BlockedVersions[:0]
 			for _, version := range prefs.BlockedVersions {
-				if version != *unblock {
+				if strings.TrimPrefix(strings.TrimSpace(version), "v") != want {
 					kept = append(kept, version)
 				}
 			}
@@ -496,11 +497,16 @@ func updateCmd(args []string) {
 		return
 	}
 	if *install {
+		if err := host.StartUpdateWatchdog(info.Latest); err != nil {
+			fmt.Fprintln(os.Stderr, "update: cannot start the restart watchdog:", err)
+			os.Exit(1)
+		}
 		if err := host.InstallStagedUpdate(staged, *force); err != nil {
 			fmt.Fprintln(os.Stderr, "update:", err)
 			os.Exit(1)
 		}
-		fmt.Println("update applied; check nexusd doctor and the service status")
+		fmt.Println("replacement scheduled; the service restarts into", info.Latest,
+			"and the watchdog restores the previous binary if it does not start")
 	}
 }
 

@@ -202,8 +202,12 @@ The host connects **outbound only**; no ports need to be opened on your machines
 
 ```bash
 cp .env.example .env      # set HUB_DOMAIN and HUB_NAME
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+To build the image from this checkout instead of pulling it, add the development
+override: `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`) and Docker Hub (`alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 

@@ -23,7 +23,10 @@ func spawnDetachedWatchdog(exe string, args []string) error {
 				"--user", "--collect", "--unit", unit, "--on-active=5s", exe,
 			}, args...)
 			cmd := exec.Command(path, runArgs...)
-			if err := cmd.Start(); err == nil {
+			// Run, not Start: systemd-run reports "Failed to connect to bus"
+			// through its exit status, and a silently non-existent watchdog
+			// would remove the rollback guarantee.
+			if err := cmd.Run(); err == nil {
 				return nil
 			}
 		}

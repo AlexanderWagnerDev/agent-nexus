@@ -38,6 +38,7 @@ type Daemon struct {
 
 	sendMu     sync.Mutex
 	snapshotMu sync.Mutex
+	sessionsMu sync.Mutex
 	ws         *websocket.Conn
 
 	lastSnapshot map[string]string
@@ -58,6 +59,7 @@ type Daemon struct {
 	gitMu       sync.Mutex
 	gitBranches map[string]gitRepoCache
 	index       *SearchIndex
+	indexMu     sync.Mutex
 
 	versionMu sync.Mutex
 	versions  map[string]string
@@ -400,17 +402,29 @@ func (d *Daemon) startSearchIndex(ctx context.Context) {
 		return
 	}
 	d.index = index
-	go func() {
-		if err := index.Refresh(ctx, d.adapters, d.policy, d.log); err != nil && ctx.Err() == nil {
-			index.setStatus(0, 0, "error", err.Error())
-			d.log.Warn("search index build failed", "error", err)
-		}
-		_ = d.sendInventory()
-	}()
+	go d.refreshSearchIndex(ctx)
+}
+
+// refreshSearchIndex serializes index rebuilds. Discovery refreshes the cache
+// after session changes; without the lock a startup build and a discovery
+// build could interleave fingerprints.
+func (d *Daemon) refreshSearchIndex(ctx context.Context) {
+	if d.index == nil {
+		return
+	}
+	d.indexMu.Lock()
+	defer d.indexMu.Unlock()
+	if err := d.index.Refresh(ctx, d.adapters, d.policy, d.log); err != nil && ctx.Err() == nil {
+		d.index.setStatus(0, 0, "error", err.Error())
+		d.log.Warn("search index refresh failed", "error", err)
+	}
+	_ = d.sendInventory()
 }
 
 func (d *Daemon) stopSearchIndex() {
 	if d.index != nil {
+		d.indexMu.Lock()
+		defer d.indexMu.Unlock()
 		_ = d.index.Close()
 	}
 }
@@ -507,6 +521,17 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 		debounce = time.NewTimer(discoveryDebounce)
 		debounceC = debounce.C
 	}
+	// The FTS cache is refreshed after discovery changes, but at most every
+	// 15 seconds so an active turn (one changing session) cannot rebuild the
+	// whole index on every poll.
+	lastIndexRefresh := time.Time{}
+	refreshIndex := func() {
+		if d.index == nil || time.Since(lastIndexRefresh) < 15*time.Second {
+			return
+		}
+		lastIndexRefresh = time.Now()
+		go d.refreshSearchIndex(ctx)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -522,6 +547,8 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			debounceC = nil
 			if err := d.sendSessions(false); err != nil {
 				d.log.Debug("session refresh failed", "error", err)
+			} else {
+				refreshIndex()
 			}
 			d.writeRuntimeStatus()
 		case <-fallback.C:
@@ -533,6 +560,8 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			// unreliable.
 			if err := d.sendSessions(false); err != nil {
 				d.log.Debug("session refresh failed", "error", err)
+			} else {
+				refreshIndex()
 			}
 			d.writeRuntimeStatus()
 		}
@@ -554,6 +583,30 @@ func (d *Daemon) inventoryLoop(ctx context.Context) {
 	}
 }
 
+// sessionCwd returns the last discovered working directory for a native
+// session. It is used to apply allowed_roots to transcript and search reads.
+func (d *Daemon) sessionCwd(agent, nativeID string) (string, bool) {
+	d.sessionsMu.Lock()
+	defer d.sessionsMu.Unlock()
+	for _, s := range d.lastByAgent[agent] {
+		if s.NativeID == nativeID {
+			return s.Cwd, true
+		}
+	}
+	return "", false
+}
+
+// sessionWithinRoots enforces the host policy for a session outside a run.
+// Unknown sessions fail closed: the hub only asks about sessions it received
+// in a snapshot, which always includes the working directory.
+func (d *Daemon) sessionWithinRoots(agent, nativeID string) bool {
+	if len(d.policy.AllowedRoots) == 0 {
+		return true
+	}
+	cwd, ok := d.sessionCwd(agent, nativeID)
+	return ok && d.policy.WithinRoots(cwd)
+}
+
 func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 	var out []protocol.Session
 	for _, a := range d.adapters {
@@ -562,10 +615,15 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 			// A broken parser must not look like "all sessions disappeared".
 			// Reuse the last successful snapshot for that agent.
 			d.log.Warn("discovery failed", "agent", a.Name(), "error", err)
-			out = append(out, d.lastByAgent[a.Name()]...)
+			d.sessionsMu.Lock()
+			previous := append([]protocol.Session(nil), d.lastByAgent[a.Name()]...)
+			d.sessionsMu.Unlock()
+			out = append(out, previous...)
 			continue
 		}
+		d.sessionsMu.Lock()
 		d.lastByAgent[a.Name()] = sessions
+		d.sessionsMu.Unlock()
 		out = append(out, sessions...)
 	}
 	// Normalize path separators so the hub groups Windows sessions from
@@ -778,6 +836,12 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		if a == nil {
 			return nil, errors.New("agent not available")
 		}
+		// The local search index already excludes sessions outside the
+		// allowed roots; direct transcript reads must apply the same rule so a
+		// restricted host does not expose unrelated personal notes.
+		if !d.sessionWithinRoots(p.Agent, p.NativeID) {
+			return nil, errors.New("session is outside the allowed roots")
+		}
 		return a.Transcript(context.Background(), p.NativeID, p.Offset, p.Limit)
 	case "search":
 		var p struct {
@@ -801,7 +865,11 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 				d.log.Debug("search failed", "agent", a.Name(), "error", err)
 				continue
 			}
-			hits = append(hits, h...)
+			for _, hit := range h {
+				if d.sessionWithinRoots(hit.Agent, hit.NativeID) {
+					hits = append(hits, hit)
+				}
+			}
 		}
 		return hits, nil
 	case "rescan":
