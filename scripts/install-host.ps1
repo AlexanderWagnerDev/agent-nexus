@@ -116,6 +116,20 @@ function Download-FileIfPresent([string]$Uri, [string]$Path) {
   }
 }
 
+# Resolves one development binary and verifies it against its adjacent
+# <file>.sha256. The dev artifact ships both nexusd and nexus, so a
+# "first checksum file in the tree" lookup would validate the wrong pair.
+function Get-VerifiedDevBinary([string]$BaseName) {
+  $file = Get-ChildItem -Path $temp -Recurse -File -Filter "$BaseName-windows-$arch.exe" | Select-Object -First 1
+  if (-not $file) { Fail "The development artifact did not contain $BaseName-windows-$arch.exe." }
+  $checksumPath = "$($file.FullName).sha256"
+  if (-not (Test-Path $checksumPath)) { Fail "The development artifact has no SHA-256 checksum for $($file.Name)." }
+  $expected = ((Get-Content $checksumPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+  $actual = (Get-FileHash -Algorithm SHA256 -Path $file.FullName).Hash.ToLowerInvariant()
+  if ($expected -ne $actual) { Fail "SHA-256 mismatch for $($file.Name)." }
+  return $file
+}
+
 function Get-ReleaseTag {
   if ($Version) {
     if ($Version -notmatch '^v') { return "v$Version" }
@@ -177,14 +191,10 @@ try {
     $run = ($runJson | ConvertFrom-Json)[0]
     $artifact = "nexusd-windows-$arch"
     gh run download $run.databaseId --repo $Repo --name $artifact --dir $temp
-    $exe = Get-ChildItem -Path $temp -Recurse -Filter "nexusd*.exe" | Select-Object -First 1
-    if (-not $exe) { Fail "The artifact did not contain nexusd.exe." }
-    $checksum = Get-ChildItem -Path $temp -Recurse -Filter "*.sha256" | Select-Object -First 1
-    if (-not $checksum) { Fail "The artifact did not contain a SHA-256 checksum." }
-    $expected = (Get-Content $checksum.FullName -Raw).Split(" ")[0].Trim().ToLowerInvariant()
-    $actual = (Get-FileHash -Algorithm SHA256 -Path $exe.FullName).Hash.ToLowerInvariant()
-    if ($expected -ne $actual) { Fail "SHA-256 mismatch for the downloaded daemon." }
-    Copy-Item $exe.FullName (Join-Path $temp "nexusd.exe") -Force
+    $daemon = Get-VerifiedDevBinary "nexusd"
+    $client = Get-VerifiedDevBinary "nexus"
+    Copy-Item $daemon.FullName (Join-Path $temp "nexusd.exe") -Force
+    Copy-Item $client.FullName (Join-Path $temp "nexus.exe") -Force
     $version = "development"
   } else {
     $tag = Get-ReleaseTag
@@ -242,9 +252,14 @@ try {
   $newExe = Join-Path $temp "nexusd.exe"
   $newCli = Join-Path $temp "nexus.exe"
   if (-not (Test-Path $newExe)) { Fail "The archive did not contain nexusd.exe." }
+  if (-not (Test-Path $newCli)) { Fail "The archive did not contain nexus.exe; refusing a partial installation." }
   $versionOutput = & $newExe version 2>&1
   if ($LASTEXITCODE -ne 0 -or "$versionOutput" -notmatch "^nexusd ") {
     Fail "The downloaded daemon did not pass its version check."
+  }
+  $cliVersionOutput = & $newCli version 2>&1
+  if ($LASTEXITCODE -ne 0 -or "$cliVersionOutput" -notmatch "^nexus ") {
+    Fail "The downloaded desktop client did not pass its version check."
   }
   if ($version -and $version -ne "development") {
     $reported = ("$versionOutput" -split '\s+')[1] -replace '^v', ''
@@ -273,7 +288,7 @@ try {
 
   try {
     Copy-Item $newExe $dest -Force
-    if (Test-Path $newCli) { Copy-Item $newCli $cli -Force }
+    Copy-Item $newCli $cli -Force
     Write-Host "Installed $dest and $cli"
   } catch {
     if (Test-Path "$dest.previous") { Copy-Item "$dest.previous" $dest -Force }

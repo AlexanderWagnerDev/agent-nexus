@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   host:
-    name: nexusd (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: Host binaries (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -47,10 +47,16 @@ jobs:
           mkdir -p dist
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
-          out="nexusd-$GOOS-$GOARCH$ext"
           version="alpha-${GITHUB_SHA::7}"
-          go build -trimpath -ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version=$version" -o "dist/$out" ./cmd/nexusd
-          (cd dist && sha256sum "$out" > "$out.sha256")
+          ldflags="-s -w -X github.com/AlexanderWagnerDev/agent-nexus/internal/host.Version=$version"
+          # The installers install the daemon and the terminal client together.
+          # Shipping only nexusd here left development installs without a
+          # working (or current) nexus binary.
+          for name in nexusd nexus; do
+            out="$name-$GOOS-$GOARCH$ext"
+            go build -trimpath -ldflags="$ldflags" -o "dist/$out" "./cmd/$name"
+            (cd dist && sha256sum "$out" > "$out.sha256")
+          done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: nexusd-${{ matrix.goos }}-${{ matrix.goarch }}

@@ -142,6 +142,13 @@ download() {
   curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1"
 }
 
+# The release feed is fetched without the token: GitHub only lists drafts to
+# authenticated push-access users, and resolving a draft tag would then 404 on
+# the download URL. Drafts must never be installable.
+download_public() {
+  curl -fsSL --retry 3 --connect-timeout 20 -o "$2" "$1"
+}
+
 # Print the final HTTP status into $HTTP_CODE. Returns non-zero on a transport
 # failure. Without -f, a 404 is reported as 404 instead of an indistinguishable
 # failure, so the caller can tell "asset does not exist" from "download broke".
@@ -179,11 +186,18 @@ install_development() {
   run_id="$(printf '%s' "$run_json" | sed -n 's/.*"databaseId":\([0-9]*\).*/\1/p')"
   echo "Downloading development build $artifact from run $run_id..."
   gh run download "$run_id" --repo "$REPO" --name "$artifact" --dir "$tmp"
-  find "$tmp" -type f -name 'nexusd*' ! -name '*.sha256' -exec cp {} "$tmp/nexusd" \;
-  local checksum
-  checksum="$(find "$tmp" -type f -name '*.sha256' | head -n 1)"
-  [ -n "$checksum" ] || { echo "artifact did not contain a SHA-256 checksum" >&2; exit 1; }
-  verify_checksum "$tmp/nexusd" "$(cut -d' ' -f1 "$checksum")"
+  # The artifact ships the daemon and the terminal client. Installing only
+  # nexusd left development installs without a working (or current) nexus.
+  local name src checksum expected
+  for name in nexusd nexus; do
+    src="$(find "$tmp" -type f -name "${name}-${os}-${arch}" | head -n 1)"
+    [ -n "$src" ] || { echo "development artifact did not contain ${name}-${os}-${arch}" >&2; exit 1; }
+    checksum="$src.sha256"
+    [ -f "$checksum" ] || { echo "development artifact has no SHA-256 checksum for ${name}" >&2; exit 1; }
+    expected="$(cut -d' ' -f1 "$checksum")"
+    verify_checksum "$src" "$expected"
+    cp "$src" "$tmp/$name"
+  done
 }
 
 verify_checksum() {
@@ -214,7 +228,7 @@ else
       feed="$API/repos/$REPO/releases?per_page=30"
     fi
     feed_file="$tmp/releases.json"
-    if ! download "$feed" "$feed_file"; then
+    if ! download_public "$feed" "$feed_file"; then
       echo "No published release found for the $CHANNEL channel." >&2
       echo "Use --development for a workflow build, or wait for the first official release." >&2
       exit 1
@@ -271,18 +285,25 @@ else
   fi
 
   mkdir -p "$tmp/extract"
-  tar -xzf "$tmp/$asset" -C "$tmp/extract" --no-same-owner --no-same-permissions nexusd
-  tar -xzf "$tmp/$asset" -C "$tmp/extract" --no-same-owner --no-same-permissions nexus 2>/dev/null || true
-  [ -f "$tmp/extract/nexusd" ] || { echo "archive did not contain nexusd" >&2; exit 1; }
-  cp "$tmp/extract/nexusd" "$tmp/nexusd"
-  if [ -f "$tmp/extract/nexus" ]; then cp "$tmp/extract/nexus" "$tmp/nexus"; fi
+  # Both binaries are part of every archive. A missing or silently skipped
+  # client would leave an outdated nexus next to a new daemon.
+  for name in nexusd nexus; do
+    tar -xzf "$tmp/$asset" -C "$tmp/extract" --no-same-owner --no-same-permissions "$name" \
+      || { echo "archive did not contain $name" >&2; exit 1; }
+    cp "$tmp/extract/$name" "$tmp/$name"
+  done
 fi
 
-chmod 0755 "$tmp/nexusd"
+chmod 0755 "$tmp/nexusd" "$tmp/nexus"
 version_output="$("$tmp/nexusd" version 2>/dev/null || true)"
 case "$version_output" in
   nexusd\ *) ;;
   *) echo "downloaded daemon failed its version check" >&2; exit 1 ;;
+esac
+client_version_output="$("$tmp/nexus" version 2>/dev/null || true)"
+case "$client_version_output" in
+  nexus\ *) ;;
+  *) echo "downloaded terminal client failed its version check" >&2; exit 1 ;;
 esac
 
 mkdir -p "$dest_dir"
@@ -315,9 +336,10 @@ if ! install -m 0755 "$tmp/nexusd" "$dest"; then
   echo "Binary replacement failed; the previous installation was restored." >&2
   exit 1
 fi
-if [ -f "$tmp/nexus" ] && ! install -m 0755 "$tmp/nexus" "$cli"; then
+if ! install -m 0755 "$tmp/nexus" "$cli"; then
   if [ -f "$cli.previous" ]; then install -m 0755 "$cli.previous" "$cli" || true; fi
   echo "nexus client replacement failed; the previous client was restored." >&2
+  exit 1
 fi
 echo "Installed $dest and $cli"
 
