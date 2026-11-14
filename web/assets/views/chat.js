@@ -60,7 +60,7 @@ export async function pageStructuredRun(id, run) {
           ${nativeActivityBadge(session?.active_elsewhere, true)}
           ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
           <button class="icon-btn chat-inline-context" id="chat-inline-context" type="button" title="${t('Toggle session details')}" aria-label="${t('Toggle session details')}">${svgIcon('panelRight')}</button>
-          <span class="chat-connection" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>Connecting…</span>
+          <span class="chat-connection" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>${t('Connecting…')}</span>
         </div>
         <div class="chat-scroll" id="chat">
           <div class="chat-inner">
@@ -585,9 +585,12 @@ export async function pageStructuredRun(id, run) {
       ${resources || event.text ? `<pre>${esc(resources || event.text)}</pre>` : ''}
       <div class="approval-actions"><button class="btn small primary" data-approval="once">${t('Allow once')}</button><button class="btn small" data-approval="always">${t('Always allow')}</button><button class="btn small danger" data-approval="reject">${t('Deny')}</button></div>`;
     card.querySelectorAll('[data-approval]').forEach((button) => button.addEventListener('click', () => {
-      wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision: button.dataset.approval });
+      if (!wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision: button.dataset.approval })) {
+        toast(t('WebSocket is reconnecting; try again in a moment'), true);
+        return;
+      }
       card.remove();
-      noteText(t('Approval sent'));
+      noteText(t('Approval sent'), true);
     }));
     approval.appendChild(card);
     autoScroll = true;
@@ -653,12 +656,12 @@ export async function pageStructuredRun(id, run) {
           .find((node) => node.dataset.approvalId === (event.approval_id || ''));
         if (resolved) resolved.remove();
         else approval.innerHTML = '';
-        noteText(`Approval ${event.decision || 'resolved'}`, true);
+        noteText(event.decision ? `${t('Approval resolved')} (${event.decision})` : t('Approval resolved'), true);
         break;
       }
       case 'run.state':
         setState(event.state);
-        noteText(event.state === 'idle' ? t('Idle — ready for your next message') : `Agent ${event.state.replaceAll('_', ' ')}`, event.state === 'running');
+        noteText(event.state === 'idle' ? t('Idle — ready for your next message') : t('Agent status: {state}', { state: t(event.state.replaceAll('_', ' ')) }), event.state === 'running');
         break;
       case 'run.error':
         setState('failed');
@@ -703,7 +706,7 @@ export async function pageStructuredRun(id, run) {
         sendSubscribe();
       }
       setState(msg.state);
-      noteText(msg.state === 'idle' ? t('Idle — ready for your next message') : `Agent ${msg.state.replaceAll('_', ' ')}`, msg.state === 'running');
+      noteText(msg.state === 'idle' ? t('Idle — ready for your next message') : t('Agent status: {state}', { state: t(msg.state.replaceAll('_', ' ')) }), msg.state === 'running');
     }
     if (msg.type === 'run.exit') {
       setState(msg.state || 'exited');
@@ -752,30 +755,36 @@ export async function pageStructuredRun(id, run) {
   };
 
   const loadHistory = async () => {
-    if (!run.session_id) return;
-    try {
-      const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
-      historyTotal = head.total || 0;
-      if (!historyTotal) return;
-      const limit = Math.min(200, historyTotal);
-      const offset = Math.max(0, historyTotal - limit);
-      const tr = historyTotal > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
-      historyOffset = offset;
-      const visible = (tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
-      for (const message of visible) {
-        if (message.role === 'assistant' && (!message.kind || message.kind === 'text')) {
-          const text = String(message.text || '').trim();
-          if (text) historyAssistantTexts.add(text);
+    if (run.session_id) {
+      try {
+        const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
+        historyTotal = head.total || 0;
+        if (historyTotal) {
+          const limit = Math.min(200, historyTotal);
+          const offset = Math.max(0, historyTotal - limit);
+          const tr = historyTotal > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
+          historyOffset = offset;
+          const visible = (tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
+          for (const message of visible) {
+            if (message.role === 'assistant' && (!message.kind || message.kind === 'text')) {
+              const text = String(message.text || '').trim();
+              if (text) historyAssistantTexts.add(text);
+            }
+          }
+          messagesEl.innerHTML = renderTranscriptMessages(visible, run.agent || session?.agent);
+          historyTop.innerHTML = offset > 0
+            ? `<button class="btn small ghost history-button" id="load-earlier">${t('Load earlier messages ({n} remaining)', { n: offset.toLocaleString() })}</button>`
+            : '';
+          document.getElementById('load-earlier')?.addEventListener('click', () => loadEarlier().catch((err) => toast(err.message, true)));
+          autoScroll = true;
+          scrollBottom(true);
         }
-      }
-      messagesEl.innerHTML = renderTranscriptMessages(visible, run.agent || session?.agent);
-      historyTop.innerHTML = offset > 0
-        ? `<button class="btn small ghost history-button" id="load-earlier">${t('Load earlier messages ({n} remaining)', { n: offset.toLocaleString() })}</button>`
-        : '';
-      document.getElementById('load-earlier')?.addEventListener('click', () => loadEarlier().catch((err) => toast(err.message, true)));
-      autoScroll = true;
-      scrollBottom(true);
-    } catch { /* history is optional */ }
+      } catch { /* history is optional */ }
+    }
+    // A new session has no transcript yet, and an existing session can have an
+    // empty store. Either way the live stream must be rendered immediately:
+    // waiting for a transcript that will never exist used to buffer every
+    // event forever.
     historyReady = true;
     flushPendingLiveEvents();
   };
@@ -1202,10 +1211,10 @@ export async function pageStructuredRun(id, run) {
     if (!state.me) { clearInterval(timer); return; }
     if (state.ws?.readyState === WebSocket.OPEN) {
       if (subscribedGen !== state.wsGen) sendSubscribe();
-      if (note.textContent.includes('Connecting')) noteText('Connected. Send a message.');
-    } else if (!note.textContent.includes('Reconnecting')) {
+      if (note.textContent.includes(t('Connecting…'))) noteText(t('Connected. Send a message.'));
+    } else if (!note.textContent.includes(t('Reconnecting…'))) {
       // Do not rebuild the live region four times per second while offline.
-      noteText('Reconnecting…');
+      noteText(t('Reconnecting…'));
     }
   }, 800);
 

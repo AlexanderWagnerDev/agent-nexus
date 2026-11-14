@@ -26,6 +26,12 @@ export const navItems = [
 
 const mobilePrimary = new Set(['overview', 'projects', 'sessions', 'runs', 'hosts']);
 
+// renderShell runs again on some pages that re-render themselves from a
+// WebSocket event. Keep one shell handler so those re-renders do not multiply
+// the sidebar/notification reloads.
+let shellWsHandler = null;
+let sidebarTimer = null;
+
 function mobileMoreDialog() {
   const secondary = navItems.filter(([, , , key]) => !mobilePrimary.has(key));
   modal(`<h2>${t('More')}</h2>
@@ -112,8 +118,8 @@ export function renderShell(active = 'overview') {
     loadSidebar().catch(() => {});
     loadNotifications().catch(() => {});
   }
-  let sidebarTimer = null;
-  state.wsHandlers.add((msg) => {
+  if (shellWsHandler) state.wsHandlers.delete(shellWsHandler);
+  shellWsHandler = (msg) => {
     if (msg.type === 'host.updated' || msg.type === 'sessions.changed' || msg.type === 'run.state' || msg.type === 'run.exit') {
       clearTimeout(sidebarTimer);
       sidebarTimer = setTimeout(() => loadSidebar().catch(() => {}), 700);
@@ -121,7 +127,8 @@ export function renderShell(active = 'overview') {
     if (msg.type === 'run.exit' || msg.type === 'run.error' || (msg.type === 'run.event' && msg.event?.type === 'approval.requested')) {
       setTimeout(() => loadNotifications().catch(() => {}), 500);
     }
-  });
+  };
+  state.wsHandlers.add(shellWsHandler);
   renderTabs();
   if (state.notifTimer) clearInterval(state.notifTimer);
   if (!state.embed) state.notifTimer = setInterval(() => { if (state.me) loadNotifications().catch(() => {}); }, 30000);
@@ -220,6 +227,9 @@ export async function loadUserTheme() {
 }
 
 export function setPage(title, sub = '', actions = '') {
+  // Tabs and bookmarks must be distinguishable; WCAG 2.4.2 also expects the
+  // document title to follow the route.
+  document.title = title ? `${title} · ${state.hubName || 'AgentNexus'}` : (state.hubName || 'AgentNexus');
   document.getElementById('page-title').textContent = title;
   document.getElementById('page-sub').textContent = sub;
   document.getElementById('page-actions').innerHTML = actions;

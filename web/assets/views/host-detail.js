@@ -263,11 +263,17 @@ export async function pageHostDetail(id) {
   for (const fn of state.wsHandlers) {
     if (fn.hostDetailID === h.id) state.wsHandlers.delete(fn);
   }
+  // Run events carry only a run id (the envelope has no run object), so the
+  // active-runs card refreshes on a debounced signal instead of a condition
+  // that can never be true.
+  let refreshTimer = null;
+  const scheduleRefresh = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => pageHostDetail(h.id).catch(() => {}), 800);
+  };
   const handler = (msg) => {
-    if (msg.type === 'host.updated' && (!msg.host || msg.host.id === h.id)) pageHostDetail(h.id).catch(() => {});
-    if ((msg.type === 'run.state' || msg.type === 'run.exit') && msg.run?.host_id === h.id) {
-      pageHostDetail(h.id).catch(() => {});
-    }
+    if (msg.type === 'host.updated' && (!msg.host || msg.host.id === h.id)) scheduleRefresh();
+    else if (msg.type === 'run.state' || msg.type === 'run.exit' || msg.type === 'run.error') scheduleRefresh();
   };
   handler.hostDetailID = h.id;
   state.wsHandlers.add(handler);

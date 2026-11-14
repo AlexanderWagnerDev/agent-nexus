@@ -33,6 +33,7 @@ export function authFrame(inner, subtitle) {
 export function renderAuth(mode, error = '') {
   state.me = null;
   disconnectWS();
+  document.title = state.hubName || 'AgentNexus';
   if (mode === 'setup') {
     authFrame(`
       <h2 class="mt-0">${t('Create the owner account')}</h2>
@@ -131,6 +132,13 @@ export async function logout() {
   state.me = null;
   state.openTabs = [];
   storeSet('nexus-tabs', []);
+  // Composer drafts are per run and survive reloads by design, but they must
+  // not survive a sign-out on a shared browser.
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-')) localStorage.removeItem(key);
+    }
+  } catch { /* storage unavailable */ }
   if (state.notifTimer) {
     clearInterval(state.notifTimer);
     state.notifTimer = null;

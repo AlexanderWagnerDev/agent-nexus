@@ -30,7 +30,7 @@ export async function pageRun(id) {
         ${run.error_code ? `<span class="badge failed" title="${esc(run.error_message || '')}">${esc(run.error_code)}</span>` : ''}
         ${agentGlyph(run.agent)}
         <span>${esc(agentMeta(run.agent).label)}</span><span class="chat-sep">·</span><span>${esc(projectName(run.cwd))}</span><span class="chat-sep">·</span><span>${esc(run.host_name || run.host_id)}</span>
-        <span class="chat-connection right" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>Connecting…</span>
+        <span class="chat-connection right" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>${t('Connecting…')}</span>
       </div>
       <div class="terminal-shell">
         <div class="terminal-bar"><span class="dot" id="term-dot"></span><span id="term-status">${t('disconnected')}</span><span class="right mono-small">${t('lease')} ${esc(shortId(run.lease_device_id || 'none'))} · ${esc(run.id)}</span></div>
