@@ -15,14 +15,20 @@ This is the day-2 guide for an AgentNexus hub. Installation is covered in
 
 Per-host grants are the unit of least privilege: `view`, `read_transcript`,
 `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage`. A host owner
-implicitly has all of them. The host policy is enforced independently on the
+implicitly has all of them. A grant never raises a viewer's role: write
+capabilities in a viewer grant are dropped on save, and any grant implies
+`view` so the host stays visible in the lists. `terminal_input` is required to
+hold the controller lease and send prompts/keystrokes; `approve` is required to
+answer approval requests. The host policy is enforced independently on the
 machine and cannot be widened from the hub.
 
 Sensitive actions require a fresh step-up confirmation valid for five minutes:
 
 - creating host pairing codes and revoking hosts;
-- revoking devices and creating device pairing links;
+- renaming/disabling a host and requesting a host update installation;
+- revoking devices, registering device keys and creating device pairing links;
 - changing users/roles and host grants;
+- creating or revoking API tokens;
 - registering passkeys or enabling TOTP.
 
 A registered passkey is preferred; password + TOTP is the fallback. Step-up is

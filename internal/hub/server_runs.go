@@ -125,12 +125,17 @@ func (s *Server) appendRunEvent(runID string, ev protocol.RunEvent) {
 	rs := s.runState(runID)
 	rs.mu.Lock()
 	previousState := rs.state
+	if ev.Type == "run.state" && ev.State != "" {
+		if terminalRunState(previousState) && !terminalRunState(ev.State) {
+			// A late event must not reopen a finished, failed or stopped run.
+			rs.mu.Unlock()
+			return
+		}
+		rs.state = ev.State
+	}
 	rs.eventSeq++
 	ev.Seq = rs.eventSeq
 	ev.RunID = runID
-	if ev.Type == "run.state" && ev.State != "" {
-		rs.state = ev.State
-	}
 	if ev.Type == "approval.requested" && ev.ApprovalID != "" {
 		s.metrics.approvalRequested(runID, ev.ApprovalID)
 		s.store.SyncTaskRunState(runID, protocol.StateWaiting)

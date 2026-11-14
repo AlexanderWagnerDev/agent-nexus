@@ -216,3 +216,33 @@ func TestPermissionCacheClearsOnGrantChange(t *testing.T) {
 		t.Fatal("revoked grant survived the cache clear")
 	}
 }
+
+func TestLateEventDoesNotReopenAFinishedRun(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "late-event-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("late-event-run", "", hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.appendRunEvent("late-event-run", protocol.RunEvent{Type: "run.state", State: protocol.StateIdle})
+	hub.server.appendRunEvent("late-event-run", protocol.RunEvent{Type: "run.state", State: protocol.StateExited})
+	hub.server.appendRunEvent("late-event-run", protocol.RunEvent{Type: "run.state", State: protocol.StateRunning})
+	run, _, err := hub.store.RunByID("late-event-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateExited || run.EndedAt == nil {
+		t.Fatalf("late event reopened a finished run: %+v", run)
+	}
+	rs := hub.server.runState("late-event-run")
+	rs.mu.Lock()
+	state := rs.state
+	rs.mu.Unlock()
+	if state != protocol.StateExited {
+		t.Fatalf("in-memory run state = %q", state)
+	}
+}

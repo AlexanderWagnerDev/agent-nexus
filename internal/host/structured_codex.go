@@ -233,6 +233,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()
 		}
+		cr.markFinished()
 		d.runMu.Lock()
 		delete(d.codexRuns, spec.RunID)
 		d.runMu.Unlock()
@@ -596,6 +597,30 @@ func (r *CodexRun) Stop() {
 		ev := protocol.RunEvent{Type: "approval.resolved", ApprovalID: fmt.Sprintf("%d", id), Decision: "reject", Text: "run stopped"}
 		_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
 	}
+	cleanupPromptAttachments(r.id)
+}
+
+// markFinished records an app-server that exited on its own. Without it the
+// read loop could still deliver buffered state events after run.exit, and the
+// hub would see a finished run turn active again.
+func (r *CodexRun) markFinished() {
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return
+	}
+	r.closed = true
+	timers := make([]*time.Timer, 0, len(r.approvalTimers))
+	for id, timer := range r.approvalTimers {
+		timers = append(timers, timer)
+		delete(r.approvalTimers, id)
+	}
+	r.approvals = map[int64]string{}
+	r.mu.Unlock()
+	for _, timer := range timers {
+		timer.Stop()
+	}
+	r.cancel()
 	cleanupPromptAttachments(r.id)
 }
 

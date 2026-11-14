@@ -839,8 +839,14 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		// The local search index already excludes sessions outside the
 		// allowed roots; direct transcript reads must apply the same rule so a
 		// restricted host does not expose unrelated personal notes.
-		if !d.sessionWithinRoots(p.Agent, p.NativeID) {
-			return nil, errors.New("session is outside the allowed roots")
+		if len(d.policy.AllowedRoots) > 0 {
+			cwd, known := d.sessionCwd(p.Agent, p.NativeID)
+			if !known {
+				return nil, errors.New("session metadata is not available yet; retry after discovery")
+			}
+			if !d.policy.WithinRoots(cwd) {
+				return nil, errors.New("session is outside the allowed roots")
+			}
 		}
 		return a.Transcript(context.Background(), p.NativeID, p.Offset, p.Limit)
 	case "search":
