@@ -49,7 +49,7 @@ export async function pageWorkspace() {
           <span class="workspace-pick-main">${agentGlyph(run.agent)}<span><strong>${esc(run.session_title || t('Untitled session'))}</strong><small>${esc(projectName(run.cwd))} · ${esc(run.host_name || run.host_id)} · ${esc(run.agent)}</small></span></span>
           ${stateBadge(run.state)}
         </button>`).join('')}</div>
-      <div class="modal-actions"><button class="btn ghost" type="button" data-close>Cancel</button></div>`);
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close>${t('Cancel')}</button></div>`);
     modalRoot.querySelectorAll('[data-pick-run]').forEach((button) => button.addEventListener('click', () => {
       const id = button.dataset.pickRun;
       if (!panes.includes(id)) panes.push(id);

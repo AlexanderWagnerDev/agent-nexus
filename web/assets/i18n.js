@@ -296,9 +296,13 @@ const de = {
 Object.assign(de, {
   'Untitled session': 'Unbenannte Session',
   'just now': 'gerade eben',
-  'm ago': ' Min. her',
-  'h ago': ' Std. her',
-  'd ago': ' T. her',
+  'm ago': 'Min. her',
+  'h ago': 'Std. her',
+  'd ago': 'T. her',
+  'waiting_for_input': 'wartet auf Eingabe',
+  'connected': 'verbunden',
+  'reconnecting': 'verbinde neu',
+  'beta': 'Beta',
   '{n} machines online': '{n} Rechner online',
   '{n} worktrees with open runs': '{n} Worktrees mit laufenden Runs',
   '{n} agent types': '{n} Agententypen',
@@ -1144,6 +1148,34 @@ Object.assign(de, {
   'Running diagnostics...': 'Diagnose läuft…',
   'Run the host-side doctor. Only sanitized checks are returned; paths, ids and keys stay on the host.': 'Startet den hostseitigen Doctor. Es werden nur bereinigte Prüfungen zurückgegeben; Pfade, IDs und Schlüssel bleiben auf dem Host.',
   'Host-reported checks only. No paths, ids or keys are included.': 'Nur hostseitig gemeldete Prüfungen. Keine Pfade, IDs oder Schlüssel enthalten.',
+});
+
+// Strings added with the permission, lease and terminal status fixes. Keeping
+// them in a final block makes later additions easy to audit for duplicates.
+Object.assign(de, {
+  'You': 'Du',
+  'Waiting for your approval': 'Wartet auf deine Freigabe',
+  'Run error': 'Run-Fehler',
+  'Idle — ready for your next message': 'Bereit für deine nächste Nachricht',
+  'run failed': 'Run fehlgeschlagen',
+  'Run exited': 'Run beendet',
+  'Pin session': 'Session anheften',
+  'Unpin session': 'Session lösen',
+  'Refresh changes': 'Änderungen aktualisieren',
+  'Try again': 'Erneut versuchen',
+  'Stopping run': 'Run wird gestoppt',
+  'agent exited': 'Agent beendet',
+  'state:': 'Status:',
+  'Lease transferred to {device}': 'Steuerung übergeben an {device}',
+  'another device': 'ein anderes Gerät',
+  'Theme: {name}': 'Design: {name}',
+  'Are you sure?': 'Bist du sicher?',
+  'Confirm': 'Bestätigen',
+  'Could not copy': 'Kopieren nicht möglich',
+  'Untitled': 'Unbenannt',
+  'Close tab': 'Tab schließen',
+  'Search or jump to': 'Suchen oder springen',
+  'Filter projects, paths, hosts or branches…': 'Projekte, Pfade, Hosts oder Branches filtern…',
 });
 
 const supported = ['en', 'de'];

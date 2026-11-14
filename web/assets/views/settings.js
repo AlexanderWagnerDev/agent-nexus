@@ -5,7 +5,7 @@ import { state } from '../state.js';
 import { badge, closeModal, copyText, modal, toast } from '../ui.js';
 import { getLang, setLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
-import { esc } from '../ui-format.js';
+import { esc, fmtStamp } from '../ui-format.js';
 
 export async function pageSettings() {
   const pageGen = state.pageGen;

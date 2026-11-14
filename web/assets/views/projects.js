@@ -61,7 +61,7 @@ export async function pageProjects() {
   };
   view.innerHTML = `
     <div class="toolbar">
-      <input class="input grow" id="projects-filter" placeholder="Filter projects, paths, hosts or branches…">
+      <input class="input grow" id="projects-filter" placeholder="${t('Filter projects, paths, hosts or branches…')}">
       <select class="select" id="projects-mode" aria-label="${t('Group projects by')}"><option value="worktrees">${t('Worktrees')}</option><option value="repos" selected>${t('Repositories')}</option></select>
       <span class="toolbar-count" id="projects-count">${countLabel(repoGroups(projects).length, 'repository', 'repositories')}</span>
     </div>

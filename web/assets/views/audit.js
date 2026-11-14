@@ -3,6 +3,7 @@ import { renderShell, setPage } from '../shell.js';
 import { badge } from '../ui.js';
 import { t } from '../i18n.js';
 import { esc, fmtTime } from '../ui-format.js';
+import { state } from '../state.js';
 
 export async function pageAudit() {
   const pageGen = state.pageGen;

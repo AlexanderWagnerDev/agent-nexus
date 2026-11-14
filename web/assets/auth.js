@@ -131,6 +131,10 @@ export async function logout() {
   state.me = null;
   state.openTabs = [];
   storeSet('nexus-tabs', []);
+  if (state.notifTimer) {
+    clearInterval(state.notifTimer);
+    state.notifTimer = null;
+  }
   disconnectWS();
   renderAuth('login');
 }

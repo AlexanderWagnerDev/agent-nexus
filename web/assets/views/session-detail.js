@@ -187,18 +187,48 @@ export async function pageSession(id) {
   document.getElementById('tag-input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') { event.preventDefault(); document.getElementById('add-tag').click(); }
   });
-  let offset = 0;
-  const append = async () => {
-    const box = document.getElementById('transcript');
-    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${offset}&limit=100`);
-    if (pageGen !== state.pageGen) return;
-    if (offset === 0) box.innerHTML = '';
-    box.insertAdjacentHTML('beforeend', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : (!offset ? `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>` : ''));
-    offset = tr.next || 0;
-    document.getElementById('load-more-wrap').innerHTML = tr.next ? `<button class="btn" id="load-more">${t('Load earlier messages')}</button>` : '';
-    document.getElementById('load-more')?.addEventListener('click', () => append().catch((e) => toast(e.message, true)));
+  // Transcripts are paged oldest-first by the host, so open at the newest
+  // messages and prepend older pages. Showing page 0 first made "Load earlier
+  // messages" append newer content below the visible conversation.
+  const TRANSCRIPT_PAGE = 100;
+  let transcriptStart = 0;
+  const renderLoadMore = (hasEarlier) => {
+    document.getElementById('load-more-wrap').innerHTML = hasEarlier
+      ? `<button class="btn" id="load-more">${t('Load earlier messages')}</button>` : '';
+    document.getElementById('load-more')?.addEventListener('click', () => loadEarlier().catch((e) => toast(e.message, true)));
   };
-  await append();
+  const loadEarlier = async () => {
+    const box = document.getElementById('transcript');
+    if (transcriptStart <= 0) return;
+    const nextStart = Math.max(0, transcriptStart - TRANSCRIPT_PAGE);
+    const before = box.scrollHeight;
+    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${nextStart}&limit=${transcriptStart - nextStart}`);
+    if (pageGen !== state.pageGen) return;
+    box.insertAdjacentHTML('afterbegin', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : '');
+    transcriptStart = nextStart;
+    box.scrollTop += box.scrollHeight - before;
+    renderLoadMore(transcriptStart > 0);
+  };
+  const loadLatest = async () => {
+    const box = document.getElementById('transcript');
+    const probe = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=0&limit=1`);
+    if (pageGen !== state.pageGen) return;
+    const total = Number(probe.total) || 0;
+    transcriptStart = Math.max(0, total - TRANSCRIPT_PAGE);
+    if (transcriptStart === 0 && total === 0) {
+      box.innerHTML = `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
+      renderLoadMore(false);
+      return;
+    }
+    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${transcriptStart}&limit=${TRANSCRIPT_PAGE}`);
+    if (pageGen !== state.pageGen) return;
+    box.innerHTML = tr.messages.length
+      ? renderTranscriptMessages(tr.messages, s.agent)
+      : `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
+    renderLoadMore(transcriptStart > 0);
+    box.scrollTop = box.scrollHeight;
+  };
+  await loadLatest();
 }
 
 export async function pageSessionChanges(id) {

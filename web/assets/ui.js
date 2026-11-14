@@ -27,6 +27,13 @@ export function trapTabKey(event, root) {
   if (!items.length) return;
   const first = items[0];
   const last = items[items.length - 1];
+  if (!root.contains(document.activeElement)) {
+    // A re-render inside the dialog can drop focus to <body>; keep the trap
+    // closed instead of letting Tab walk into the page behind it.
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+    return;
+  }
   if (event.shiftKey && document.activeElement === first) {
     event.preventDefault();
     last.focus();
@@ -68,7 +75,7 @@ export function toast(message, isError = false) {
 }
 
 export function copyText(text) {
-  navigator.clipboard?.writeText(text).then(() => toast('Copied to clipboard')).catch(() => toast('Could not copy', true));
+  navigator.clipboard?.writeText(text).then(() => toast(t('Copied to clipboard'))).catch(() => toast(t('Could not copy'), true));
 }
 
 export function b64encode(bytes) {
@@ -89,6 +96,13 @@ export function modal(html, onClose) {
   modalReturnFocus = document.activeElement;
   modalOnClose = onClose || null;
   modalRoot.innerHTML = `<div class="modal-backdrop" data-modal-backdrop><div class="modal" role="dialog" aria-modal="true" tabindex="-1">${html}</div></div>`;
+  const dialog = modalRoot.querySelector('.modal');
+  const heading = dialog.querySelector('h1, h2, h3');
+  if (heading) {
+    if (!heading.id) heading.id = 'modal-heading';
+    dialog.setAttribute('aria-labelledby', heading.id);
+  }
+  app?.setAttribute('inert', '');
   const backdrop = modalRoot.firstElementChild;
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) closeModal();
@@ -96,13 +110,14 @@ export function modal(html, onClose) {
   backdrop.addEventListener('keydown', (event) => trapTabKey(event, backdrop));
   modalRoot.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeModal));
   const first = focusableWithin(backdrop)[0];
-  (first || modalRoot.querySelector('.modal'))?.focus();
+  (first || dialog)?.focus();
 }
 
 export function closeModal() {
   const cb = modalOnClose;
   modalOnClose = null;
   modalRoot.innerHTML = '';
+  app?.removeAttribute('inert');
   const target = modalReturnFocus;
   modalReturnFocus = null;
   if (target && target.isConnected) target.focus();
@@ -111,11 +126,11 @@ export function closeModal() {
 
 export function confirmDanger(message, onConfirm) {
   modal(`
-    <h2>Are you sure?</h2>
+    <h2>${t('Are you sure?')}</h2>
     <p class="hint">${esc(message)}</p>
     <div class="modal-actions">
       <button class="btn ghost" type="button" data-close>${t('Cancel')}</button>
-      <button class="btn danger" type="button" id="confirm-danger">Confirm</button>
+      <button class="btn danger" type="button" id="confirm-danger">${t('Confirm')}</button>
     </div>`);
   document.getElementById('confirm-danger').addEventListener('click', async () => {
     closeModal();

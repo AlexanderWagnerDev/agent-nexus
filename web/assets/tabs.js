@@ -2,6 +2,7 @@ import { state, storeGet, storeSet } from './state.js';
 import { agentGlyph } from './ui.js';
 import { svgIcon } from './icons.js';
 import { esc } from './ui-format.js';
+import { t } from './i18n.js';
 
 export function loadTabs() {
   state.openTabs = storeGet('nexus-tabs', []);
@@ -60,9 +61,9 @@ export function renderTabs() {
     const key = tab.key || tab.id;
     const href = tab.href || (tab.kind === 'session' ? `#/sessions/${esc(tab.id)}` : `#/runs/${esc(tab.id)}`);
     const active = location.hash === href;
-    return `<a class="tab ${active ? 'active' : ''}" href="${href}" title="${esc(tab.title || '')}">
-      ${agentGlyph(tab.agent, 'tiny')}<span class="tab-title">${esc(tab.title || 'Untitled')}</span>
-      <button class="tab-close" type="button" data-close-tab="${esc(key)}" aria-label="Close tab">${svgIcon('x', 13)}</button>
+    return `<a class="tab ${active ? 'active' : ''}" href="${esc(href)}" title="${esc(tab.title || '')}">
+      ${agentGlyph(tab.agent, 'tiny')}<span class="tab-title">${esc(tab.title || t('Untitled'))}</span>
+      <button class="tab-close" type="button" data-close-tab="${esc(key)}" aria-label="${t('Close tab')}">${svgIcon('x', 13)}</button>
     </a>`;
   }).join('')}</div>`;
   bar.querySelectorAll('[data-close-tab]').forEach((button) => button.addEventListener('click', (event) => {

@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { state, storeGet, storeSet } from './state.js';
-import { modal, modalRoot, trapTabKey } from './ui.js';
+import { closeModal, modal, modalRoot, trapTabKey } from './ui.js';
 import { newSessionPicker } from './components/new-session.js';
 import { t } from './i18n.js';
 import { svgIcon } from './icons.js';
@@ -55,6 +55,11 @@ export function renderPaletteResults(items) {
 }
 
 export function closePalette() {
+  if (modalRoot?.firstElementChild?.classList.contains('modal-backdrop')) {
+    // The palette never replaces a real dialog (openPalette refuses), but a
+    // stale call must not leave the dialog's onClose promise unsettled.
+    closeModal();
+  }
   modalRoot.innerHTML = '';
   state.palette = null;
   if (paletteReturnFocus?.isConnected) paletteReturnFocus.focus();
@@ -65,6 +70,9 @@ let paletteReturnFocus = null;
 
 export async function openPalette() {
   if (state.palette) return;
+  // A modal (for example a step-up password prompt) owns its own focus and
+  // promise; replacing it would hang every later privileged action.
+  if (modalRoot?.firstElementChild) return;
   paletteReturnFocus = document.activeElement;
   state.palette = { index: 0, items: [], timer: null };
   const actions = paletteActions();
@@ -76,7 +84,7 @@ export async function openPalette() {
   }));
   modalRoot.innerHTML = `
     <div class="palette-backdrop" data-palette-backdrop>
-      <div class="palette" role="dialog" aria-modal="true" aria-label="Search or jump to">
+      <div class="palette" role="dialog" aria-modal="true" aria-label="${t('Search or jump to')}">
         <div class="palette-input">${svgIcon('search')}<input id="palette-input" autocomplete="off" spellcheck="false" placeholder="${t('Search sessions, projects, hosts…')}" aria-label="${t('Search')}"><kbd>Esc</kbd></div>
         <div class="palette-results" id="palette-results"></div>
         <div class="palette-foot"><span>${t('↑↓ navigate')}</span><span>${t('↵ open')}</span><span>${t('Ctrl K toggle')}</span></div>

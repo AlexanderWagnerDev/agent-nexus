@@ -19,6 +19,10 @@ function indexLabel(index) {
   return t('Index ready');
 }
 
+// One debounced refresh per page instance. Re-registering a new closure on
+// every host.updated event would multiply handlers and renders exponentially.
+let hostRefreshTimer = null;
+
 export async function pageHosts() {
   const pageGen = state.pageGen;
   renderShell('hosts');
@@ -28,10 +32,22 @@ export async function pageHosts() {
   if (pageGen !== state.pageGen) return;
   hosts.sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name));
   document.getElementById('pair-host').addEventListener('click', pairHostDialog);
-  state.wsHandlers.add((msg) => {
-    if (msg.type === 'host.updated') pageHosts().catch(() => {});
-    if (msg.type === 'sessions.changed') { /* no-op on hosts page */ }
-  });
+  for (const handler of state.wsHandlers) {
+    if (handler.hostsPage) state.wsHandlers.delete(handler);
+  }
+  const onHostUpdated = (msg) => {
+    if (msg.type !== 'host.updated') return;
+    clearTimeout(hostRefreshTimer);
+    hostRefreshTimer = setTimeout(() => {
+      if (pageGen === state.pageGen) pageHosts().catch(() => {});
+    }, 200);
+  };
+  onHostUpdated.hostsPage = true;
+  state.wsHandlers.add(onHostUpdated);
+  state.pageCleanup = () => {
+    clearTimeout(hostRefreshTimer);
+    hostRefreshTimer = null;
+  };
   if (!hosts.length) {
     view.innerHTML = `<div class="card empty"><strong>${t('No hosts paired')}</strong>${t('Create a one-time code, then run')} <code>nexusd pair --hub ${esc(location.origin)} --code &lt;code&gt;</code> ${t('on the machine.')}</div>`;
     return;

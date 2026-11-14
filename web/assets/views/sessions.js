@@ -218,6 +218,9 @@ export async function pageSessions() {
     }
     const height = list.clientHeight || 0;
     if (!height) {
+      // Never keep an animation-frame loop alive for a detached or replaced
+      // view; the next resize/scroll on a live list re-renders it.
+      if (!list.isConnected || pageGen !== state.pageGen) return;
       requestAnimationFrame(renderWindow);
       return;
     }
@@ -251,11 +254,12 @@ export async function pageSessions() {
     });
   };
   list.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', () => {
+  const onResize = () => {
     lastStart = -1;
     lastEnd = -1;
     renderWindow();
-  });
+  };
+  window.addEventListener('resize', onResize);
 
   list.addEventListener('click', (event) => {
     const button = event.target.closest('[data-tag-filter]');
@@ -377,7 +381,16 @@ export async function pageSessions() {
   });
   for (const id of ['filter-since', 'filter-until']) document.getElementById(id).addEventListener('change', () => load(true).catch((err) => toast(err.message, true)));
   state.wsHandlers.add((msg) => { if (msg.type === 'sessions.changed') schedule(); });
-  state.pageCleanup = () => observer.disconnect();
+  state.pageCleanup = () => {
+    observer.disconnect();
+    window.removeEventListener('resize', onResize);
+    list.removeEventListener('scroll', onScroll);
+    if (scrollFrame) {
+      cancelAnimationFrame(scrollFrame);
+      scrollFrame = null;
+    }
+    clearTimeout(filterTimer);
+  };
   clearProject();
   await load(true);
 }

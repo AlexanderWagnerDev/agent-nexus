@@ -18,8 +18,9 @@
     document.documentElement.dataset.theme = r;
     document.documentElement.dataset.themeMode = m;
     document.documentElement.style.colorScheme = r;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', r === 'dark' ? '#0f1012' : '#f7f7f8');
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', r === 'dark' ? '#0f1012' : '#f7f7f8');
+    });
     if (persist !== false) {
       try { localStorage.setItem(KEY, m); } catch { /* private mode */ }
     }

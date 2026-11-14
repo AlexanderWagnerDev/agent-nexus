@@ -1193,10 +1193,11 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 }
 @media (max-width: 900px) {
   body { overflow: auto; }
-  .layout, .layout.sidebar-collapsed { display: block; height: auto; min-height: 100vh; padding-bottom: 58px; }
+  .layout, .layout.sidebar-collapsed { display: block; height: auto; min-height: 100vh; padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
   .sidebar {
-    position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: 58px; width: 100%;
-    z-index: 100; flex-direction: row; align-items: center; padding: 0 5px;
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    height: calc(58px + env(safe-area-inset-bottom)); width: 100%;
+    z-index: 100; flex-direction: row; align-items: center; padding: 0 5px env(safe-area-inset-bottom);
     border-right: 0; border-top: 1px solid var(--line); background: var(--sidebar-bg);
   }
   .sidebar-top, .sidebar-extra, .sidebar-foot { display: none; }
@@ -1209,7 +1210,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .nav .icon svg { width: 19px; height: 19px; }
   .sidebar-collapsed .nav a, .sidebar-collapsed .nav-more { padding: 5px 1px; }
   .nav-label { display: block !important; }
-  .main { height: auto; min-height: calc(100vh - 58px); }
+  .main { height: auto; min-height: calc(100vh - 58px - env(safe-area-inset-bottom)); }
   .topbar { min-height: 54px; padding: 6px 14px; gap: 10px; position: sticky; top: 0; z-index: 60; background: var(--bg-elev); border-bottom-color: var(--line-strong); }
   .topbar-title h1 { font-size: 18px; max-width: 44vw; }
   .topbar-title .sub { max-width: 44vw; }
@@ -1219,7 +1220,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .view { padding: 16px 14px 34px; overflow: visible; }
   .view.chat-view { padding: 0; overflow: hidden; }
   .tabs-bar { display: none !important; }
-  .chat-page, .chat-page.context-open { height: calc(100dvh - 54px - 58px); display: flex; flex-direction: column; }
+  .chat-page, .chat-page.context-open { height: calc(100dvh - 54px - 58px - env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
   .chat-statusbar { padding: 0 12px; gap: 6px; min-height: 38px; overflow-x: auto; white-space: nowrap; }
   .chat-scroll { overscroll-behavior: contain; }
   .chat-inner { padding: 16px 14px 8px; }
@@ -1234,8 +1235,8 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .composer-model { max-width: 190px; }
   .composer-model-provider { display: none; }
   .composer-select { max-width: 160px; }
-  .chat-page.context-open .chat-context { top: 54px; bottom: 58px; }
-  .chat-page.context-open .chat-scrim { inset: 54px 0 58px; }
+  .chat-page.context-open .chat-context { top: 54px; bottom: calc(58px + env(safe-area-inset-bottom)); }
+  .chat-page.context-open .chat-scrim { inset: 54px 0 calc(58px + env(safe-area-inset-bottom)); }
   .session-banner { flex-wrap: wrap; }
   .session-banner-meta { width: 100%; }
   .project-grid { grid-template-columns: 1fr; }
@@ -1247,7 +1248,8 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .control-summary > div:nth-child(-n+2) { border-bottom: 1px solid var(--line-soft); }
   .host-row { grid-template-columns: 1fr; gap: 8px; }
   .host-actions { justify-content: flex-start; }
-  .terminal-page { height: calc(100dvh - 54px - 58px); }
+  .terminal-page { height: calc(100dvh - 54px - 58px - env(safe-area-inset-bottom)); }
+  .keybar { padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
   .workspace-page { height: auto; min-height: 0; padding-bottom: 70px; scroll-margin-top: 54px; }
   .workspace-head { align-items: flex-start; flex-wrap: wrap; }
   .split-grid.two.horizontal, .split-grid.two.vertical { display: flex; flex-direction: column; gap: 10px; }
@@ -1289,7 +1291,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .tool-line strong { font-size: 12px; }
   .tool-line code { font-size: 11px; }
   .tool-state { display: none; }
-  .chat-connection { display: none; }
+  .chat-connection { margin-left: auto; max-width: 52vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
   .turn-assistant .turn-body, .md { font-size: 15px; }
   .md h1 { font-size: 20px; }
   .md-code pre { font-size: 12.5px; max-height: 320px; }

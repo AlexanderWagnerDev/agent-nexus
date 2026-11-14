@@ -65,7 +65,7 @@ export async function pageStructuredRun(id, run) {
         <div class="chat-scroll" id="chat">
           <div class="chat-inner">
             <div id="history-top"></div>
-            <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
+            <div id="messages" class="messages" role="log"></div>
             <div id="working-slot"></div>
           </div>
         </div>
@@ -86,7 +86,7 @@ export async function pageStructuredRun(id, run) {
             <div class="prompt-queue-items" id="queue-items"></div>
           </div>
           <form class="composer" id="prompt-form">
-            <textarea id="prompt-text" rows="1" placeholder="${t('Message {agent}…', { agent: agent.label })}" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
+            <textarea id="prompt-text" rows="1" placeholder="${esc(t('Message {agent}…', { agent: agent.label }))}" enterkeyhint="send" autocomplete="off" spellcheck="false"></textarea>
             <div class="composer-config" id="composer-config"></div>
             <div class="attachment-list" id="attachment-list"></div>
             <div class="composer-bar">
@@ -423,6 +423,7 @@ export async function pageStructuredRun(id, run) {
   const completedMessages = new Set();
   const initialCursor = run.last_event_seq || 0;
   let lastSeq = initialCursor;
+  let lastPrompt = null;
   let subscribedGen = 0;
   let runEpoch = '';
   let historyReady = false;
@@ -483,7 +484,7 @@ export async function pageStructuredRun(id, run) {
   const appendUser = (text) => {
     const article = document.createElement('article');
     article.className = 'turn turn-user';
-    article.innerHTML = `<div class="turn-meta"><span>You</span><time>${esc(fmtStamp(new Date()))}</time></div><div class="turn-body"></div>`;
+    article.innerHTML = `<div class="turn-meta"><span>${t('You')}</span><time>${esc(fmtStamp(new Date()))}</time></div><div class="turn-body"></div>`;
     article.querySelector('.turn-body').textContent = text;
     messagesEl.appendChild(article);
     scrollBottom();
@@ -578,6 +579,7 @@ export async function pageStructuredRun(id, run) {
     const resources = (event.resources || []).join('\n');
     const card = document.createElement('div');
     card.className = 'approval-card';
+    card.dataset.approvalId = event.approval_id || '';
     card.innerHTML = `
       <div class="approval-head">${svgIcon('alert', 16)}<strong>${t('Approval required')}</strong><span class="badge waiting_for_input">${esc(event.action || 'permission')}</span></div>
       ${resources || event.text ? `<pre>${esc(resources || event.text)}</pre>` : ''}
@@ -590,7 +592,7 @@ export async function pageStructuredRun(id, run) {
     approval.appendChild(card);
     autoScroll = true;
     scrollBottom(true);
-    noteText('Waiting for your approval');
+    noteText(t('Waiting for your approval'));
     setState('waiting_for_input');
   };
 
@@ -601,7 +603,7 @@ export async function pageStructuredRun(id, run) {
   const appendError = (text) => {
     const node = document.createElement('div');
     node.className = 'chat-error';
-    node.innerHTML = `${svgIcon('alert', 15)}<div><strong>Run error</strong><pre>${esc(text)}</pre></div>`;
+    node.innerHTML = `${svgIcon('alert', 15)}<div><strong>${t('Run error')}</strong><pre>${esc(text)}</pre></div>`;
     messagesEl.appendChild(node);
     scrollBottom(true);
   };
@@ -643,18 +645,22 @@ export async function pageStructuredRun(id, run) {
       case 'approval.requested':
         showApproval(event);
         break;
-      case 'approval.resolved':
-        approval.innerHTML = '';
+      case 'approval.resolved': {
+        const resolved = Array.from(approval.querySelectorAll('[data-approval-id]'))
+          .find((node) => node.dataset.approvalId === (event.approval_id || ''));
+        if (resolved) resolved.remove();
+        else approval.innerHTML = '';
         noteText(`Approval ${event.decision || 'resolved'}`, true);
         break;
+      }
       case 'run.state':
         setState(event.state);
-        noteText(event.state === 'idle' ? 'Idle — ready for your next message' : `Agent ${event.state.replaceAll('_', ' ')}`, event.state === 'running');
+        noteText(event.state === 'idle' ? t('Idle — ready for your next message') : `Agent ${event.state.replaceAll('_', ' ')}`, event.state === 'running');
         break;
       case 'run.error':
         setState('failed');
-        noteText(event.error || 'run failed');
-        appendError(event.error || 'run failed');
+        noteText(event.error || t('run failed'));
+        appendError(event.error || t('run failed'));
         break;
     }
   };
@@ -694,13 +700,29 @@ export async function pageStructuredRun(id, run) {
         sendSubscribe();
       }
       setState(msg.state);
-      noteText(msg.state === 'idle' ? 'Idle — ready for your next message' : `Agent ${msg.state.replaceAll('_', ' ')}`, msg.state === 'running');
+      noteText(msg.state === 'idle' ? t('Idle — ready for your next message') : `Agent ${msg.state.replaceAll('_', ' ')}`, msg.state === 'running');
     }
     if (msg.type === 'run.exit') {
       setState(msg.state || 'exited');
-      noteText(msg.message || 'Run exited');
+      noteText(msg.message || t('Run exited'));
     }
-    if (msg.type === 'error') toast(msg.error || 'error', true);
+    if (msg.type === 'error') {
+      const errorText = String(msg.error || 'error');
+      toast(errorText, true);
+      if (/lease|permission|read-only/i.test(errorText)) {
+        noteText(t('Read-only:') + ' ' + errorText);
+        textarea.disabled = true;
+        sendButton.disabled = true;
+        // The prompt was echoed and the draft cleared optimistically; give
+        // the text back so the user does not lose it.
+        if (lastPrompt && !textarea.value) {
+          textarea.value = lastPrompt.text;
+          storeSet(draftKey(id), lastPrompt.text);
+          autosize();
+          lastPrompt = null;
+        }
+      }
+    }
   };
   state.wsHandlers.add(handler);
 
@@ -876,6 +898,7 @@ export async function pageStructuredRun(id, run) {
       toast(t('WebSocket is reconnecting; try again in a moment'), true);
       return;
     }
+    lastPrompt = { text };
     appendUser(text);
     textarea.value = '';
     pendingAttachments = [];
@@ -1113,7 +1136,7 @@ export async function pageStructuredRun(id, run) {
       try {
         await api(`/sessions/${session.id}/favorite`, { method: on ? 'PUT' : 'DELETE' });
         if (on) state.favorites.add(session.id); else state.favorites.delete(session.id);
-        document.getElementById('context-pin').innerHTML = `${svgIcon('star')} ${on ? 'Unpin session' : 'Pin session'}`;
+        document.getElementById('context-pin').innerHTML = `${svgIcon('star')} ${t(on ? 'Unpin session' : 'Pin session')}`;
         loadSidebar().catch(() => {});
       } catch (err) { toast(err.message, true); }
     });
@@ -1133,7 +1156,7 @@ export async function pageStructuredRun(id, run) {
       const statTotals = stat ? stat.rows.reduce((sum, row) => ({ add: sum.add + row.additions, del: sum.del + row.deletions }), { add: 0, del: 0 }) : null;
       const truncated = g.status_truncated || g.stat_truncated || g.diff_truncated;
       box.innerHTML = `
-        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtStamp(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="Refresh changes">${svgIcon('refresh', 13)}</button></div>
+        <div class="git-context-head">${g.branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(g.branch)}</span>` : ''}<span class="muted small">${esc(fmtStamp(new Date().toISOString()))}</span><button class="btn ghost small" id="git-refresh" title="${t('Refresh changes')}">${svgIcon('refresh', 13)}</button></div>
         ${g.root ? `<div class="copy-line"><code>${esc(g.root)}</code></div>` : ''}
         ${g.file_count ? `<div class="muted small">${esc(countLabel(g.file_count, 'changed file', 'changed files'))}</div>` : ''}
         <pre class="git-status">${esc(g.status?.trim() || t('Clean working tree'))}</pre>
@@ -1144,7 +1167,7 @@ export async function pageStructuredRun(id, run) {
       // A background poll must not erase a readable diff because the host was
       // briefly busy or offline. Manual refreshes still show the error.
       if (silent) return;
-      box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><button class="btn small block mt-1" id="context-git-load">Try again</button>`;
+      box.innerHTML = `<div class="notice error small">${esc(err.message)}</div><button class="btn small block mt-1" id="context-git-load">${t('Try again')}</button>`;
     }
   };
   let lastGitSignature = '';
@@ -1177,7 +1200,8 @@ export async function pageStructuredRun(id, run) {
     if (state.ws?.readyState === WebSocket.OPEN) {
       if (subscribedGen !== state.wsGen) sendSubscribe();
       if (note.textContent.includes('Connecting')) noteText('Connected. Send a message.');
-    } else {
+    } else if (!note.textContent.includes('Reconnecting')) {
+      // Do not rebuild the live region four times per second while offline.
       noteText('Reconnecting…');
     }
   }, 800);
@@ -1188,6 +1212,7 @@ export async function pageStructuredRun(id, run) {
     gitRefreshHook = null;
     document.removeEventListener('keydown', shortcutHandler);
     state.wsHandlers.delete(handler);
+    try { recognition?.stop(); } catch { /* not running */ }
   };
   if (!state.embed && window.innerWidth > 900) textarea.focus();
 }

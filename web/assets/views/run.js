@@ -22,6 +22,7 @@ export async function pageRun(id) {
   rememberRecent({ id, title, agent: run.agent, hint: `${agentMeta(run.agent).label} · ${run.host_name || run.host_id} · terminal`, href: `#/runs/${id}` });
   setPage(title, `Terminal · ${projectName(run.cwd)} · ${run.host_name || run.host_id}`, `<button class="btn small danger" id="stop-run">${svgIcon('stop')} ${t('Stop')}</button><a class="btn small ghost" href="#/sessions">${t('Sessions')}</a>`);
   const view = document.getElementById('view');
+  view.className = 'view chat-view';
   view.innerHTML = `
     <div class="terminal-page">
       <div class="terminal-statusbar">
@@ -93,7 +94,7 @@ export async function pageRun(id) {
   }).catch((err) => { note.textContent = t('Read-only:') + ' ' + err.message; });
 
   document.getElementById('stop-run').addEventListener('click', async () => {
-    try { await api(`/runs/${id}/stop`, { method: 'POST' }); toast('Stopping run'); }
+    try { await api(`/runs/${id}/stop`, { method: 'POST' }); toast(t('Stopping run')); }
     catch (err) { toast(err.message, true); }
   });
 
@@ -115,20 +116,20 @@ export async function pageRun(id) {
           sendSubscribe();
         }
         if (msg.epoch) runEpoch = msg.epoch;
-        if (msg.state) { run.state = msg.state; note.textContent = `state: ${msg.state}`; }
+        if (msg.state) { run.state = msg.state; note.textContent = `${t('state:')} ${t(msg.state)}`; }
         break;
       case 'run.exit':
         run.state = msg.state || 'exited';
         setLive('exited');
-        note.textContent = msg.message || 'agent exited';
+        note.textContent = msg.message || t('agent exited');
         term.write(`\r\n\x1b[2m[run ${run.state}]\x1b[0m\r\n`);
         break;
       case 'run.error':
-        note.textContent = msg.error || 'run failed';
-        term.write(`\r\n\x1b[31m[${msg.error || 'run failed'}]\x1b[0m\r\n`);
+        note.textContent = msg.error || t('run failed');
+        term.write(`\r\n\x1b[31m[${msg.error || t('run failed')}]\x1b[0m\r\n`);
         break;
       case 'run.lease':
-        note.textContent = 'Lease transferred to ' + (msg.message || 'another device');
+        note.textContent = t('Lease transferred to {device}', { device: msg.message || t('another device') });
         break;
     }
   };

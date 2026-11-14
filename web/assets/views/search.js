@@ -3,6 +3,7 @@ import { renderShell, setPage } from '../shell.js';
 import { agentBadge, toast } from '../ui.js';
 import { t } from '../i18n.js';
 import { esc, fmtRelative } from '../ui-format.js';
+import { state } from '../state.js';
 
 export async function pageSearch() {
   const pageGen = state.pageGen;

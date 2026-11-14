@@ -103,7 +103,7 @@ export function renderShell(active = 'overview') {
     const next = order[(order.indexOf(current) + 1) % order.length];
     try {
       await saveTheme(next);
-      toast(`Theme: ${next}`);
+      toast(t('Theme: {name}', { name: t(next.charAt(0).toUpperCase() + next.slice(1)) }));
     } catch (err) {
       toast(err.message, true);
     }
@@ -208,7 +208,7 @@ export async function saveTheme(theme) {
   const button = document.getElementById('theme-toggle');
   if (button) {
     button.innerHTML = themeIcon();
-    button.title = `Theme: ${saved.theme}`;
+    button.title = t('Theme: {name}', { name: t(saved.theme.charAt(0).toUpperCase() + saved.theme.slice(1)) });
   }
 }
 
