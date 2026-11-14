@@ -291,6 +291,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if token := tokenFrom(r); token != "" {
 		_ = s.store.RevokeSession(token)
 	}
+	// The browser socket is authenticated by that cookie. Close it so the
+	// signed-out tab cannot keep using the connection.
+	s.closeDevice(deviceFrom(r).ID)
 	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }

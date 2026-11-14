@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -81,6 +82,10 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	d := deviceFrom(r)
 	if err := s.store.SavePushSubscription(u.ID, d.ID, req.Endpoint, req.Keys.P256DH, req.Keys.Auth); err != nil {
+		if errors.Is(err, errPushSubscriptionOwned) {
+			writeError(w, http.StatusConflict, "this browser subscription belongs to another account; disable notifications there first")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

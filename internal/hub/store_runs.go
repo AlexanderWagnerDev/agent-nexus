@@ -2,6 +2,7 @@ package hub
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -11,12 +12,43 @@ func (s *Store) CreateRun(id, sessionID, hostID, mode, userID, deviceID string) 
 	return s.CreateRunAt(id, sessionID, hostID, "", mode, userID, deviceID)
 }
 
+// errRunAlreadyActive is returned by CreateRunAt when another tab or device
+// won the race for the same native session.
+var errRunAlreadyActive = errors.New("session is already active")
+
+// activeRunConflict carries the run that already owns the session so the
+// browser can offer "Attach to the existing run".
+type activeRunConflict struct {
+	runID string
+}
+
+func (e activeRunConflict) Error() string { return "session is already active" }
+
+// Is lets errors.Is(err, errRunAlreadyActive) keep working for callers that
+// only need the reason.
+func (e activeRunConflict) Is(target error) bool { return target == errRunAlreadyActive }
+
 // CreateRunAt records the working directory so per-project concurrency limits
-// can be enforced without joining the session row.
+// can be enforced without joining the session row. The insert is a single
+// statement that refuses a second active row for the same native session, so
+// two concurrent requests cannot both pass ActiveRunForSession and start two
+// writer runs. A new session has no id yet and is exempt.
 func (s *Store) CreateRunAt(id, sessionID, hostID, cwd, mode, userID, deviceID string) error {
-	_, err := s.db.Exec(`INSERT INTO runs(id,session_id,host_id,cwd,mode,state,started_by,lease_device_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		id, sessionID, hostID, cwd, mode, protocol.StateStarting, userID, deviceID, ms(time.Now()))
-	return err
+	res, err := s.db.Exec(`INSERT INTO runs(id,session_id,host_id,cwd,mode,state,started_by,lease_device_id,created_at)
+		SELECT ?,?,?,?,?,?,?,?,?
+		WHERE ?='' OR NOT EXISTS (SELECT 1 FROM runs WHERE session_id=? AND ended_at IS NULL)`,
+		id, sessionID, hostID, cwd, mode, protocol.StateStarting, userID, deviceID, ms(time.Now()), sessionID, sessionID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return errRunAlreadyActive
+	}
+	return nil
 }
 
 func (s *Store) RunByID(id string) (protocol.RunView, string, error) {

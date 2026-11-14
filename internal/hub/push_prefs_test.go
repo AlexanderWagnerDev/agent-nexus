@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 )
@@ -47,5 +48,38 @@ func TestNotificationPreferencesPersistAndDefault(t *testing.T) {
 	}
 	if settings.Theme != "dark" || settings.Notifications["completed"] {
 		t.Fatalf("theme update lost notification prefs: %s", body)
+	}
+}
+
+func TestSavePushSubscriptionDoesNotRebindAnotherAccount(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	second, err := hub.store.CreateUserWithRole("second", "hash", "", "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "https://push.example.test/sub/1"
+	_, deviceA, err := hub.store.CreateSession(owner.ID, "browser-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, deviceB, err := hub.store.CreateSession(second.ID, "browser-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.SavePushSubscription(owner.ID, deviceA.ID, endpoint, "p256", "auth"); err != nil {
+		t.Fatal(err)
+	}
+	// The same user re-subscribing from the same browser is a normal upsert.
+	if err := hub.store.SavePushSubscription(owner.ID, deviceA.ID, endpoint, "p256b", "authb"); err != nil {
+		t.Fatalf("re-subscribe by the same user: %v", err)
+	}
+	if err := hub.store.SavePushSubscription(second.ID, deviceB.ID, endpoint, "p256", "auth"); !errors.Is(err, errPushSubscriptionOwned) {
+		t.Fatalf("another account took over the subscription: %v", err)
+	}
+	subs, err := hub.store.PushSubscriptions(owner.ID)
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("owner subscriptions: %+v %v", subs, err)
 	}
 }

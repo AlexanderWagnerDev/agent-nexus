@@ -16,6 +16,17 @@ func writeRunStartError(w http.ResponseWriter, err error) {
 		})
 		return
 	}
+	if errors.Is(err, errRunAlreadyActive) {
+		payload := map[string]any{
+			"error": "session is already active", "reason": "active_run",
+		}
+		var conflict activeRunConflict
+		if errors.As(err, &conflict) && conflict.runID != "" {
+			payload["run_id"] = conflict.runID
+		}
+		writeJSON(w, http.StatusConflict, payload)
+		return
+	}
 	writeError(w, http.StatusBadGateway, err.Error())
 }
 

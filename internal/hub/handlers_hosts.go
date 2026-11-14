@@ -338,6 +338,17 @@ func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
+	// Reading host status must not become an expensive write command that a
+	// read-only grantee can loop. A short cache bounds host-side work to one
+	// real check per host and channel per 30 seconds.
+	key := hostID + "|" + channel
+	if raw, ok := s.cachedUpdateCheck(key, 30*time.Second); ok {
+		var info any
+		if json.Unmarshal(raw, &info) == nil {
+			writeJSON(w, http.StatusOK, info)
+			return
+		}
+	}
 	params, _ := json.Marshal(map[string]string{"channel": channel})
 	ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
 	defer cancel()
@@ -346,12 +357,37 @@ func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	s.storeUpdateCheck(key, raw)
 	var info any
 	if err := json.Unmarshal(raw, &info); err != nil {
 		writeError(w, http.StatusBadGateway, "invalid host response")
 		return
 	}
 	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) cachedUpdateCheck(key string, maxAge time.Duration) ([]byte, bool) {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+	cached, ok := s.updateChecks[key]
+	if !ok || time.Since(cached.at) > maxAge {
+		return nil, false
+	}
+	return cached.raw, true
+}
+
+func (s *Server) storeUpdateCheck(key string, raw []byte) {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+	if s.updateChecks == nil {
+		s.updateChecks = map[string]updateCheckCache{}
+	}
+	for candidate, cached := range s.updateChecks {
+		if time.Since(cached.at) > 5*time.Minute {
+			delete(s.updateChecks, candidate)
+		}
+	}
+	s.updateChecks[key] = updateCheckCache{at: time.Now(), raw: raw}
 }
 
 // handleHostUpdateInstall asks the host to start its automatic update flow.

@@ -71,7 +71,7 @@ func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	c := &clientConn{
-		server: s, ws: ws, user: userFrom(r), device: deviceFrom(r),
+		server: s, ws: ws, user: userFrom(r), device: deviceFrom(r), token: tokenFrom(r),
 		send: make(chan protocol.ServerEnvelope, clientSendQueue), done: make(chan struct{}),
 		subs: map[string]bool{}, limiter: newRateLimiter(240, 10*time.Second),
 	}
@@ -101,6 +101,33 @@ func (s *Server) handleClientWS(w http.ResponseWriter, r *http.Request) {
 				err := ws.Ping(pctx)
 				pcancel()
 				if err != nil {
+					c.close()
+					return
+				}
+			}
+		}
+	}()
+
+	// A socket outlives the cookie that created it. Re-check the session so
+	// logout, expiry, device revocation and a role change take effect instead
+	// of leaving a privileged channel open until the browser disconnects.
+	go func() {
+		t := time.NewTicker(60 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-c.done:
+				return
+			case <-t.C:
+				if c.token == "" {
+					continue
+				}
+				si, err := s.store.SessionByToken(c.token)
+				if err != nil || si.ExpiresAt.Before(time.Now()) || si.User.Role != c.user.Role {
+					s.log.Info("closing a client socket with a stale session",
+						"user_id", c.user.ID, "device_id", c.device.ID)
 					c.close()
 					return
 				}
@@ -308,6 +335,7 @@ func (s *Server) broadcast(msg protocol.ServerEnvelope) {
 }
 
 func (s *Server) broadcastToSubscribers(msg protocol.ServerEnvelope) {
+	hostID := s.runHostID(msg.RunID)
 	s.mu.RLock()
 	clients := make([]*clientConn, 0, len(s.clients))
 	for c := range s.clients {
@@ -315,10 +343,39 @@ func (s *Server) broadcastToSubscribers(msg protocol.ServerEnvelope) {
 	}
 	s.mu.RUnlock()
 	for _, c := range clients {
-		if c.subscribed(msg.RunID) {
-			c.push(msg)
+		if !c.subscribed(msg.RunID) {
+			continue
 		}
+		// A grant can be revoked while a subscription is open. Re-check the
+		// transcript permission instead of streaming agent output to a user
+		// who can no longer read the transcript over HTTP.
+		if hostID != "" && !s.hostPermission(c.user, hostID, "read_transcript") {
+			c.mu.Lock()
+			delete(c.subs, msg.RunID)
+			c.mu.Unlock()
+			continue
+		}
+		c.push(msg)
 	}
+}
+
+// runHostID resolves the host of a run, preferring the in-memory association
+// that every accepted host message and every started run already sets.
+func (s *Server) runHostID(runID string) string {
+	s.mu.RLock()
+	hostID := s.runHosts[runID]
+	s.mu.RUnlock()
+	if hostID != "" {
+		return hostID
+	}
+	run, _, err := s.store.RunByID(runID)
+	if err != nil {
+		return ""
+	}
+	s.mu.Lock()
+	s.runHosts[runID] = run.HostID
+	s.mu.Unlock()
+	return run.HostID
 }
 
 // broadcastToRunOwner filters a run-scoped message by run ownership. Passing
@@ -400,6 +457,23 @@ func (s *Server) closeDevice(deviceID string) {
 	clients := make([]*clientConn, 0, len(s.clients))
 	for c := range s.clients {
 		if c.device.ID == deviceID {
+			clients = append(clients, c)
+		}
+	}
+	s.mu.RUnlock()
+	for _, c := range clients {
+		c.close()
+	}
+}
+
+// closeUser disconnects every socket of a user after a role change, so a
+// demoted account cannot keep authorizing from the role it had at connect
+// time. The browser reconnects and receives the current role.
+func (s *Server) closeUser(userID string) {
+	s.mu.RLock()
+	clients := make([]*clientConn, 0, len(s.clients))
+	for c := range s.clients {
+		if c.user.ID == userID {
 			clients = append(clients, c)
 		}
 	}

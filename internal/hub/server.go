@@ -56,6 +56,7 @@ type Server struct {
 	hostUpdates        map[string]protocol.UpdateStatus
 	lastUpdateNotified map[string]string
 	lastUpdatePhase    map[string]string
+	updateChecks       map[string]updateCheckCache
 
 	indexMu   sync.Mutex
 	hostIndex map[string]protocol.IndexStatus
@@ -79,6 +80,13 @@ type Server struct {
 type permissionEntry struct {
 	allowed bool
 	expires time.Time
+}
+
+// updateCheckCache debounces a host-side release check, which performs an
+// outbound HTTP request and rewrites the host's persisted update state.
+type updateCheckCache struct {
+	at  time.Time
+	raw []byte
 }
 
 type pendingRequest struct {

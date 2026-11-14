@@ -91,6 +91,9 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearPermissionCache()
+	// A live socket authorized the old role. Drop it; the browser reconnects
+	// with the new role instead of keeping admin rights until it reloads.
+	s.closeUser(id)
 	s.audit(u.Username, "user.role_changed", map[string]string{"user_id": id, "role": req.Role})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }

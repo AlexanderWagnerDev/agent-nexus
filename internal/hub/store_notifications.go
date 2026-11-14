@@ -2,17 +2,34 @@ package hub
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+// errPushSubscriptionOwned is returned when a browser's push endpoint is
+// already registered by another account. Rebinding it would silently stop the
+// first account's notifications.
+var errPushSubscriptionOwned = errors.New("this browser subscription belongs to another account")
+
 func (s *Store) SavePushSubscription(userID, deviceID, endpoint, p256dh, auth string) error {
-	_, err := s.db.Exec(`INSERT INTO push_subscriptions(id,user_id,device_id,endpoint,p256dh,auth,created_at)
+	res, err := s.db.Exec(`INSERT INTO push_subscriptions(id,user_id,device_id,endpoint,p256dh,auth,created_at)
 		VALUES(?,?,?,?,?,?,?)
-		ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, device_id=excluded.device_id, p256dh=excluded.p256dh, auth=excluded.auth`,
+		ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id, device_id=excluded.device_id, p256dh=excluded.p256dh, auth=excluded.auth
+		WHERE push_subscriptions.user_id=excluded.user_id`,
 		newID(), userID, deviceID, endpoint, p256dh, auth, ms(time.Now()))
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return errPushSubscriptionOwned
+	}
+	return nil
 }
 
 func (s *Store) DeletePushSubscription(userID, endpoint string) error {

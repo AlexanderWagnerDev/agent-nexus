@@ -584,6 +584,7 @@ type clientConn struct {
 	ws     *websocket.Conn
 	user   User
 	device Device
+	token  string
 	send   chan protocol.ServerEnvelope
 	done   chan struct{}
 	once   sync.Once

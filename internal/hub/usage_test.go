@@ -43,7 +43,11 @@ func TestUsageReportAggregatesReportedMetadata(t *testing.T) {
 	if err := hub.store.UpsertRunUsage(runB, protocol.Usage{InputTokens: 10, OutputTokens: 5, Source: "agent"}); err != nil {
 		t.Fatal(err)
 	}
-	// A third run without usage must count as unavailable, not estimated.
+	// A third run without usage must count as unavailable, not estimated. The
+	// earlier run has to be finished first: a session may only have one active
+	// run at a time.
+	hub.store.UpdateRunState(runA, protocol.StateExited)
+	hub.store.UpdateRunState(runB, protocol.StateExited)
 	runC := newID()
 	if err := hub.store.CreateRun(runC, alpha.ID, hostID, protocol.ModeStructured, owner.ID, "device-a"); err != nil {
 		t.Fatal(err)

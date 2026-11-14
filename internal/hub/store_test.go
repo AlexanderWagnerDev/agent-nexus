@@ -558,3 +558,43 @@ func TestBackupSnapshot(t *testing.T) {
 		t.Fatalf("backup lost sessions: got %d want 50", len(sessions))
 	}
 }
+
+func TestCreateRunAtRefusesASecondActiveRunForTheSameSession(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "race-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "codex", NativeID: "race-session", Title: "Race", Cwd: "/work/race",
+		CreatedAt: now, UpdatedAt: now, MessageCount: 1, State: protocol.StateIdle,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := hub.store.SessionByNativeID(owner.ID, hostID, "codex", "race-session", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRunAt("run-a", sess.ID, hostID, "/work/race", protocol.ModeStructured, owner.ID, "d1"); err != nil {
+		t.Fatal(err)
+	}
+	// A second tab that raced the ActiveRunForSession check must not create a
+	// second writer row.
+	if err := hub.store.CreateRunAt("run-b", sess.ID, hostID, "/work/race", protocol.ModeStructured, owner.ID, "d2"); !errors.Is(err, errRunAlreadyActive) {
+		t.Fatalf("second active run: %v", err)
+	}
+	hub.server.setRunState("run-a", protocol.StateExited)
+	if err := hub.store.CreateRunAt("run-c", sess.ID, hostID, "/work/race", protocol.ModeStructured, owner.ID, "d3"); err != nil {
+		t.Fatalf("a run after the previous one ended was rejected: %v", err)
+	}
+	// New sessions have no session id yet, so they never contend.
+	if err := hub.store.CreateRunAt("run-d", "", hostID, "/work/race", protocol.ModeStructured, owner.ID, "d4"); err != nil {
+		t.Fatalf("new session run: %v", err)
+	}
+	if err := hub.store.CreateRunAt("run-e", "", hostID, "/work/race", protocol.ModeStructured, owner.ID, "d5"); err != nil {
+		t.Fatalf("second new session run: %v", err)
+	}
+}

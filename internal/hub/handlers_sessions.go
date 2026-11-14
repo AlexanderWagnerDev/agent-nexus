@@ -584,6 +584,11 @@ func (s *Server) startRun(u User, d Device, sess protocol.SessionView, action, c
 		return protocol.RunView{}, err
 	}
 	if err := s.store.CreateRunAt(id, sess.ID, sess.HostID, cwd, mode, u.ID, d.ID); err != nil {
+		if errors.Is(err, errRunAlreadyActive) {
+			if activeRun, active := s.store.ActiveRunForSession(sess.ID); active {
+				return protocol.RunView{}, activeRunConflict{runID: activeRun}
+			}
+		}
 		return protocol.RunView{}, err
 	}
 	// The lease is the write lock for terminal input and prompts. A user who
@@ -686,6 +691,13 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Stopping kills the agent mid-task, so it needs the same terminal control
+	// permission as typing or interrupting. Run ownership alone is not enough
+	// after a demotion or a reduced grant.
+	if !s.hostPermission(u, run.HostID, "terminal_input") {
+		writeError(w, http.StatusForbidden, "terminal_input permission required")
+		return
+	}
 	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, nil) {
 		return
 	}
@@ -711,6 +723,9 @@ func (s *Server) handleLease(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.hostPermission(u, run.HostID, "terminal_input") {
 		writeError(w, http.StatusForbidden, "terminal_input permission required")
+		return
+	}
+	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, nil) {
 		return
 	}
 	d := deviceFrom(r)

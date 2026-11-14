@@ -140,6 +140,15 @@ func (s *Server) dispatchDuePrompts() {
 			s.audit(user.Username, "prompt_queue.denied", map[string]string{"run_id": run.ID, "item_id": queued.ID})
 			continue
 		}
+		// Enqueuing required terminal_input. Re-check it here: a queued prompt
+		// can be scheduled days ahead, and a grant removed in between must not
+		// be bypassed by the stored item.
+		if !s.hostPermission(user, run.HostID, "terminal_input") {
+			s.store.FinishPromptQueueItem(queued.ID, "failed", "terminal_input permission was revoked; the prompt was not sent")
+			s.broadcast(protocol.ServerEnvelope{Type: "queue.changed", RunID: run.ID})
+			s.audit(user.Username, "prompt_queue.denied", map[string]string{"run_id": run.ID, "item_id": queued.ID})
+			continue
+		}
 		item, claimed, err := s.store.ClaimPromptQueueItem(queued.ID)
 		if err != nil || !claimed {
 			continue
