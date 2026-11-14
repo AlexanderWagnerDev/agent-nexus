@@ -145,6 +145,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 }
 .agent-glyph.small { width: 21px; height: 21px; border-radius: 3px; font-size: 8px; }
 .agent-glyph.tiny { width: 17px; height: 17px; border-radius: 4px; font-size: 7px; }
+.agent-glyph svg { width: 68%; height: 68%; display: block; }
 .agent-glyph[data-agent="opencode"] { --glyph: #8c7df0; }
 .agent-glyph[data-agent="codex"] { --glyph: #6f9ae8; }
 .agent-glyph[data-agent="claude"] { --glyph: #d29a64; }

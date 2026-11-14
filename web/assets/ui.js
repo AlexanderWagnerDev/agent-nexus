@@ -1,5 +1,6 @@
 /* DOM, modal and toast primitives shared by every view. */
 import { t } from './i18n.js';
+import { agentLogo } from './icons.js';
 import { agentMeta, esc } from './ui-format.js';
 
 const doc = typeof document !== 'undefined' ? document : null;
@@ -37,7 +38,8 @@ export function trapTabKey(event, root) {
 
 export function agentGlyph(agent, size = 'normal') {
   const meta = agentMeta(agent);
-  return `<span class="agent-glyph ${size}" data-agent="${esc(String(agent || 'agent').toLowerCase())}" title="${esc(meta.label)}">${esc(meta.short)}</span>`;
+  const label = esc(meta.label);
+  return `<span class="agent-glyph ${size}" data-agent="${esc(String(agent || 'agent').toLowerCase())}" role="img" aria-label="${label}" title="${label}">${agentLogo(agent) || esc(meta.short)}</span>`;
 }
 
 export function badge(text, cls = '') {
