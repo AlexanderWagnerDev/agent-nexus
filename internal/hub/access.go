@@ -72,12 +72,17 @@ func (s *Server) hostPermission(u User, hostID, need string) bool {
 		allowed = grantAllows(perms, need) || (need == "view" && perms != "")
 	}
 
-	s.permMu.Lock()
-	if s.perms == nil || len(s.perms) >= 8192 {
-		s.perms = map[string]permissionEntry{}
+	if allowed {
+		// Only positive results are cached. A newly granted permission takes
+		// effect immediately, while a revoked one is cleared explicitly by the
+		// handlers that change grants, roles or host state.
+		s.permMu.Lock()
+		if s.perms == nil || len(s.perms) >= 8192 {
+			s.perms = map[string]permissionEntry{}
+		}
+		s.perms[key] = permissionEntry{allowed: true, expires: now.Add(15 * time.Second)}
+		s.permMu.Unlock()
 	}
-	s.perms[key] = permissionEntry{allowed: allowed, expires: now.Add(15 * time.Second)}
-	s.permMu.Unlock()
 	return allowed
 }
 
