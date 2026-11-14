@@ -46,7 +46,7 @@ goals; they are not release gates. Publication is a separate maintainer decision
   Codex app-server and ACP agent for structured starts, policy rejection, Codex
   JSON-RPC, Gemini search, a grandchild process-tree test and ACP session
   controls.
-- 34 JavaScript unit tests pass; the browser smoke test and the axe-core scan
+- 44 JavaScript unit tests pass; the browser smoke test and the axe-core scan
   pass on desktop and mobile in English and German. A pinned-clock pixel diff
   covers six stable demo views; the manual/nightly job runs on a Windows
   runner with a wider tolerance.
@@ -59,7 +59,7 @@ goals; they are not release gates. Publication is a separate maintainer decision
 - Screenshots are generated from `cmd/nexus-demo` fixtures, not real sessions.
 - **Still unproven:** physical three-host operation, real Linux/macOS agent
   sessions, Docker/Portainer runtime deployment, update/rollback against a real
-  release feed, a real Claude ACP session, client/device-signed commands,
+  release feed, a real Claude ACP session, host-side device-signature verification,
   PostgreSQL. Visual baselines exist only for Windows 11.
 
 | Phase | Status | Implemented | Notable gaps |
@@ -147,11 +147,13 @@ and PostgreSQL integration are outside this test record.
 
 Device command signing is implemented for native clients. A device can register
 an Ed25519 or P-256 public key with step-up; prompts, approvals, terminal input,
-interrupts and run stops are then rejected unless the canonical request carries
-a valid signature, timestamp and nonce. The hub keeps a per-device nonce window
-and tests replay, unsigned-write, Ed25519 and P-256/P1363 cases. The browser UI
-remains cookie-authenticated because hub-delivered JavaScript cannot protect a
-key against a compromised hub; see [DEVICE-SIGNING.md](DEVICE-SIGNING.md).
+interrupts, run starts, prompt-queue writes, task delegation, fan-out and run
+stops are then rejected unless the canonical request carries a valid signature,
+timestamp and nonce. The prompt options (model, agent mode, attachments) are
+part of the signed payload. The hub keeps a per-device nonce window and tests
+replay, unsigned-write, Ed25519 and P-256/P1363 cases. The browser UI remains
+cookie-authenticated because hub-delivered JavaScript cannot protect a key
+against a compromised hub; see [DEVICE-SIGNING.md](DEVICE-SIGNING.md).
 `--require-signed-commands` enforces signatures for every device. This is
 hub-side verification: it protects against stolen cookies and replayed writes,
 not against a compromised hub. Host-side rejection of hub-forged commands

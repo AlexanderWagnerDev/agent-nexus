@@ -66,6 +66,7 @@ export async function pageSession(id) {
         ${s.warning ? `<div class="notice mt-1">${esc(s.warning)}</div>` : ''}
         ${versionWarning ? `<div class="notice info mt-1">${t('Untested agent version')}: ${esc(versionWarning)}</div>` : ''}
         <div id="transcript" class="transcript"><div class="empty"><span class="spinner"></span></div></div>
+        <div id="transcript-warning"></div>
         <div class="load-more" id="load-more-wrap"></div>
       </section>
       <aside class="detail-aside">
@@ -192,6 +193,10 @@ export async function pageSession(id) {
   // messages" append newer content below the visible conversation.
   const TRANSCRIPT_PAGE = 100;
   let transcriptStart = 0;
+  const renderTranscriptWarning = (tr) => {
+    const target = document.getElementById('transcript-warning');
+    if (target) target.innerHTML = tr.warning ? `<div class="notice mt-1">${esc(tr.warning)}</div>` : '';
+  };
   const renderLoadMore = (hasEarlier) => {
     document.getElementById('load-more-wrap').innerHTML = hasEarlier
       ? `<button class="btn" id="load-more">${t('Load earlier messages')}</button>` : '';
@@ -204,6 +209,7 @@ export async function pageSession(id) {
     const before = box.scrollHeight;
     const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${nextStart}&limit=${transcriptStart - nextStart}`);
     if (pageGen !== state.pageGen) return;
+    renderTranscriptWarning(tr);
     box.insertAdjacentHTML('afterbegin', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : '');
     transcriptStart = nextStart;
     box.scrollTop += box.scrollHeight - before;
@@ -222,6 +228,7 @@ export async function pageSession(id) {
     }
     const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${transcriptStart}&limit=${TRANSCRIPT_PAGE}`);
     if (pageGen !== state.pageGen) return;
+    renderTranscriptWarning(tr);
     box.innerHTML = tr.messages.length
       ? renderTranscriptMessages(tr.messages, s.agent)
       : `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
