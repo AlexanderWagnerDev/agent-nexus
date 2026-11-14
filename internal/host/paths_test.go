@@ -36,6 +36,7 @@ func TestCodexFindFileRequiresExactSessionSuffix(t *testing.T) {
 func TestFileURIIsAbsoluteOnEveryPlatform(t *testing.T) {
 	cases := map[string]string{
 		`C:\Users\me\AppData\Local\Temp\a.png`: "file:///C:/Users/me/AppData/Local/Temp/a.png",
+		`C:\Temp\a b#c.png`:                    "file:///C:/Temp/a%20b%23c.png",
 		"/tmp/agentnexus/a b.png":              "file:///tmp/agentnexus/a%20b.png",
 	}
 	for input, want := range cases {

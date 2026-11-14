@@ -37,10 +37,13 @@ type passkeySessionStore struct {
 }
 
 const maxPasskeySessions = 512
+const maxPasskeySessionsPerUser = 8
 
 // put stores one WebAuthn challenge. The map is bounded and expired entries
 // are only swept when the map grows, so an unauthenticated caller cannot turn
-// every request into a full-map scan.
+// every request into a full-map scan. The per-user bound prevents one account
+// from exhausting the global challenge budget and blocking passkey logins for
+// everyone else.
 func (p *passkeySessionStore) put(v passkeySession) (string, error) {
 	id := randomToken(24)
 	now := time.Now()
@@ -55,6 +58,16 @@ func (p *passkeySessionStore) put(v passkeySession) (string, error) {
 		}
 		if len(p.data) >= maxPasskeySessions {
 			return "", errors.New("too many pending passkey challenges")
+		}
+	}
+	perUser := 0
+	for _, old := range p.data {
+		if old.userID != v.userID || now.After(old.expires) {
+			continue
+		}
+		perUser++
+		if perUser >= maxPasskeySessionsPerUser {
+			return "", errors.New("too many pending passkey challenges for this account")
 		}
 	}
 	p.data[id] = v

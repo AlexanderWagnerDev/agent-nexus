@@ -193,6 +193,13 @@ export async function pageSession(id) {
   // messages" append newer content below the visible conversation.
   const TRANSCRIPT_PAGE = 100;
   let transcriptStart = 0;
+  // The scroll container is #view on desktop and the window on mobile; the
+  // transcript element itself does not scroll.
+  const scrollTarget = () => {
+    const view = document.getElementById('view');
+    if (view && view.scrollHeight > view.clientHeight + 1) return view;
+    return document.scrollingElement || document.documentElement;
+  };
   const renderTranscriptWarning = (tr) => {
     const target = document.getElementById('transcript-warning');
     if (target) target.innerHTML = tr.warning ? `<div class="notice mt-1">${esc(tr.warning)}</div>` : '';
@@ -206,13 +213,14 @@ export async function pageSession(id) {
     const box = document.getElementById('transcript');
     if (transcriptStart <= 0) return;
     const nextStart = Math.max(0, transcriptStart - TRANSCRIPT_PAGE);
-    const before = box.scrollHeight;
+    const scroller = scrollTarget();
+    const before = scroller.scrollHeight;
     const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${nextStart}&limit=${transcriptStart - nextStart}`);
     if (pageGen !== state.pageGen) return;
     renderTranscriptWarning(tr);
     box.insertAdjacentHTML('afterbegin', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : '');
     transcriptStart = nextStart;
-    box.scrollTop += box.scrollHeight - before;
+    scroller.scrollTop += scroller.scrollHeight - before;
     renderLoadMore(transcriptStart > 0);
   };
   const loadLatest = async () => {
@@ -233,7 +241,8 @@ export async function pageSession(id) {
       ? renderTranscriptMessages(tr.messages, s.agent)
       : `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
     renderLoadMore(transcriptStart > 0);
-    box.scrollTop = box.scrollHeight;
+    const scroller = scrollTarget();
+    scroller.scrollTop = scroller.scrollHeight;
   };
   await loadLatest();
 }

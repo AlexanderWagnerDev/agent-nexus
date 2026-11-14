@@ -163,6 +163,7 @@ func TestFinishedRunStateIsReleased(t *testing.T) {
 		t.Fatal(err)
 	}
 	hub.server.appendRunOutput("memory-run", 1, []byte("buffered terminal output"))
+	hub.server.appendRunEvent("memory-run", protocol.RunEvent{Type: "message.delta", Text: "hello"})
 	hub.server.setRunState("memory-run", protocol.StateIdle)
 
 	// A live run must keep its replay buffer.
@@ -177,11 +178,23 @@ func TestFinishedRunStateIsReleased(t *testing.T) {
 	hub.server.setRunState("memory-run", protocol.StateExited)
 	hub.server.cleanupRunState("memory-run")
 	hub.server.mu.Lock()
-	_, keptRun := hub.server.runs["memory-run"]
+	rs := hub.server.runs["memory-run"]
 	_, keptHost := hub.server.runHosts["memory-run"]
 	hub.server.mu.Unlock()
-	if keptRun || keptHost {
-		t.Fatalf("finished run was not released: runs=%v runHosts=%v", keptRun, keptHost)
+	if rs == nil {
+		t.Fatal("the run state (and its event cursor) was dropped")
+	}
+	rs.mu.Lock()
+	chunks, events, seq := len(rs.chunks), len(rs.events), rs.eventSeq
+	rs.mu.Unlock()
+	if chunks != 0 || events != 0 {
+		t.Fatalf("finished run buffers were not released: chunks=%d events=%d", chunks, events)
+	}
+	if seq == 0 {
+		t.Fatal("the event cursor was reset")
+	}
+	if keptHost {
+		t.Fatal("finished run still owns a host mapping")
 	}
 }
 

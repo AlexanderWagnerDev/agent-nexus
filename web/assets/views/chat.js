@@ -617,6 +617,9 @@ export async function pageStructuredRun(id, run) {
     if (event.seq) lastSeq = Math.max(lastSeq, event.seq);
     switch (event.type) {
       case 'message.started':
+        // The prompt was accepted and the agent began answering; an older
+        // prompt must not be restored by a much later permission error.
+        lastPrompt = null;
         assistantRecord(event.message_id);
         break;
       case 'message.delta':

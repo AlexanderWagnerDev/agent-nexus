@@ -292,3 +292,96 @@ func TestStartingRunWithEarlyOutputIsNotFailed(t *testing.T) {
 		t.Fatalf("a run that already produced output was failed: %+v", run)
 	}
 }
+
+func TestAdoptedTerminalRunDropsSyntheticError(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "adopt-terminal", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("adopt-terminal-run", "", hostID, protocol.ModeTerminal, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	hub.store.SetRunError("adopt-terminal-run", ErrCodeNetwork, "hub restarted before the host re-adopted the run")
+	hub.store.UpdateRunState("adopt-terminal-run", protocol.StateFailed)
+	hub.store.AdoptRunState("adopt-terminal-run", protocol.StateExited)
+	run, _, err := hub.store.RunByID("adopt-terminal-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateExited || run.ErrorCode != "" || run.ErrorMessage != "" || run.EndedAt == nil {
+		t.Fatalf("adopted terminal run kept stale metadata: %+v", run)
+	}
+	// A late non-terminal update must not reopen it.
+	hub.store.UpdateRunState("adopt-terminal-run", protocol.StateRunning)
+	run, _, err = hub.store.RunByID("adopt-terminal-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateExited {
+		t.Fatalf("late update reopened a finished run: %+v", run)
+	}
+}
+
+func TestHostViewerGetsRunStateButNotRunErrors(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	viewer, err := hub.store.CreateUserWithRole("run-viewer", "hash", "secret", "viewer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostID, err := hub.store.CreateHost(owner.ID, "control-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.SetHostGrant(hostID, viewer.ID, "view"); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRun("control-run", "", hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	viewerConn := &clientConn{user: viewer, send: make(chan protocol.ServerEnvelope, 8), subs: map[string]bool{}}
+	hub.server.mu.Lock()
+	hub.server.clients[viewerConn] = struct{}{}
+	hub.server.mu.Unlock()
+	defer func() {
+		hub.server.mu.Lock()
+		delete(hub.server.clients, viewerConn)
+		hub.server.mu.Unlock()
+	}()
+
+	hub.server.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: "control-run", State: protocol.StateRunning})
+	select {
+	case msg := <-viewerConn.send:
+		if msg.Type != "run.state" || msg.State != protocol.StateRunning {
+			t.Fatalf("viewer received %+v", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("host viewer did not receive the run state")
+	}
+	hub.server.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: "control-run", Error: "secret path"})
+	select {
+	case msg := <-viewerConn.send:
+		t.Fatalf("run error leaked to a host viewer: %+v", msg)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestPasskeyChallengesAreBoundedPerUser(t *testing.T) {
+	var store passkeySessionStore
+	store.data = map[string]passkeySession{}
+	for i := 0; i < maxPasskeySessionsPerUser; i++ {
+		if _, err := store.put(passkeySession{userID: "user-a", kind: "login"}); err != nil {
+			t.Fatalf("challenge %d: %v", i, err)
+		}
+	}
+	if _, err := store.put(passkeySession{userID: "user-a", kind: "login"}); err == nil {
+		t.Fatal("per-user challenge cap was not enforced")
+	}
+	if _, err := store.put(passkeySession{userID: "user-b", kind: "login"}); err != nil {
+		t.Fatalf("another user was blocked: %v", err)
+	}
+}

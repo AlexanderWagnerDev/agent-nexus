@@ -28,8 +28,9 @@ func (s *Server) scheduleRunCleanup(runID string) {
 	time.AfterFunc(runStateRetention, func() { s.cleanupRunState(runID) })
 }
 
-// cleanupRunState drops the retained events and output of one finished run.
-// Live runs are never touched, so a delayed timer cannot affect them.
+// cleanupRunState releases the retained output and event text of a finished
+// run. The tiny state object (and its sequence counter) stays so a re-adopted
+// run continues the same cursor and a late event cannot reopen it.
 func (s *Server) cleanupRunState(runID string) {
 	s.mu.Lock()
 	rs, ok := s.runs[runID]
@@ -39,15 +40,17 @@ func (s *Server) cleanupRunState(runID string) {
 	}
 	rs.mu.Lock()
 	finished := terminalRunState(rs.state)
+	if finished {
+		rs.chunks = nil
+		rs.bytes = 0
+		rs.events = nil
+	}
 	rs.mu.Unlock()
 	if !finished {
 		return
 	}
 	s.mu.Lock()
-	if current, exists := s.runs[runID]; exists && current == rs {
-		delete(s.runs, runID)
-		delete(s.runHosts, runID)
-	}
+	delete(s.runHosts, runID)
 	s.mu.Unlock()
 	s.queueMu.Lock()
 	delete(s.queueArmed, runID)

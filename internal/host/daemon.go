@@ -841,7 +841,7 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		// restricted host does not expose unrelated personal notes.
 		if len(d.policy.AllowedRoots) > 0 {
 			cwd, known := d.sessionCwd(p.Agent, p.NativeID)
-			if !known {
+			if !known || cwd == "" {
 				return nil, errors.New("session metadata is not available yet; retry after discovery")
 			}
 			if !d.policy.WithinRoots(cwd) {

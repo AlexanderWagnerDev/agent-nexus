@@ -135,7 +135,9 @@ func sliceContains(items []string, want string) bool {
 func fileURI(path string) string {
 	slash := strings.ReplaceAll(path, `\`, "/")
 	if len(slash) >= 2 && slash[1] == ':' {
-		return "file:///" + slash
+		// The leading slash makes the drive letter part of the path instead of
+		// a URL host; url.URL also escapes spaces, '#' and '%' correctly.
+		return (&url.URL{Scheme: "file", Path: "/" + slash}).String()
 	}
 	return (&url.URL{Scheme: "file", Path: slash}).String()
 }
@@ -155,7 +157,7 @@ type cachedMetadata struct {
 	session protocol.Session
 }
 
-const metadataCacheLimit = 4096
+const metadataCacheLimit = 20000
 
 func (c *metadataCache) get(path string, modTime time.Time, size int64) (protocol.Session, bool) {
 	c.mu.Lock()

@@ -346,6 +346,9 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		}
 		s.setRunState(msg.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.exit", RunID: msg.RunID, State: state, Message: msg.Reason})
+		// A state-only message keeps the control room of every host viewer in
+		// sync without forwarding the agent's exit reason to them.
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: state})
 		s.log.Info("run exited", "run_id", msg.RunID, "code", msg.Code, "reason", msg.Reason)
 		if state == protocol.StateFailed {
 			go s.notifyRun(msg.RunID, "failed", "Agent run failed", "A run exited with an error. Open AgentNexus for details.")
@@ -357,6 +360,7 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		s.store.SetRunError(msg.RunID, ClassifyRunError(msg.Error), msg.Error)
 		s.setRunState(msg.RunID, protocol.StateFailed)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.error", RunID: msg.RunID, Error: msg.Error})
+		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateFailed})
 		s.audit("host:"+hc.id, "run.failed", map[string]string{"run_id": msg.RunID, "error": msg.Error})
 		go s.notifyRun(msg.RunID, "failed", "Agent error", "A run failed. Open AgentNexus for details.")
 	case "pong", "pong ":

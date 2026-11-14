@@ -325,7 +325,7 @@ func (s *Server) broadcastToSubscribers(msg protocol.ServerEnvelope) {
 // subscribersOnly restricts delivery to clients already subscribed to the run,
 // which is required for messages that carry prompt or transcript content.
 func (s *Server) broadcastToRunOwner(msg protocol.ServerEnvelope, subscribersOnly bool) {
-	_, startedBy, err := s.store.RunByID(msg.RunID)
+	run, startedBy, err := s.store.RunByID(msg.RunID)
 	if err != nil {
 		return
 	}
@@ -337,6 +337,13 @@ func (s *Server) broadcastToRunOwner(msg protocol.ServerEnvelope, subscribersOnl
 	s.mu.RUnlock()
 	for _, c := range clients {
 		if c.subscribed(msg.RunID) || (!subscribersOnly && (startedBy == c.user.ID || isAdminRole(c.user.Role))) {
+			c.push(msg)
+			continue
+		}
+		// The control room lists runs from every visible host. A viewer of the
+		// host gets the state transition (no error text, prompt text or
+		// transcript) so its list does not go stale.
+		if !subscribersOnly && msg.Type == "run.state" && s.hostPermission(c.user, run.HostID, "view") {
 			c.push(msg)
 		}
 	}

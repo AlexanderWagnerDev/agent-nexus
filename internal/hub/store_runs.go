@@ -64,7 +64,9 @@ func (s *Store) UpdateRunState(id, state string) {
 		s.db.Exec(`UPDATE runs SET state=?, ended_at=? WHERE id=?`, state, ms(time.Now()), id)
 		return
 	}
-	s.db.Exec(`UPDATE runs SET state=? WHERE id=?`, state, id)
+	// Only AdoptRunState may reopen a finished run; a late event or a stale
+	// caller must not turn a run with an end time back into a live one.
+	s.db.Exec(`UPDATE runs SET state=? WHERE id=? AND ended_at IS NULL`, state, id)
 }
 
 // RecoverStaleRuns closes runs that a previous hub process left active. The
@@ -89,7 +91,11 @@ func (s *Store) RecoverStaleRuns() int {
 // per-session uniqueness check effective.
 func (s *Store) AdoptRunState(id, state string) {
 	if state == protocol.StateExited || state == protocol.StateFailed || state == protocol.StateCompleted {
-		s.db.Exec(`UPDATE runs SET state=?, ended_at=? WHERE id=?`, state, ms(time.Now()), id)
+		// The host now owns the final state. Drop the synthetic error written
+		// when the hub closed the run, and keep an existing end time instead of
+		// inflating the run duration with the reconnect delay.
+		s.db.Exec(`UPDATE runs SET state=?, ended_at=COALESCE(ended_at, ?), error_code='', error_message='' WHERE id=?`,
+			state, ms(time.Now()), id)
 		return
 	}
 	s.db.Exec(`UPDATE runs SET state=?, ended_at=NULL, error_code='', error_message='' WHERE id=?`, state, id)
