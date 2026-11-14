@@ -132,7 +132,7 @@ func sliceContains(items []string, want string) bool {
 // drive letters need the empty authority form (file:///C:/...), otherwise a
 // parser treats the drive letter as the host.
 func fileURI(path string) string {
-	slash := filepath.ToSlash(path)
+	slash := strings.ReplaceAll(path, `\`, "/")
 	if len(slash) >= 2 && slash[1] == ':' {
 		return "file:///" + slash
 	}
