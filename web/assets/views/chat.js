@@ -706,6 +706,9 @@ export async function pageStructuredRun(id, run) {
         // must not filter the replayed events away.
         lastSeq = 0;
         initialCursor = 0;
+        // Buffered events belong to the previous epoch and would push the
+        // cursor above the new epoch's sequence numbers when history loads.
+        pendingLiveEvents.length = 0;
         sendSubscribe();
       }
       setState(msg.state);

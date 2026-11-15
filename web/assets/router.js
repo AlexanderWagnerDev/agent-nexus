@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { esc } from './ui-format.js';
 import { renderTabs } from './tabs.js';
 import { parseRoute } from './routes.js';
-import { closeModal } from './ui.js';
+import { closePalette } from './palette.js';
 
 let pageHandler = null;
 
@@ -15,10 +15,11 @@ export function setPageHandler(fn) {
 
 export async function route() {
   if (!state.me) return;
-  // A dialog is mounted outside #app and makes #app inert. Leaving it open
-  // across a route change would present the old page's dialog on top of an
-  // unclickable new page.
-  closeModal();
+  // A dialog or the command palette is mounted outside #app and, for a real
+  // dialog, makes #app inert. Leaving either open across a route change would
+  // present the old page's overlay on top of the new page. closePalette also
+  // clears the palette state so the shortcut can reopen it.
+  closePalette();
   state.pageGen += 1;
   if (state.pageCleanup) {
     try { state.pageCleanup(); } catch { /* ignore */ }

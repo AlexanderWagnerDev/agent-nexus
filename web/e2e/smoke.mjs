@@ -124,6 +124,17 @@ async function run() {
     assert(await page.locator('#palette-input').count() === 0, 'command palette did not close');
     assert(await page.evaluate(() => document.activeElement?.id === 'command-trigger'), 'command palette did not return focus');
 
+    // Navigating while the palette is open must clear its state, otherwise the
+    // shortcut cannot reopen it on the next page.
+    await page.keyboard.press('Control+K');
+    await page.waitForSelector('#palette-input');
+    await page.evaluate(() => { location.hash = '#/devices'; });
+    await page.waitForTimeout(500);
+    await page.keyboard.press('Control+K');
+    await page.waitForSelector('#palette-input');
+    assert((await page.locator('.palette-row').count()) > 0, 'command palette did not reopen after navigation');
+    await page.keyboard.press('Escape');
+
     await page.click('#sidebar-toggle');
     assert(await page.locator('#layout.sidebar-collapsed').count() === 1, 'sidebar did not collapse');
     await page.click('#sidebar-toggle');
