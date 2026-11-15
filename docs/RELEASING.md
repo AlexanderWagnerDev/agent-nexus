@@ -32,7 +32,7 @@ Later tags and releases still require the maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
-| v0.1.0 | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; GHCR and Docker Hub images `v0.1.0`, `0.1.0`, `latest`, `alpha` |
+| [v0.1.0](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.0`, `0.1.0`, `latest`, `alpha` |
 
 ## Release decision
 
