@@ -32,7 +32,7 @@ Usage: install-host.sh [--hub URL [--code CODE] [--name NAME]] [options]
   --code CODE           One-time pairing code from Hosts -> Pair a host
   --name NAME           Host name shown in the hub (default: hostname)
   --channel CHANNEL     stable (default), prerelease or development
-  --version VERSION     Install a specific release tag, for example v0.1.1
+  --version VERSION     Install a specific release tag, for example v0.1.2
   --repo OWNER/REPO     Release repository (default: AlexanderWagnerDev/agent-nexus)
   --development         Use the newest GitHub Actions development build
                         (requires an authenticated gh CLI; no release needed)

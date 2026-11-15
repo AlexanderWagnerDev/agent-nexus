@@ -4,6 +4,26 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-11-16
+
+### Added
+
+- The hub's Pair-a-host dialog now shows install-and-pair one-liners for
+  Linux, macOS and Windows. Each command downloads the official installer,
+  pairs the host with this hub and installs the per-user service. The
+  installer is pinned to the hub's release tag (`main` for development
+  builds); the manual `nexusd pair` command remains available for existing
+  installations.
+
+### Changed
+
+- Release automation: the Release workflow creates and pushes the annotated
+  tag itself and publishes the GitHub release directly, without a draft stage
+  or confirmation input.
+- Container builds once and pushes the same multi-arch manifest to GHCR and
+  Docker Hub. Release dispatches check out the tagged commit even after
+  `main` moved and no longer attach a misleading `sha-` tag.
+
 ## [0.1.1] - 2026-11-15
 
 ### Fixed
@@ -40,5 +60,6 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.2]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2
 [0.1.1]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.1
 [0.1.0]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0
