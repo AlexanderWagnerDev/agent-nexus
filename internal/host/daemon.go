@@ -888,15 +888,15 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		}
 		// The local search index already excludes sessions outside the
 		// allowed roots; direct transcript reads must apply the same rule so a
-		// restricted host does not expose unrelated personal notes.
-		if len(d.policy.AllowedRoots) > 0 {
-			cwd, known := d.sessionCwd(p.Agent, p.NativeID)
-			if !known || cwd == "" {
-				return nil, errors.New("session metadata is not available yet; retry after discovery")
-			}
-			if !d.policy.WithinRoots(cwd) {
-				return nil, errors.New("session is outside the allowed roots")
-			}
+		// restricted host does not expose unrelated personal notes. An
+		// explicitly empty root list is a deny-all policy (docs/SECURITY.md),
+		// so the check must run even then.
+		cwd, known := d.sessionCwd(p.Agent, p.NativeID)
+		if !known || cwd == "" {
+			return nil, errors.New("session metadata is not available yet; retry after discovery")
+		}
+		if !d.policy.WithinRoots(cwd) {
+			return nil, errors.New("session is outside the allowed roots")
 		}
 		return a.Transcript(context.Background(), p.NativeID, p.Offset, p.Limit)
 	case "search":
@@ -906,6 +906,15 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
+		}
+		// The index clamps the limit itself; the adapter fallback must apply
+		// the same bound, otherwise a hub-supplied limit controls how many
+		// rows and bytes one reply may carry.
+		if p.Limit <= 0 {
+			p.Limit = 50
+		}
+		if p.Limit > 100 {
+			p.Limit = 100
 		}
 		if d.index != nil && d.index.Status().State == "ready" {
 			if hits, err := d.index.Search(context.Background(), p.Query, p.Limit); err == nil {

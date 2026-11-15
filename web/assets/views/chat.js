@@ -421,7 +421,7 @@ export async function pageStructuredRun(id, run) {
   const toolRecords = new Map();
   const reasoningRecords = new Map();
   const completedMessages = new Set();
-  const initialCursor = run.last_event_seq || 0;
+  let initialCursor = run.last_event_seq || 0;
   let lastSeq = initialCursor;
   let lastPrompt = null;
   let subscribedGen = 0;
@@ -702,7 +702,10 @@ export async function pageStructuredRun(id, run) {
       if (msg.epoch) runEpoch = msg.epoch;
       if (epochChanged) {
         // The hub restarted and its per-run sequence starts from zero again.
+        // The cursor captured at page load belongs to the previous epoch and
+        // must not filter the replayed events away.
         lastSeq = 0;
+        initialCursor = 0;
         sendSubscribe();
       }
       setState(msg.state);

@@ -46,8 +46,14 @@ func FetchHubPublicKey(ctx context.Context, hubURL string) (string, error) {
 		}
 		return "", errors.New(parsed.Error)
 	}
-	if _, err := base64.StdEncoding.DecodeString(parsed.PublicKey); err != nil {
+	// Reject a malformed key before it is pinned: a bad pin is unrecoverable
+	// because the daemon only fetches the key while none is stored.
+	raw, err := base64.StdEncoding.DecodeString(parsed.PublicKey)
+	if err != nil {
 		return "", fmt.Errorf("hub returned an invalid public key: %w", err)
+	}
+	if len(raw) != ed25519.PublicKeySize {
+		return "", fmt.Errorf("hub returned a public key that is not a 32-byte Ed25519 key")
 	}
 	return parsed.PublicKey, nil
 }

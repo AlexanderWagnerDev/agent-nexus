@@ -3,7 +3,7 @@ import { rememberRecent } from '../palette.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { openTab } from '../tabs.js';
-import { agentGlyph, b64decode, stateBadge, toast } from '../ui.js';
+import { agentGlyph, b64decode, b64encode, stateBadge, toast } from '../ui.js';
 import { wsSend } from '../ws.js';
 import { pageStructuredRun } from './chat.js';
 import { t } from '../i18n.js';
@@ -76,7 +76,7 @@ export async function pageRun(id) {
       note.textContent = t('Read-only: another device holds the lease.');
       return;
     }
-    wsSend({ type: 'input', run_id: id, data: btoa(String.fromCharCode(...new TextEncoder().encode(data))) });
+    wsSend({ type: 'input', run_id: id, data: b64encode(new TextEncoder().encode(data)) });
   };
   term.onData(input);
   const resize = () => {

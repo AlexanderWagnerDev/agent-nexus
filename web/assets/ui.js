@@ -75,12 +75,38 @@ export function toast(message, isError = false) {
 }
 
 export function copyText(text) {
-  navigator.clipboard?.writeText(text).then(() => toast(t('Copied to clipboard'))).catch(() => toast(t('Could not copy'), true));
+  const value = String(text ?? '');
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(value).then(() => toast(t('Copied to clipboard'))).catch(() => toast(t('Could not copy'), true));
+    return;
+  }
+  // A plain-HTTP hub on a LAN address is not a secure context, so the async
+  // clipboard API does not exist. Fall back instead of silently doing nothing.
+  const area = document.createElement('textarea');
+  area.value = value;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  let ok = false;
+  try {
+    area.select();
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  toast(ok ? t('Copied to clipboard') : t('Could not copy'), !ok);
 }
 
 export function b64encode(bytes) {
+  // Chunked: one spread call throws a RangeError above roughly 125k bytes, so
+  // a large terminal paste used to be dropped without any error.
   let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
   return btoa(s);
 }
 

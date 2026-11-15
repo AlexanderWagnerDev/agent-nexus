@@ -196,7 +196,19 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if task.RunID != "" {
-			if _, active := s.store.ActiveRunForSession(task.SessionID); active && status != protocol.TaskCancelled {
+			// The delegated run id is available from the moment of delegation;
+			// task.SessionID is empty until the host reports the new native
+			// session, so checking the session alone let a status change
+			// through while the delegated run was still active.
+			active := false
+			if run, _, err := s.store.RunByID(task.RunID); err == nil && run.EndedAt == nil {
+				active = true
+			}
+			if !active {
+				// A resumed task can share its session with a newer run.
+				_, active = s.store.ActiveRunForSession(task.SessionID)
+			}
+			if active && status != protocol.TaskCancelled {
 				writeError(w, http.StatusConflict, "stop the active run before changing the task status")
 				return
 			}

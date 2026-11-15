@@ -142,7 +142,10 @@ func (s *Store) ListHosts(userID string, all bool) ([]protocol.HostView, error) 
 	if err != nil {
 		return nil, err
 	}
-	var out []protocol.HostView
+	// A user without any visible host must get an empty list, not null: the
+	// browser renders `hosts.filter(...)` and would otherwise crash on the
+	// very first page after setup.
+	out := make([]protocol.HostView, 0, 8)
 	for rows.Next() {
 		var h protocol.HostView
 		var seen int64

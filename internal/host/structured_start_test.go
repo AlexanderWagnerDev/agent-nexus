@@ -70,6 +70,15 @@ func TestStartGeminiStructuredUsesACPCommand(t *testing.T) {
 	if run.sessionID != "fake-acp-session" {
 		t.Fatalf("gemini ACP session: %q", run.sessionID)
 	}
+	// A new run must reserve the native session the driver created. Leaving
+	// the synthetic "new" key hid the live session from the discovery overlay
+	// and from the duplicate-run guard.
+	if run.sessionKey != "gemini:fake-acp-session" {
+		t.Fatalf("run session key = %q, want the created native session", run.sessionKey)
+	}
+	if !d.sessionActiveLocked("gemini:fake-acp-session") {
+		t.Fatal("a live structured run does not own its native session key")
+	}
 	if err := run.Prompt("hello", nil); err != nil {
 		t.Fatalf("gemini ACP prompt: %v", err)
 	}

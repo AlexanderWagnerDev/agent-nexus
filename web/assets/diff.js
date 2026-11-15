@@ -38,23 +38,42 @@ export function parseUnifiedDiff(source) {
     files.push(file);
     return file;
   };
-  for (const line of text.split('\n')) {
+  const lines = text.split('\n');
+  let expectNewFileHeader = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    // A "--- x" / "+++ y" pair starts a new file header only outside a hunk,
+    // or when the pair is complete. Inside a hunk the same prefixes are added
+    // or removed content lines (for example a diff of a .patch file) and must
+    // stay part of the body.
+    const startsFileHeader = line.startsWith('--- ') && (lines[index + 1] || '').startsWith('+++ ');
     if (line.startsWith('diff --git ')) {
       const match = line.match(/^diff --git a\/(.*?) b\/(.*)$/);
       file = { path: cleanPath(match?.[2] || match?.[1] || 'changes'), oldPath: cleanPath(match?.[1]), newPath: cleanPath(match?.[2]), additions: 0, deletions: 0, hunks: [], binary: false };
       files.push(file);
       hunk = null;
+      expectNewFileHeader = false;
       continue;
     }
-    if (line.startsWith('--- ')) {
+    if ((!hunk || startsFileHeader) && line.startsWith('--- ')) {
+      if (hunk && startsFileHeader) {
+        // A complete ---/+++ pair after a hunk starts the next file of a diff
+        // that has no `diff --git` line.
+        file = { path: 'changes', oldPath: '', newPath: '', additions: 0, deletions: 0, hunks: [], binary: false };
+        files.push(file);
+      }
       ensureFile().oldPath = cleanPath(line.slice(4));
+      hunk = null;
+      expectNewFileHeader = true;
       continue;
     }
-    if (line.startsWith('+++ ')) {
+    if ((!hunk || expectNewFileHeader) && line.startsWith('+++ ')) {
       ensureFile().newPath = cleanPath(line.slice(4));
       if (file?.newPath) file.path = file.newPath;
+      expectNewFileHeader = false;
       continue;
     }
+    expectNewFileHeader = false;
     const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
     if (hunkMatch) {
       const target = ensureFile();
@@ -73,11 +92,11 @@ export function parseUnifiedDiff(source) {
       continue;
     }
     const first = line[0];
-    if (first === '+' && !line.startsWith('+++')) {
+    if (first === '+') {
       hunk.lines.push({ type: 'add', text: line.slice(1), oldLine: null, newLine });
       file.additions += 1;
       newLine += 1;
-    } else if (first === '-' && !line.startsWith('---')) {
+    } else if (first === '-') {
       hunk.lines.push({ type: 'del', text: line.slice(1), oldLine, newLine: null });
       file.deletions += 1;
       oldLine += 1;

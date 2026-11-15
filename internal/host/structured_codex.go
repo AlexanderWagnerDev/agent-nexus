@@ -227,6 +227,11 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	}
 	d.runMu.Lock()
 	d.codexRuns[spec.RunID] = cr
+	if cr.threadID != "" {
+		// Bind to the created/forked thread for the same reason as the
+		// OpenCode driver: discovery and the run guard need the real key.
+		cr.sessionKey = "codex:" + cr.threadID
+	}
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	if d.consumePendingStop(spec.RunID) {

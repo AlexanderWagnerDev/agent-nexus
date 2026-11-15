@@ -70,6 +70,8 @@ export function highlightCode(code, lang) {
   const comment = commentPattern(language);
   const parts = [];
   if (comment) parts.push(`(${comment})`);
+  // The string/number groups shift by one when a comment group is present.
+  const groupOffset = comment ? 1 : 0;
   parts.push(`("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\\x60(?:\\\\.|[^\\x60\\\\])*\\x60)`);
   parts.push('(\\b\\d+(?:\\.\\d+)?\\b)');
   parts.push('([A-Za-z_$][A-Za-z0-9_$]*)');
@@ -81,9 +83,9 @@ export function highlightCode(code, lang) {
   while ((match = re.exec(source))) {
     out += escapeHtml(source.slice(last, match.index));
     const token = match[0];
-    if (match[1] !== undefined) out += wrapToken(token, 'com');
-    else if (match[2] !== undefined) out += wrapToken(token, 'str');
-    else if (match[3] !== undefined) out += wrapToken(token, 'num');
+    if (comment && match[1] !== undefined) out += wrapToken(token, 'com');
+    else if (match[1 + groupOffset] !== undefined) out += wrapToken(token, 'str');
+    else if (match[2 + groupOffset] !== undefined) out += wrapToken(token, 'num');
     else if (keywords.has(token)) out += wrapToken(token, 'key');
     else if (LITERALS.has(token)) out += wrapToken(token, 'lit');
     else out += escapeHtml(token);
