@@ -162,7 +162,7 @@ async function run() {
 
     const after = await page.evaluate(() => {
       const list = document.getElementById('session-list');
-      const hrefs = [...list.querySelectorAll('.virtual-row')].map((row) => row.getAttribute('href'));
+      const hrefs = [...list.querySelectorAll('.virtual-row a.session-row-link')].map((row) => row.getAttribute('href'));
       return {
         rows: list.querySelectorAll('.virtual-row').length,
         nodes: list.querySelectorAll('*').length,
