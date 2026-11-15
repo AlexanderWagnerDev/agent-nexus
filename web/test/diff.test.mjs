@@ -109,3 +109,27 @@ test('keeps a bare multi-file diff as separate files', () => {
   assert.equal(files[1].additions, 1);
   assert.equal(files[1].deletions, 1);
 });
+
+test('keeps a header-like removal and addition as hunk content', () => {
+  // A hunk that removes "-- old text" and adds "++ new text" produces
+  // consecutive lines starting with --- and +++. They are content, not a new
+  // file, until the hunk has consumed its announced line counts.
+  const source = [
+    'diff --git a/notes.md b/notes.md',
+    '--- a/notes.md',
+    '+++ b/notes.md',
+    '@@ -1,2 +1,3 @@',
+    ' before',
+    '--- old text',
+    '+++ new text',
+    ' after',
+  ].join('\n');
+  const files = parseUnifiedDiff(source);
+  assert.equal(files.length, 1);
+  assert.equal(files[0].path, 'notes.md');
+  assert.equal(files[0].additions, 1);
+  assert.equal(files[0].deletions, 1);
+  assert.deepEqual(files[0].hunks[0].lines.map((line) => line.type), ['context', 'del', 'add', 'context']);
+  assert.equal(files[0].hunks[0].lines[1].text, '-- old text');
+  assert.equal(files[0].hunks[0].lines[2].text, '++ new text');
+});

@@ -32,6 +32,11 @@ export function parseUnifiedDiff(source) {
   let hunk = null;
   let oldLine = 0;
   let newLine = 0;
+  // Lines remaining in the current hunk as announced by its @@ header. A
+  // header pair is only a new file once the hunk is exhausted; inside a hunk
+  // the same prefixes are removed/added content.
+  let oldRemaining = 0;
+  let newRemaining = 0;
   const ensureFile = () => {
     if (file) return file;
     file = { path: 'changes', oldPath: '', newPath: '', additions: 0, deletions: 0, hunks: [], binary: false };
@@ -47,6 +52,7 @@ export function parseUnifiedDiff(source) {
     // or removed content lines (for example a diff of a .patch file) and must
     // stay part of the body.
     const startsFileHeader = line.startsWith('--- ') && (lines[index + 1] || '').startsWith('+++ ');
+    const hunkComplete = !hunk || (oldRemaining <= 0 && newRemaining <= 0);
     if (line.startsWith('diff --git ')) {
       const match = line.match(/^diff --git a\/(.*?) b\/(.*)$/);
       file = { path: cleanPath(match?.[2] || match?.[1] || 'changes'), oldPath: cleanPath(match?.[1]), newPath: cleanPath(match?.[2]), additions: 0, deletions: 0, hunks: [], binary: false };
@@ -55,7 +61,7 @@ export function parseUnifiedDiff(source) {
       expectNewFileHeader = false;
       continue;
     }
-    if ((!hunk || startsFileHeader) && line.startsWith('--- ')) {
+    if ((!hunk || (hunkComplete && startsFileHeader)) && line.startsWith('--- ')) {
       if (hunk && startsFileHeader) {
         // A complete ---/+++ pair after a hunk starts the next file of a diff
         // that has no `diff --git` line.
@@ -74,11 +80,13 @@ export function parseUnifiedDiff(source) {
       continue;
     }
     expectNewFileHeader = false;
-    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
+    const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
     if (hunkMatch) {
       const target = ensureFile();
       oldLine = Number(hunkMatch[1]);
-      newLine = Number(hunkMatch[2]);
+      newLine = Number(hunkMatch[3]);
+      oldRemaining = hunkMatch[2] === undefined ? 1 : Number(hunkMatch[2]);
+      newRemaining = hunkMatch[4] === undefined ? 1 : Number(hunkMatch[4]);
       hunk = { header: line, oldStart: oldLine, newStart: newLine, lines: [] };
       target.hunks.push(hunk);
       continue;
@@ -96,18 +104,24 @@ export function parseUnifiedDiff(source) {
       hunk.lines.push({ type: 'add', text: line.slice(1), oldLine: null, newLine });
       file.additions += 1;
       newLine += 1;
+      newRemaining -= 1;
     } else if (first === '-') {
       hunk.lines.push({ type: 'del', text: line.slice(1), oldLine, newLine: null });
       file.deletions += 1;
       oldLine += 1;
+      oldRemaining -= 1;
     } else if (first === ' ') {
       hunk.lines.push({ type: 'context', text: line.slice(1), oldLine, newLine });
       oldLine += 1;
       newLine += 1;
+      oldRemaining -= 1;
+      newRemaining -= 1;
     } else if (line === '' && hunk.lines.length) {
       hunk.lines.push({ type: 'context', text: '', oldLine, newLine });
       oldLine += 1;
       newLine += 1;
+      oldRemaining -= 1;
+      newRemaining -= 1;
     }
   }
   return files.filter((entry) => entry.hunks.length || entry.binary);
