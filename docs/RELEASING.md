@@ -64,8 +64,9 @@ accurately without turning optional testing into release blockers.
 3. Then run **Container** with `release_tag=v0.1.1` and `publish_latest=true`
    for a stable release. The dispatch publishes `v0.1.1`, `0.1.1`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
-   Dispatch it either from `main` while `HEAD` is still the tagged commit, or
-   from the tag itself; both are accepted, while a stale `main` is rejected.
+   Dispatch it from `main` or from the tag; when `release_tag` is set the
+   workflow checks out that tag before building, so a newer `main` does not
+   block a release rebuild, while a non-main branch is rejected.
    Ordinary `main` builds keep publishing `alpha`/`sha-*` and can never
    overwrite the version tags.
 4. Verify a host update on a disposable installation before announcing it.
