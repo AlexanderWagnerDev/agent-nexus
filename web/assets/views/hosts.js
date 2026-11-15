@@ -5,6 +5,7 @@ import { state } from '../state.js';
 import { badge, confirmDanger, copyText, modal, toast } from '../ui.js';
 import { shareHostDialog } from '../components/host-share.js';
 import { newSessionDialog } from '../components/new-session.js';
+import { installCommand } from '../install-command.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { agentVersion, esc, fmtRelative } from '../ui-format.js';
@@ -152,17 +153,37 @@ export async function pairHostDialog() {
     if (!box) return;
     box.className = 'secret';
     box.textContent = data.code;
-    const origin = location.origin.replace(/^http/, 'ws');
-    document.getElementById('pair-steps').innerHTML = `
-      <p class="small muted mt-2">${t('Run this on the machine you want to add:')}</p>
-      <div class="secret">nexusd pair --hub ${esc(location.origin)} --code ${esc(data.code)}</div>
-      <div class="split mt-1">
-        <button class="btn small" id="copy-code">${t('Copy code')}</button>
-        <button class="btn small" id="copy-command">${t('Copy command')}</button>
+    const steps = document.getElementById('pair-steps');
+    steps.innerHTML = `
+      <p class="small muted mt-2">${t('Run this one-liner on the machine you want to add. It installs, pairs and starts the service.')}</p>
+      <div class="split" id="install-os" role="group" aria-label="${t('Operating system')}">
+        <button type="button" class="btn small" data-install-os="linux">Linux</button>
+        <button type="button" class="btn small" data-install-os="macos">macOS</button>
+        <button type="button" class="btn small" data-install-os="windows">Windows</button>
       </div>
-      <p class="small muted mt-2">${t('Then install the per-user service:')} <code>nexusd service install</code>. ${t('The host is accepted by this hub at')} <code>${esc(origin)}/v1/host/connect</code>.</p>`;
+      <div class="secret mt-1" id="install-command"></div>
+      <div class="split mt-1">
+        <button class="btn small" id="copy-install-command">${t('Copy install command')}</button>
+        <button class="btn small" id="copy-code">${t('Copy code')}</button>
+      </div>
+      <details class="mt-2">
+        <summary class="small muted">${t('Already installed? Pair manually:')}</summary>
+        <div class="secret mt-1">nexusd pair --hub ${esc(location.origin)} --code ${esc(data.code)}</div>
+      </details>`;
+    let os = /Win/i.test(navigator.userAgent) ? 'windows' : (/Mac/i.test(navigator.userAgent) ? 'macos' : 'linux');
+    const renderCommand = () => {
+      document.getElementById('install-command').textContent = installCommand(os, location.origin, data.code, state.version);
+      document.querySelectorAll('[data-install-os]').forEach((button) => {
+        button.classList.toggle('primary', button.dataset.installOs === os);
+      });
+    };
+    document.querySelectorAll('[data-install-os]').forEach((button) => button.addEventListener('click', () => {
+      os = button.dataset.installOs;
+      renderCommand();
+    }));
+    renderCommand();
+    document.getElementById('copy-install-command').addEventListener('click', () => copyText(document.getElementById('install-command').textContent));
     document.getElementById('copy-code').addEventListener('click', () => copyText(data.code));
-    document.getElementById('copy-command').addEventListener('click', () => copyText(`nexusd pair --hub ${location.origin} --code ${data.code}`));
   }).catch((err) => {
     const box = document.getElementById('pair-code');
     if (box) { box.className = 'notice error'; box.textContent = err.message; }
