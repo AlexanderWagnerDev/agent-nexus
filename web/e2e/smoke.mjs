@@ -105,6 +105,12 @@ async function run() {
       assert(await page.locator('#view').count(), `view missing for ${route}`);
     }
 
+    // A fresh hub has no hosts. Home must render normally, not fall into the
+    // router's error branch (the API used to answer {"hosts":null}).
+    await page.goto(`${baseURL}/`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.home-title');
+    assert(!(await page.locator('#view .notice.error').count()), 'home page reported an error without any host');
+
     await page.goto(`${baseURL}/#/`, { waitUntil: 'networkidle' });
     await page.focus('#command-trigger');
     await page.keyboard.press('Control+K');

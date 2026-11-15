@@ -231,6 +231,11 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 
 	d.runMu.Lock()
 	d.acpRuns[spec.RunID] = ar
+	if ar.sessionID != "" {
+		// Bind to the created/forked ACP session so the discovery overlay and
+		// the duplicate-run guard see the real native id.
+		ar.sessionKey = spec.Agent + ":" + string(ar.sessionID)
+	}
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	if d.consumePendingStop(spec.RunID) {

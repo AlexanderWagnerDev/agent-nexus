@@ -98,3 +98,11 @@ test('invalid tool input stays raw instead of throwing', () => {
   const described = describeTool('custom', 'not json');
   assert.equal(described.detail, 'not json');
 });
+
+test('colours strings and numbers in languages without comments', () => {
+  // JSON has no comment pattern; the group offsets must still line up.
+  const html = highlightCode('{"a": 1, "b": "s"}', 'json');
+  assert.ok(html.includes('<span class="tok-str">&quot;a&quot;</span>'), html);
+  assert.ok(html.includes('<span class="tok-num">1</span>'), html);
+  assert.ok(!html.includes('<span class="tok-com">&quot;a&quot;</span>'), html);
+});

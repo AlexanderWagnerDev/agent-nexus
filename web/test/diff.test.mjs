@@ -77,3 +77,35 @@ test('marks binary diffs without line content', () => {
   assert.equal(files[0].binary, true);
   assert.ok(renderUnifiedDiff(files).includes('Binary file differs'));
 });
+
+test('keeps patch-like content inside a hunk', () => {
+  // A diff of a file that itself contains a patch: the added line starts with
+  // "++ " and must not be mistaken for a new file header.
+  const source = [
+    'diff --git a/patch.txt b/patch.txt',
+    '--- a/patch.txt',
+    '+++ b/patch.txt',
+    '@@ -1,2 +1,3 @@',
+    ' context',
+    '+++ b/other.txt',
+    ' tail',
+  ].join('\n');
+  const files = parseUnifiedDiff(source);
+  assert.equal(files.length, 1);
+  assert.equal(files[0].path, 'patch.txt');
+  assert.equal(files[0].newPath, 'patch.txt');
+  assert.equal(files[0].additions, 1);
+  assert.deepEqual(files[0].hunks[0].lines.map((line) => line.type), ['context', 'add', 'context']);
+  assert.equal(files[0].hunks[0].lines[1].text, '++ b/other.txt');
+  assert.equal(files[0].hunks[0].lines[2].newLine, 3);
+});
+
+test('keeps a bare multi-file diff as separate files', () => {
+  const source = ['--- a/one.txt', '+++ b/one.txt', '@@ -1 +1 @@', '-old', '+new', '--- a/two.txt', '+++ b/two.txt', '@@ -1 +1 @@', '-x', '+y'].join('\n');
+  const files = parseUnifiedDiff(source);
+  assert.equal(files.length, 2);
+  assert.equal(files[0].path, 'one.txt');
+  assert.equal(files[1].path, 'two.txt');
+  assert.equal(files[1].additions, 1);
+  assert.equal(files[1].deletions, 1);
+});

@@ -228,6 +228,13 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 
 	d.runMu.Lock()
 	d.structured[spec.RunID] = sr
+	if sr.sessionID != "" {
+		// Bind the run to the native session the driver just created. The
+		// discovery overlay and the duplicate-run guard are keyed by this
+		// value; leaving the synthetic "new"/"fork" key hid a live session
+		// (reported idle) and let a second run attach to it.
+		sr.sessionKey = spec.Agent + ":" + sr.sessionID
+	}
 	d.runMu.Unlock()
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
 	if d.consumePendingStop(spec.RunID) {

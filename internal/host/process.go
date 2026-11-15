@@ -28,14 +28,23 @@ func detectActiveElsewhere(ctx context.Context, sessions []protocol.Session) map
 
 func matchActiveSessions(lines []string, sessions []protocol.Session) map[string]bool {
 	active := map[string]bool{}
+	if len(lines) == 0 || len(sessions) == 0 {
+		return active
+	}
+	// Lowercase every command line once. Doing it inside the session loop made
+	// a snapshot O(sessions x processes) with one allocation per pair, which
+	// dominated discovery time on hosts with thousands of sessions.
+	lowered := make([]string, len(lines))
+	for i, line := range lines {
+		lowered[i] = strings.ToLower(line)
+	}
 	for _, s := range sessions {
 		if s.NativeID == "" {
 			continue
 		}
 		needle := strings.ToLower(s.NativeID)
 		agent := strings.ToLower(s.Agent)
-		for _, line := range lines {
-			lower := strings.ToLower(line)
+		for _, lower := range lowered {
 			if strings.Contains(lower, needle) && strings.Contains(lower, agent) {
 				active[s.Agent+":"+s.NativeID] = true
 				break
