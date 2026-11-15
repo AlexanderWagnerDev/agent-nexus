@@ -53,12 +53,6 @@ const de = {
   'Create hub': 'Hub anlegen',
   'First-run setup': 'Ersteinrichtung',
   'Creating...': 'Wird angelegt…',
-  'Save your authenticator secret': 'Authenticator-Secret speichern',
-  'TOTP is optional until you confirm it. Scan this URI with an authenticator app, or copy the secret. You can enrol later in Devices.':
-    'TOTP ist optional, bis du es bestätigst. Scanne diese URI mit einer Authenticator-App oder kopiere das Secret. Du kannst es später unter Geräte einrichten.',
-  'otpauth URI': 'otpauth-URI',
-  'Copy secret': 'Secret kopieren',
-  'I saved it': 'Ich habe es gespeichert',
   'Sign in': 'Anmelden',
   'Use your owner account. Authenticator code is required once TOTP is enabled.':
     'Melde dich mit deinem Eigentümer-Konto an. Sobald TOTP aktiviert ist, wird der Authenticator-Code benötigt.',

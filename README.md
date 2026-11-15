@@ -186,7 +186,7 @@ Requirements: Go 1.26.11+ and Node.js only for the JavaScript syntax check (the 
 ./bin/nexus-hub --addr 127.0.0.1:8080 --data-dir ./.nexus
 
 # 2. Open http://127.0.0.1:8080, create the owner account.
-#    Save the TOTP secret shown after setup if you want a second factor.
+#    TOTP can be enrolled later under Settings -> Devices.
 
 # 3. In the web UI: Hosts -> "Pair a host" -> copy the command.
 # 4. On the machine that runs your agents:

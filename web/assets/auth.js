@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { loadUserTheme, renderShell } from './shell.js';
 import { state, storeSet } from './state.js';
-import { app, closeModal, copyText, modal, toast } from './ui.js';
+import { app, closeModal, modal, toast } from './ui.js';
 import { disconnectWS } from './ws.js';
 import { route } from './router.js';
 import { getLang, setLang, t } from './i18n.js';
@@ -52,7 +52,7 @@ export function renderAuth(mode, error = '') {
       button.disabled = true;
       button.innerHTML = `<span class="spinner"></span> ${t('Creating...')}`;
       try {
-        const data = await api('/setup', { method: 'POST', body: {
+        await api('/setup', { method: 'POST', body: {
           username: form.get('username'), password: form.get('password'),
         }, allow401: true });
         state.me = await api('/me');
@@ -60,19 +60,6 @@ export function renderAuth(mode, error = '') {
       await loadUserTheme();
         renderShell('overview');
         await route();
-        if (data.totp_secret) {
-          modal(`
-            <h2>${t('Save your authenticator secret')}</h2>
-            <p class="hint">${t('TOTP is optional until you confirm it. Scan this URI with an authenticator app, or copy the secret. You can enrol later in Devices.').replace('Devices', `<b>${t('Devices')}</b>`)}</p>
-            <div class="secret">${esc(data.totp_secret)}</div>
-            <p class="small muted mt-1">${t('otpauth URI')}</p>
-            <div class="secret">${esc(data.totp_url)}</div>
-            <div class="modal-actions">
-              <button class="btn" type="button" id="copy-totp">${t('Copy secret')}</button>
-              <button class="btn primary" type="button" data-close>${t('I saved it')}</button>
-            </div>`);
-          document.getElementById('copy-totp').addEventListener('click', () => copyText(data.totp_secret));
-        }
       } catch (err) {
         renderAuth('setup', err.message);
       }
