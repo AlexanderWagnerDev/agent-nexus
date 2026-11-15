@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { draftKey, parseStored } from '../assets/state.js';
 import { backoffBase, backoffDelay, nextBackoff } from '../assets/ws.js';
+import { versionLabel } from '../assets/ui-format.js';
 
 test('parses stored JSON and falls back on missing or corrupt values', () => {
   assert.deepEqual(parseStored('{"a":1}', null), { a: 1 });
@@ -27,4 +28,11 @@ test('jittered delay stays inside the 80-120 percent window', () => {
   assert.equal(backoffDelay(1000, () => 1), 1200);
   assert.equal(backoffDelay(1000, () => 0.5), 1000);
   assert.equal(backoffDelay(40000, () => 1), 18000);
+});
+
+test('release versions get a display v prefix, development markers keep theirs', () => {
+  assert.equal(versionLabel('0.1.0'), 'v0.1.0');
+  assert.equal(versionLabel('alpha-71541c2'), 'alpha-71541c2');
+  assert.equal(versionLabel(''), '');
+  assert.equal(versionLabel(null), '');
 });

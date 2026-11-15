@@ -25,6 +25,7 @@ const de = {
   Notifications: 'Benachrichtigungen',
   'Open navigation': 'Navigation öffnen',
   'Sign out': 'Abmelden',
+  'Source code on GitHub': 'Quellcode auf GitHub',
   'Collapse sidebar': 'Seitenleiste einklappen',
   'Expand sidebar': 'Seitenleiste ausklappen',
   'Main navigation': 'Hauptnavigation',

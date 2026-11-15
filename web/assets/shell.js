@@ -9,7 +9,7 @@ import { connectWS } from './ws.js';
 import { applyDiffMode } from './components/transcript.js';
 import { t } from './i18n.js';
 import { svgIcon } from './icons.js';
-import { countLabel, cwdKey, esc, groupProjects } from './ui-format.js';
+import { countLabel, cwdKey, esc, groupProjects, versionLabel } from './ui-format.js';
 
 export const navItems = [
   ['#/', 'Home', 'home', 'overview'],
@@ -72,6 +72,10 @@ export function renderShell(active = 'overview') {
             <span class="avatar">${esc(initials)}</span>
             <span class="user-meta nav-label"><strong>${esc(state.me.username)}</strong><small>${esc(t(role))}</small></span>
             <button class="icon-btn user-logout" id="logout" type="button" title="${t('Sign out')}" aria-label="${t('Sign out')}">${svgIcon('external')}</button>
+          </div>
+          <div class="sidebar-meta">
+            <span title="${t('Version')}">AgentNexus ${esc(versionLabel(state.version) || t('unknown'))}</span>
+            <a href="https://github.com/AlexanderWagnerDev/agent-nexus" target="_blank" rel="noopener noreferrer" title="${t('Source code on GitHub')}">GitHub${svgIcon('external', 11)}</a>
           </div>
         </div>
       </aside>

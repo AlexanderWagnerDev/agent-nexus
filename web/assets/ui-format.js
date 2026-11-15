@@ -53,6 +53,15 @@ export function shortId(id) {
   return id ? id.slice(0, 10) : '';
 }
 
+// The hub reports the version without the leading "v" for official builds and
+// with an "alpha-" prefix for development builds. Display the release form as
+// v0.1.0 while leaving development markers untouched.
+export function versionLabel(version) {
+  const raw = String(version ?? '').trim();
+  if (!raw) return '';
+  return /^\d/.test(raw) ? `v${raw}` : raw;
+}
+
 export function countLabel(count, singular, plural) {
   return tp(count, singular, plural);
 }

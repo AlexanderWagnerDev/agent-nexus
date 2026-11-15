@@ -52,13 +52,15 @@ function groupHead(group) {
 }
 
 function row(session, group) {
-  return `<a class="session-row virtual-row" href="#/sessions/${esc(session.id)}">
-    ${agentGlyph(session.agent)}
-    <span class="session-row-main"><strong>${esc(session.local_title || session.title || t('Untitled session'))}</strong><small>${group.hosts.size > 1 ? `${esc(session.host_name || session.host_id)} &middot; ` : ''}${esc(fmtRelative(session.updated_at))} &middot; ${countLabel(session.message_count || 0, 'message', 'messages')}${group.roots.size > 1 && session.repo_root ? ` &middot; ${esc(projectName(session.repo_root))}` : ''}</small></span>
+  return `<div class="session-row virtual-row">
+    <a class="session-row-link" href="#/sessions/${esc(session.id)}">
+      ${agentGlyph(session.agent)}
+      <span class="session-row-main"><strong>${esc(session.local_title || session.title || t('Untitled session'))}</strong><small>${group.hosts.size > 1 ? `${esc(session.host_name || session.host_id)} &middot; ` : ''}${esc(fmtRelative(session.updated_at))} &middot; ${countLabel(session.message_count || 0, 'message', 'messages')}${group.roots.size > 1 && session.repo_root ? ` &middot; ${esc(projectName(session.repo_root))}` : ''}</small></span>
+    </a>
     <span class="row-tags">${tagChips(session.tags)}</span>
     ${nativeActivityBadge(session.active_elsewhere, true)}
     ${stateBadge(session.state)}
-  </a>`;
+  </div>`;
 }
 
 export async function pageSessions() {
@@ -264,7 +266,6 @@ export async function pageSessions() {
   list.addEventListener('click', (event) => {
     const button = event.target.closest('[data-tag-filter]');
     if (!button) return;
-    event.preventDefault();
     document.getElementById('filter-tag').value = button.dataset.tagFilter;
     load(true).catch((err) => toast(err.message, true));
   });

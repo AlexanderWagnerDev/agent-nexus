@@ -5,7 +5,7 @@ import { app, closeModal, copyText, modal, toast } from './ui.js';
 import { disconnectWS } from './ws.js';
 import { route } from './router.js';
 import { getLang, setLang, t } from './i18n.js';
-import { esc } from './ui-format.js';
+import { esc, versionLabel } from './ui-format.js';
 
 export function authFrame(inner, subtitle) {
   app.className = 'app-loading';
@@ -22,6 +22,7 @@ export function authFrame(inner, subtitle) {
         </div>
         <div class="card">${inner}</div>
         <p class="small muted" style="text-align:center;margin-top:14px">${t('Self-hosted · no telemetry · transcript content stays on your hosts')}</p>
+        <p class="small muted auth-meta">AgentNexus ${esc(versionLabel(state.version) || t('unknown'))} · <a href="https://github.com/AlexanderWagnerDev/agent-nexus" target="_blank" rel="noopener noreferrer">GitHub</a></p>
       </div>
     </div>`;
   app.querySelectorAll('[data-lang]').forEach((button) => button.addEventListener('click', () => {

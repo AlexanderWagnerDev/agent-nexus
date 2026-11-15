@@ -61,10 +61,12 @@ export function renderTabs() {
     const key = tab.key || tab.id;
     const href = tab.href || (tab.kind === 'session' ? `#/sessions/${esc(tab.id)}` : `#/runs/${esc(tab.id)}`);
     const active = location.hash === href;
-    return `<a class="tab ${active ? 'active' : ''}" href="${esc(href)}" title="${esc(tab.title || '')}">
-      ${agentGlyph(tab.agent, 'tiny')}<span class="tab-title">${esc(tab.title || t('Untitled'))}</span>
+    return `<div class="tab ${active ? 'active' : ''}">
+      <a class="tab-link" href="${esc(href)}" title="${esc(tab.title || '')}">
+        ${agentGlyph(tab.agent, 'tiny')}<span class="tab-title">${esc(tab.title || t('Untitled'))}</span>
+      </a>
       <button class="tab-close" type="button" data-close-tab="${esc(key)}" aria-label="${t('Close tab')}">${svgIcon('x', 13)}</button>
-    </a>`;
+    </div>`;
   }).join('')}</div>`;
   bar.querySelectorAll('[data-close-tab]').forEach((button) => button.addEventListener('click', (event) => {
     event.preventDefault();
