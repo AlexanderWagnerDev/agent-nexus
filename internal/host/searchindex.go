@@ -335,19 +335,26 @@ func transcriptBody(ctx context.Context, adapter Adapter, nativeID string) (stri
 			break
 		}
 		for _, m := range tr.Messages {
+			if b.Len() >= indexBodyLimit {
+				break
+			}
 			for _, value := range []string{m.Text, m.ToolName, m.ToolInput, m.ToolOutput} {
 				value = strings.TrimSpace(value)
 				if value == "" {
 					continue
 				}
-				if b.Len()+len(value) > indexBodyLimit {
-					value = value[:indexBodyLimit-b.Len()]
+				remaining := indexBodyLimit - b.Len()
+				if remaining <= 0 {
+					break
+				}
+				if len(value) > remaining {
+					value = value[:remaining]
 				}
 				b.WriteString(value)
-				b.WriteByte('\n')
 				if b.Len() >= indexBodyLimit {
 					break
 				}
+				b.WriteByte('\n')
 			}
 		}
 		if tr.Next <= 0 || len(tr.Messages) == 0 || (tr.Total > 0 && tr.Next >= tr.Total) {

@@ -416,6 +416,13 @@ func (d *Daemon) refreshSearchIndex(ctx context.Context) {
 	if d.index == nil {
 		return
 	}
+	// A malformed transcript must not take down the daemon. Indexing is a
+	// background cache; report the panic and retry on the next refresh.
+	defer func() {
+		if r := recover(); r != nil {
+			d.log.Error("search index refresh panicked", "panic", r)
+		}
+	}()
 	d.indexMu.Lock()
 	defer d.indexMu.Unlock()
 	if err := d.index.Refresh(ctx, d.adapters, d.policy, d.log); err != nil && ctx.Err() == nil {

@@ -250,3 +250,22 @@ func TestDispatchSearchUsesReadyIndexAndFallsBackWhileBuilding(t *testing.T) {
 		t.Fatalf("status: %+v", got)
 	}
 }
+
+func TestTranscriptBodyStopsAtLimitWithoutPanicking(t *testing.T) {
+	adapter := &indexTestAdapter{transcripts: map[string]protocol.Transcript{
+		"big": {Total: 2, Messages: []protocol.Message{
+			{Role: "user", Text: strings.Repeat("x", indexBodyLimit+64)},
+			{Role: "assistant", Text: "trailing value"},
+		}},
+	}}
+	body, err := transcriptBody(context.Background(), adapter, "big")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) > indexBodyLimit {
+		t.Fatalf("body length %d exceeds the limit %d", len(body), indexBodyLimit)
+	}
+	if len(body) == 0 {
+		t.Fatal("expected a truncated body")
+	}
+}
