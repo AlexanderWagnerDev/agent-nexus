@@ -8,8 +8,8 @@
 # Required:
 #   HUB_DOMAIN   external HTTPS hostname (WebAuthn requires a hostname)
 #   NEXUS_TAG    latest for the stable release channel, alpha for main,
-#                v0.1.0/0.1.0 for the first release, or a commit-based
-#                sha-<short> tag for a pinned build.
+#                v0.1.1/0.1.1 for the current release (v0.1.0/0.1.0 for the
+#                first), or a commit-based sha-<short> tag for a pinned build.
 # Optional:
 #   HUB_NAME, HUB_BIND (default 127.0.0.1), HUB_PORT (default 8787)
 #   WUD_WATCH_DIGEST=true (default; set false when pinning a sha- tag)

@@ -8,8 +8,8 @@
 #   HUB_DOMAIN      external HTTPS hostname (WebAuthn requires a hostname)
 #   PROXY_NETWORK   exact name of the existing proxy network
 #   NEXUS_TAG       latest for the stable release channel, alpha for main,
-#                   v0.1.0/0.1.0 for the first release, or sha-<short> for a
-#                   pinned commit build.
+#                   v0.1.1/0.1.1 for the current release (v0.1.0/0.1.0 for the
+#                   first), or sha-<short> for a pinned commit build.
 # Optional:
 #   HUB_NAME, WUD_WATCH_DIGEST=true (false when pinning a sha- tag), subnets
 #

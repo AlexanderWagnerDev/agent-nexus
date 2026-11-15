@@ -30,4 +30,4 @@ their session stores inside the distribution's filesystem. The Windows-side
 - Use a distinct host name for each distribution; AgentNexus treats them as
   independent machines.
 - This path is documented but was not exercised on a WSL installation in the
-  v0.1.0 development environment.
+  current development environment.
