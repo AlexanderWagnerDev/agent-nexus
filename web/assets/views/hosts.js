@@ -53,7 +53,7 @@ export async function pageHosts() {
     view.innerHTML = `<div class="card empty"><strong>${t('No hosts paired')}</strong>${t('Create a one-time code, then run')} <code>nexusd pair --hub ${esc(location.origin)} --code &lt;code&gt;</code> ${t('on the machine.')}</div>`;
     return;
   }
-  view.innerHTML = `<div class="list">${hosts.map((h) => `
+  view.innerHTML = `<div class="list host-list">${hosts.map((h) => `
     <div class="host-row">
       <div class="host-id">
         <div class="host-name"><span class="side-dot ${h.status === 'online' ? 'on' : ''}"></span><a href="#/hosts/${encodeURIComponent(h.id)}" class="host-name-link">${esc(h.name)}</a>${badge(t(h.pending ? 'pending' : (h.disabled ? 'disabled' : (h.status === 'online' ? 'online' : 'offline'))), h.pending ? 'waiting_for_input' : (h.disabled ? 'failed' : h.status))}${h.health ? badge(t(h.health.state), h.health.state === 'healthy' ? 'online' : (h.health.state === 'degraded' ? 'waiting_for_input' : 'offline')) : ''}${h.update?.available ? `<span class="badge waiting_for_input" title="${t('nexusd update available')}">${t('update')} ${esc(h.update.latest || '')}</span>` : ''}${['failed', 'rolled_back', 'blocked'].includes(h.update?.state) ? badge(t(h.update.state), 'failed') : ''}</div>

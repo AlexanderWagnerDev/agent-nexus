@@ -1112,6 +1112,13 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 
 /* ---------- hosts ---------- */
 
+/* The action menu is absolutely positioned. The generic list clips it at the
+   bottom row, hiding rename/revoke; keep the host list open and round the row
+   corners instead. */
+.host-list { overflow: visible; }
+.host-list .host-row:first-child { border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); }
+.host-list .host-row:last-child { border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
+
 .host-row { display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(140px, 1fr) auto; gap: 14px; align-items: center; padding: 10px 12px; background: var(--bg-elev); }
 .host-row + .host-row { border-top: 1px solid var(--line-soft); }
 .host-id { min-width: 0; }
