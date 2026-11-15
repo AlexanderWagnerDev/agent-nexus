@@ -4,6 +4,18 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-11-16
+
+### Fixed
+
+- Host: a transcript that filled the search-index body limit could panic
+  `transcriptBody` with a negative slice bound, killing `nexusd` while the
+  background index was building and leaving the host offline. The body is now
+  clamped to the limit, and index-refresh panics are recovered so a malformed
+  transcript cannot take the host down.
+- Web: the last host row's action menu was clipped by the list container,
+  hiding rename and revoke. The host list no longer clips its overflow.
+
 ## [0.1.2] - 2026-11-16
 
 ### Added
@@ -60,6 +72,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.3]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.3
 [0.1.2]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2
 [0.1.1]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.1
 [0.1.0]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0

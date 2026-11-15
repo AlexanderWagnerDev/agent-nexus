@@ -2,14 +2,14 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: v0.1.2 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: v0.1.3 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
-**v0.1.2 is the current release; v0.1.0 was the first official release.**
+**v0.1.3 is the current release; v0.1.0 was the first official release.**
 Releases are published through the manual release workflow as
 [GitHub releases](https://github.com/AlexanderWagnerDev/agent-nexus/releases)
-with signed archives and as multi-arch container images tagged `v0.1.2`,
-`0.1.2`, `latest` and `alpha`; the v0.1.0 and v0.1.1 releases remain available
-under their own tags. The `alpha` tag continues to move with `main` as the
+with signed archives and as multi-arch container images tagged `v0.1.3`,
+`0.1.3`, `latest` and `alpha`; the v0.1.0, v0.1.1 and v0.1.2 releases remain
+available under their own tags. The `alpha` tag continues to move with `main` as the
 development channel. Official tags and releases still require explicit
 maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the release
 procedure and [CHANGELOG.md](CHANGELOG.md) for the changes in this release.
@@ -121,7 +121,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
 | **Operations** | Multi-arch GHCR and Docker Hub image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
-### Agent support in v0.1.2
+### Agent support in v0.1.3
 
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -167,18 +167,18 @@ install the newest CI build as an explicit fallback; that path requires
 make build          # produces bin/nexus-hub, bin/nexusd and bin/nexus
 ```
 
-Official images are published for the v0.1.2 release:
+Official images are published for the v0.1.3 release:
 
 ```bash
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-`latest` follows the newest stable release; `v0.1.2` and `0.1.2` pin this
-release, while `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain available for the
-previous and first releases. Container builds from `main` are published under
-`alpha` and `sha-<short>`; `alpha` moves with `main`, is not an official
-release and can differ from `latest`. Use `sha-<short>` or a version tag for a
-pinned build.
+`latest` follows the newest stable release; `v0.1.3` and `0.1.3` pin this
+release, while `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain
+available for the previous and first releases. Container builds from `main`
+are published under `alpha` and `sha-<short>`; `alpha` moves with `main`, is
+not an official release and can differ from `latest`. Use `sha-<short>` or a
+version tag for a pinned build.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
 Linux and macOS host-client installation.
@@ -217,7 +217,7 @@ docker compose up -d
 To build the image from this checkout instead of pulling it, add the development
 override: `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.2`/`0.1.2` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.3`/`0.1.3` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Host updates
 
@@ -271,7 +271,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.2 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.3 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 

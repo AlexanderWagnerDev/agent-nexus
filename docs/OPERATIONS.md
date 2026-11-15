@@ -1,6 +1,6 @@
 # AgentNexus — Operations
 
-Practical runbook for the v0.1.2 release. It describes what the code does and
+Practical runbook for the v0.1.3 release. It describes what the code does and
 what has actually been tested, not the 1.0 target.
 
 ## Data locations
@@ -26,15 +26,15 @@ agents' own stores; the hub never rewrites them.
 
 Images are published to
 [Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus).
-`latest` follows the newest stable release, `v0.1.2`/`0.1.2` pin the current
-release (`v0.1.1`/`0.1.1` the previous and `v0.1.0`/`0.1.0` the first),
-`alpha` tracks `main`, and `sha-<short>` pins a commit.
+`latest` follows the newest stable release, `v0.1.3`/`0.1.3` pin the current
+release (`v0.1.2`/`0.1.2` the previous, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0`
+the earlier ones), `alpha` tracks `main`, and `sha-<short>` pins a commit.
 
 ```bash
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-Use `:v0.1.2` or `:sha-167a829` when a fixed build is required.
+Use `:v0.1.3` or `:sha-167a829` when a fixed build is required.
 
 The Docker Hub push in `.github/workflows/docker.yml` needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
@@ -65,7 +65,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — `latest` for the stable release channel, `alpha` for `main`, `v0.1.2`/`0.1.2` for the current release (`v0.1.1`/`0.1.1` the previous, `v0.1.0`/`0.1.0` the first), or `sha-<short>` to pin a commit.
+- `NEXUS_TAG` — `latest` for the stable release channel, `alpha` for `main`, `v0.1.3`/`0.1.3` for the current release (`v0.1.2`/`0.1.2` the previous, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones), or `sha-<short>` to pin a commit.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided

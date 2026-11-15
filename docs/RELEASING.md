@@ -1,9 +1,9 @@
 # Releasing
 
-AgentNexus **v0.1.2** is the current release (published 2026-11-16);
-**v0.1.1** was published on 2026-11-15 and **v0.1.0** was the first official
-release (published 2026-11-15). Later tags and releases still require the
-maintainer's explicit approval.
+AgentNexus **v0.1.3** is the current release (prepared 2026-11-16);
+**v0.1.2** was published on 2026-11-16, **v0.1.1** on 2026-11-15, and
+**v0.1.0** was the first official release (published 2026-11-15). Later tags
+and releases still require the maintainer's explicit approval.
 
 ## Current policy
 
@@ -24,7 +24,7 @@ maintainer's explicit approval.
 - Container builds on `main` publish `alpha` (moving) and `sha-<short>`
   (pinned) tags. Official releases use an explicit **Container** workflow
   dispatch with the `release_tag` input, which publishes the matching
-  `v0.1.2`, `0.1.2`, `0.1` and `alpha` tags; the `latest` tag additionally
+  `v0.1.3`, `0.1.3`, `0.1` and `alpha` tags; the `latest` tag additionally
   requires `publish_latest=true`. `alpha` keeps moving with `main` after the
   release.
 - The hub, daemon and terminal client report their version as `alpha` unless a
@@ -36,6 +36,7 @@ maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
+| v0.1.3 | 2026-11-16 (prepared) | Tag, archives and images pending the manual release workflow |
 | [v0.1.2](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.2`, `0.1.2`, `0.1`, `alpha`, `latest` (digest `sha256:7061c549f2402b0d36c14dfcd5c3605c603bf6d30009ca9d5936a53238e385da`) |
 | [v0.1.1](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.1) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.1`, `0.1.1`, `0.1`, `alpha`, `latest` (digest `sha256:b8716fdea47d4e0efb346a59fcb2dbb9baf2514eac9499b0c034e43b0d8b734c`) |
 | [v0.1.0](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.0`, `0.1.0`, `latest`, `alpha` |
@@ -55,7 +56,7 @@ accurately without turning optional testing into release blockers.
 ## Manual release procedure (only after approval)
 
 1. In GitHub Actions, run **Release** from `main` with the approved tag, for
-   example `tag=v0.1.2`. The workflow creates and pushes the annotated tag on
+   example `tag=v0.1.3`. The workflow creates and pushes the annotated tag on
    the dispatched commit and publishes the GitHub release. Re-running it for an
    existing tag publishes that tag as-is.
 2. Review the published release's assets, checksums, SBOMs and the cosign
@@ -63,8 +64,8 @@ accurately without turning optional testing into release blockers.
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
    release, delete the release and the tag before dispatching it again.
-3. Then run **Container** with `release_tag=v0.1.2` and `publish_latest=true`
-   for a stable release. The dispatch publishes `v0.1.2`, `0.1.2`, `0.1`,
+3. Then run **Container** with `release_tag=v0.1.3` and `publish_latest=true`
+   for a stable release. The dispatch publishes `v0.1.3`, `0.1.3`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
    workflow checks out that tag before building, so a newer `main` does not
@@ -95,6 +96,6 @@ workflow logs. At the time of the cleanup:
 
 ## Versioning
 
-The first approved version was `v0.1.0`; the current release is `v0.1.2`.
+The first approved version was `v0.1.0`; the current release is `v0.1.3`.
 Builds without a release tag are identified by commit SHA. Do not infer or
 promise a later version number from this document.
