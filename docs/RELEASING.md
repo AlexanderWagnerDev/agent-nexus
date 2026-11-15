@@ -1,6 +1,6 @@
 # Releasing
 
-AgentNexus **v0.1.1** is the current release (prepared 2026-11-15);
+AgentNexus **v0.1.1** is the current release (published 2026-11-15);
 **v0.1.0** was the first official release (published 2026-11-15).
 Later tags and releases still require the maintainer's explicit approval.
 
@@ -35,7 +35,7 @@ Later tags and releases still require the maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
-| v0.1.1 | 2026-11-15 (prepared) | Tag, archives and images pending the manual release workflow |
+| [v0.1.1](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.1) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.1`, `0.1.1`, `0.1`, `alpha`, `latest` (digest `sha256:b8716fdea47d4e0efb346a59fcb2dbb9baf2514eac9499b0c034e43b0d8b734c`) |
 | [v0.1.0](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.0`, `0.1.0`, `latest`, `alpha` |
 
 ## Release decision
