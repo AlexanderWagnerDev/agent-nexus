@@ -9,14 +9,13 @@ Later tags and releases still require the maintainer's explicit approval.
 - Older withdrawn tags and releases (`v0.1.0-rc.*`, `v0.2.0-rc.*`, `v0.3.*`)
   stay removed. Do not recreate them.
 - Ordinary commits and pull requests must not produce a GitHub release. The
-  release workflow is `workflow_dispatch` only, refuses to run unless the
-  operator types `PUBLISH` and a semver tag, and dispatches from `main` or from
-  that tag. It creates and pushes the annotated tag on the dispatched `main`
-  commit before goreleaser runs; an existing tag is published as-is.
-- `goreleaser` is configured with `release.draft: true`, so even a manual run
-  produces a draft that must be published by hand. `release.prerelease: auto`
-  keeps stable tags stable and only marks a `-rc`/`-beta`/`-alpha` tag as a
-  prerelease.
+  release workflow is `workflow_dispatch` only, requires a semver tag and
+  dispatches from `main` or from that tag. It creates and pushes the annotated
+  tag on the dispatched `main` commit before goreleaser runs; an existing tag
+  is published as-is.
+- `goreleaser` publishes the release directly, without a draft stage.
+  `release.prerelease: auto` keeps stable tags stable and only marks a
+  `-rc`/`-beta`/`-alpha` tag as a prerelease.
 - Release archives contain `nexus-hub`, `nexusd` and the `nexus` terminal
   client for Windows, Linux and macOS on `amd64` and `arm64`, plus
   `checksums.txt`, per-archive SBOMs and the cosign bundle
@@ -53,23 +52,23 @@ accurately without turning optional testing into release blockers.
 
 ## Manual release procedure (only after approval)
 
-1. In GitHub Actions, run **Release (manual, locked)** from `main` with the
-   approved tag, for example `tag=v0.1.1`, and `confirm=PUBLISH`. The workflow
-   creates and pushes the annotated tag on the dispatched commit. Re-running it
-   for an existing tag publishes that tag as-is.
-2. Wait for the draft release. Review assets, checksums, SBOMs and the cosign
+1. In GitHub Actions, run **Release** from `main` with the approved tag, for
+   example `tag=v0.1.1`. The workflow creates and pushes the annotated tag on
+   the dispatched commit and publishes the GitHub release. Re-running it for an
+   existing tag publishes that tag as-is.
+2. Review the published release's assets, checksums, SBOMs and the cosign
    bundle. The archive names are
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
-   exactly what the host updater expects.
-3. Publish the draft manually.
-4. Then run **Container** with `release_tag=v0.1.1` and `publish_latest=true`
+   exactly what the host updater expects. If the run produced a broken
+   release, delete the release and the tag before dispatching it again.
+3. Then run **Container** with `release_tag=v0.1.1` and `publish_latest=true`
    for a stable release. The dispatch publishes `v0.1.1`, `0.1.1`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it either from `main` while `HEAD` is still the tagged commit, or
    from the tag itself; both are accepted, while a stale `main` is rejected.
    Ordinary `main` builds keep publishing `alpha`/`sha-*` and can never
    overwrite the version tags.
-5. Verify a host update on a disposable installation before announcing it.
+4. Verify a host update on a disposable installation before announcing it.
 
 ## Leftover artifacts from removed releases
 

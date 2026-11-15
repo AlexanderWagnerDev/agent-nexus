@@ -63,12 +63,9 @@ signs:
     artifacts: checksum
 
 release:
-  # Shift-left safety net: even a manual dispatch produces a draft. Publishing
-  # remains a separate, human decision in the GitHub UI.
-  draft: true
-  # A stable tag (v0.1.0) must produce a normal release; a tag with a
-  # prerelease suffix (v0.1.0-rc.1) stays a prerelease. "auto" prevents the old
-  # behaviour that marked every future release as a prerelease.
+  # A manual dispatch publishes the release directly; ordinary pushes never
+  # create a release. A tag with a prerelease suffix stays a prerelease.
+  draft: false
   prerelease: auto
 
 changelog:

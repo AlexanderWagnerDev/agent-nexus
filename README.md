@@ -5,13 +5,13 @@ A self-hosted control plane to discover, manage, and continue existing AI coding
 > **Status: v0.1.1 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
 **v0.1.1 is the current release; v0.1.0 was the first official release.**
-Releases are published through the locked manual workflow as
+Releases are published through the manual release workflow as
 [GitHub releases](https://github.com/AlexanderWagnerDev/agent-nexus/releases)
 with signed archives and as multi-arch container images tagged `v0.1.1`,
 `0.1.1`, `latest` and `alpha`; the published v0.1.0 release remains available
 under its own tags. The `alpha` tag continues to move with `main` as the
 development channel. Official tags and releases still require explicit
-maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the locked
+maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the release
 procedure and [CHANGELOG.md](CHANGELOG.md) for the changes in this release.
 
 ## Why AgentNexus?
@@ -369,7 +369,7 @@ Detailed acceptance criteria remain in [docs/ROADMAP.md](docs/ROADMAP.md). The s
 | [docs/AGENT-INTEGRATIONS.md](docs/AGENT-INTEGRATIONS.md) | Per-agent session storage and native resume details |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, pairing, permissions, deployment hardening |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Data locations, backup/restore, upgrade, proxy, troubleshooting |
-| [docs/RELEASING.md](docs/RELEASING.md) | Alpha release policy and the locked manual release procedure |
+| [docs/RELEASING.md](docs/RELEASING.md) | Release policy and the manual release procedure |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | Public identity, screenshot rules and the pre-publication privacy checklist |
 | [docs/WSL.md](docs/WSL.md) | Running `nexusd` inside WSL as a separate host |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |

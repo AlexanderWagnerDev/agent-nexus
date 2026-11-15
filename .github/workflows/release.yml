@@ -1,19 +1,15 @@
-name: Release (manual, locked)
+name: Release
 
 # Publication is intentionally manual. No push or tag triggers this workflow.
-# A maintainer dispatches it from main with the new tag name and the
-# confirmation word; the workflow creates the annotated tag, then goreleaser
-# produces a draft that must be published by hand. See docs/RELEASING.md.
+# A maintainer dispatches it from main with the new tag name; the workflow
+# creates the annotated tag and goreleaser publishes the release directly.
+# See docs/RELEASING.md.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to create or republish, for example v0.1.1'
-        required: true
-        type: string
-      confirm:
-        description: 'Type PUBLISH to confirm an intentional public release'
         required: true
         type: string
 
@@ -26,15 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require explicit confirmation
+      - name: Validate tag
         env:
-          CONFIRM: ${{ inputs.confirm }}
           TAG: ${{ inputs.tag }}
         run: |
-          if [ "$CONFIRM" != "PUBLISH" ]; then
-            echo "Refusing to release: confirm input must be exactly PUBLISH." >&2
-            exit 1
-          fi
           case "$TAG" in
             v[0-9]*) ;;
             *) echo "Refusing to release: tag must start with v and a digit." >&2; exit 1 ;;
