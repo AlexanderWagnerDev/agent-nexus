@@ -1,7 +1,7 @@
 # AgentNexus — Operations
 
-Practical runbook for the current alpha build. It describes what the code does
-and what has actually been tested, not the 1.0 target.
+Practical runbook for the v0.1.0 release. It describes what the code does and
+what has actually been tested, not the 1.0 target.
 
 ## Data locations
 
@@ -24,16 +24,16 @@ agents' own stores; the hub never rewrites them.
 
 ## Docker image (GHCR and Docker Hub)
 
-Development images are published to GitHub Container Registry and to
-[Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus) with the
-same tags. There is no official version yet: `alpha` tracks `main`, and
-`sha-<short>` pins a commit.
+Images are published to
+[Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus).
+`latest` follows the newest stable release, `v0.1.0`/`0.1.0` pin the first
+release, `alpha` tracks `main`, and `sha-<short>` pins a commit.
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:alpha
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:sha-167a829   # pinned build
-docker pull alexanderwagnerdev/agent-nexus:alpha                 # Docker Hub
+docker pull alexanderwagnerdev/agent-nexus:latest
 ```
+
+Use `:v0.1.0` or `:sha-167a829` when a fixed build is required.
 
 The Docker Hub push in `.github/workflows/docker.yml` needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
@@ -64,7 +64,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — `alpha` for the development channel or `sha-<short>` to pin a commit. There is no official release yet.
+- `NEXUS_TAG` — `latest` for the stable release channel, `alpha` for `main`, `v0.1.0`/`0.1.0` for the first release, or `sha-<short>` to pin a commit.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
@@ -142,10 +142,10 @@ nexusd update --rollback
 The daemon checks at startup and every six hours (configurable, with jitter,
 ETag caching and exponential backoff) and reports `update.status` to the hub.
 A hub reconnect wakes the check early. The check works while the hub is offline.
-There is no release feed during alpha, so `--check` reports that no release
-exists until the first approved version. A private test feed can be selected
-with `NEXUS_UPDATE_API` and `NEXUS_UPDATE_REPO`; a private repository needs a
-read-only `NEXUS_GITHUB_TOKEN` with Contents access.
+v0.1.0 is the first release on the official feed, so `--check` now returns a
+real version. A private test feed can be selected with `NEXUS_UPDATE_API` and
+`NEXUS_UPDATE_REPO`; a private repository needs a read-only
+`NEXUS_GITHUB_TOKEN` with Contents access.
 
 ### Channels and local settings
 

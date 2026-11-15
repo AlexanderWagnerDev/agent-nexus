@@ -60,11 +60,11 @@ request for the maintainer to perform tests personally.
 - A live service binary replacement and rollback on a real Windows Task
   Scheduler, systemd user unit or launchd agent. The code paths are covered by
   unit/fixture tests, but no real service was replaced in this environment.
-- A real public release feed: no release exists during alpha. Channel
-  selection, ETag handling and signature/checksum failure paths are covered by
-  local fake release servers.
-- macOS notarization and Windows Authenticode signing: neither exists in the
-  alpha. The installers rely on SHA-256 and cosign keyless verification.
+- A real public release feed before v0.1.0 was published. v0.1.0 is the first
+  release; channel selection, ETag handling and signature/checksum failure
+  paths remain covered by local fake release servers.
+- macOS notarization and Windows Authenticode signing: neither exists in
+  v0.1.0. The installers rely on SHA-256 and cosign keyless verification.
 - Browser end-to-end and pixel-diff runs in this round: `web/node_modules` was
   not installed here, so only the dependency-free unit tests and the syntax
   check ran locally. The workflows and the existing Playwright suites are

@@ -16,7 +16,7 @@ SSH or WSL are required.
 
    ```dotenv
    HUB_DOMAIN=nexus.example.com
-   NEXUS_TAG=alpha
+   NEXUS_TAG=latest
    WUD_WATCH_DIGEST=true
    HUB_BIND=127.0.0.1
    HUB_PORT=8787
@@ -45,8 +45,8 @@ The per-user service inherits that profile, so OpenCode logins, models, skills
 and MCP config are available.
 
 ```powershell
-# 1. Install or update from the official release archive. During alpha add
-#    -Development to use the authenticated workflow build instead.
+# 1. Install or update from the official release archive. For an unreleased
+#    main build, add -Development to use the authenticated workflow build.
 #    The installer verifies the archive checksum and executable, refuses while
 #    runs are active, and only interrupts them after -Force plus typing FORCE.
 #    No Go toolchain and no GitHub CLI are required for a release.

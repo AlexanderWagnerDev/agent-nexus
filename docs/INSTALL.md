@@ -6,8 +6,8 @@ machines with coding agents installed.
 
 ## 1. Run the hub with Docker Compose
 
-The repository is public during alpha. Clone it with Git or the GitHub CLI.
-Authentication is not required to read or clone the source repository.
+The repository is public. Clone it with Git or the GitHub CLI. Authentication
+is not required to read or clone the source repository.
 
 ```bash
 gh repo clone AlexanderWagnerDev/agent-nexus
@@ -20,7 +20,7 @@ Edit `.env`:
 ```dotenv
 HUB_DOMAIN=nexus.example.com
 HUB_NAME=AgentNexus
-NEXUS_TAG=alpha
+NEXUS_TAG=latest
 ```
 
 Point the DNS record for `HUB_DOMAIN` at the server, open TCP 80/443, then:
@@ -58,13 +58,12 @@ read-only root filesystem with a small `/tmp`, no capabilities, and an IPv6
 bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
 enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 
-The stack includes WUD labels. There is no official release yet: `alpha`
-tracks `main` and `sha-<short>` pins a commit. Digest watching is enabled by
-default so WUD notices new `alpha` builds; set `WUD_WATCH_DIGEST=false` when you
-pin a `sha-` tag or a fixed version tag. The default `WUD_TAG_INCLUDE` watches
-`alpha` and immutable semver tags, not `sha-` pins. After an approved release,
-set `NEXUS_TAG=v0.1.0` (or `0.1.0`) and keep digest watching off for that
-immutable tag.
+The stack includes WUD labels. `latest` follows the newest stable release,
+`alpha` tracks `main`, `sha-<short>` pins a commit and `v0.1.0` (or `0.1.0`)
+pins the first release. Digest watching is enabled by default so WUD notices
+new `latest` and `alpha` builds; set `WUD_WATCH_DIGEST=false` when you pin a
+`sha-` tag or a version tag. The default `WUD_TAG_INCLUDE` watches `latest`,
+`alpha` and immutable semver tags, not `sha-` pins.
 
 WUD only reports updates; it does not apply them. This is separate from the
 host updater: WUD watches the hub container, while `nexusd` updates itself on
@@ -102,11 +101,11 @@ client. The script verifies the archive SHA-256, verifies the cosign bundle when
 existing host identity and installs the per-user service. No GitHub CLI and no
 Go toolchain are required for a public release.
 
-During alpha there is no public release yet. The development workflow builds
-remain available as an explicit fallback (`-Development` / `--development`);
-that path uses the GitHub CLI and authenticated Actions artifacts, installs the
-same two binaries, and should not be mixed with release installations on the
-same host.
+Official release archives are available for v0.1.0 and later. The development
+workflow builds remain available as an explicit fallback (`-Development` /
+`--development`); that path uses the GitHub CLI and authenticated Actions
+artifacts, installs the same two binaries, and should not be mixed with release
+installations on the same host.
 
 Clone the repository once on the machine that runs the installer so the script
 is available locally:
@@ -126,15 +125,16 @@ powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 
   -Hub https://nexus.example.com -Code XXXX-XXXX -Name my-laptop
 ```
 
-Official release (after the first approved version):
+Official release:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 `
   -Hub https://nexus.example.com -Name my-laptop -Channel stable
 ```
 
-During alpha, add `-Development` to install the newest authenticated workflow
-build. Upgrades run without `-Code`; an existing pairing is kept. The daemon
+For an unreleased `main` build, add `-Development` to install the newest
+authenticated workflow build. Upgrades run without `-Code`; an existing pairing
+is kept. The daemon
 prints a **Pairing SAS** (for example `123-456`) on first pairing. In the hub,
 open **Hosts**, compare the SAS and click **Confirm host**.
 
@@ -166,7 +166,7 @@ git clone https://github.com/AlexanderWagnerDev/agent-nexus
 ./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-During alpha: `--development`. Upgrades omit `--code`.
+For an unreleased `main` build: `--development`. Upgrades omit `--code`.
 
 The script installs `~/.local/bin/nexusd` and `~/.local/bin/nexus` and writes
 the systemd **user** unit to `~/.config/systemd/user/agentnexus.service`. To run
@@ -187,10 +187,11 @@ git clone https://github.com/AlexanderWagnerDev/agent-nexus
 ./agent-nexus/scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name macbook
 ```
 
-During alpha: `--development`. The LaunchAgent starts at login and is kept
-alive. Grant Full Disk Access / Files and Folders permission if your projects
-live under `~/Documents`, `~/Desktop` or iCloud Drive. Downloaded binaries are
-not notarized in the alpha; if Gatekeeper blocks one, inspect and remove the
+For an unreleased `main` build: `--development`. The LaunchAgent starts at
+login and is kept alive. Grant Full Disk Access / Files and Folders permission
+if your projects live under `~/Documents`, `~/Desktop` or iCloud Drive.
+Downloaded binaries are not notarized in v0.1.0; if Gatekeeper blocks one,
+inspect and remove the
 quarantine attribute explicitly (`xattr -d com.apple.quarantine <path>`) only
 after verifying the release checksum and cosign bundle.
 

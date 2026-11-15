@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional official version tag to publish, for example v0.1.0 (creates 0.1.0 and 0.1 tags)'
+        description: 'Optional official version tag to publish, for example v0.1.0 (creates v0.1.0, 0.1.0, 0.1 and alpha tags)'
         required: false
         type: string
       publish_latest:
@@ -76,12 +76,15 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           # Normal main builds remain development images only. Official
           # version tags require an explicit workflow dispatch with the
-          # release_tag input; no commit can overwrite them.
+          # release_tag input; no commit can overwrite them. A release
+          # dispatch also carries alpha so the release image keeps the same
+          # tag set as the development channel at publication time.
           tags: |
-            type=raw,value=alpha,enable={{is_default_branch}}
+            type=raw,value=alpha,enable=${{ github.event.inputs.release_tag != '' || github.ref_name == github.event.repository.default_branch }}
             type=sha,prefix=sha-,format=short
             type=semver,pattern={{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=semver,pattern=v{{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
             type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' && github.event.inputs.release_tag != '' }}
           labels: |
             org.opencontainers.image.title=AgentNexus
@@ -165,10 +168,11 @@ jobs:
         with:
           images: docker.io/alexanderwagnerdev/agent-nexus
           tags: |
-            type=raw,value=alpha,enable={{is_default_branch}}
+            type=raw,value=alpha,enable=${{ github.event.inputs.release_tag != '' || github.ref_name == github.event.repository.default_branch }}
             type=sha,prefix=sha-,format=short
             type=semver,pattern={{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
+            type=semver,pattern=v{{version}},value=${{ github.event.inputs.release_tag }},enable=${{ github.event.inputs.release_tag != '' }}
             type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' && github.event.inputs.release_tag != '' }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         if: steps.check.outputs.enabled == 'true'

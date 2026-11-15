@@ -1,6 +1,6 @@
 services:
   hub:
-    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-alpha}
+    image: alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-latest}
     restart: unless-stopped
     init: true
     read_only: true

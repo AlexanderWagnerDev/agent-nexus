@@ -38,4 +38,4 @@ run-daemon:
 	go run ./cmd/nexusd run
 
 docker:
-	docker build -t ghcr.io/alexanderwagnerdev/agent-nexus:dev .
+	docker build -t alexanderwagnerdev/agent-nexus:dev .

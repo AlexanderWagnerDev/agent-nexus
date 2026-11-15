@@ -2,9 +2,9 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The current alpha build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, and replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Client/device-signed commands are **not implemented**; host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The v0.1.0 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### alpha implementation notes
+### v0.1.0 implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Step-up | Sensitive actions require a fresh passkey or password + TOTP confirmation; the window is five minutes and is bound to the session | no per-action confirmation list is configurable yet |
 | Sessions | random 256-bit token, SHA-256 hash at rest, `HttpOnly`, `SameSite=Strict`, `Secure` with TLS, 30-day lifetime | cookie is not `__Host-` prefixed because local HTTP development must work; no idle timeout |
 | CSRF | custom `X-Nexus-Request` header, `Origin` check, SameSite cookie | no per-session CSRF token |
-| Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window; hub commands signed and replay-protected after authentication | hub key is a `0600` file, not OS keystore/DPAPI; client/device signatures not implemented |
+| Host auth | Ed25519 key generated at pairing, nonce challenge per WebSocket connection, 15 s auth window; hub commands signed and replay-protected after authentication; native clients can opt into device-signed writes | hub key is a `0600` file, not OS keystore/DPAPI; host-side verification of device signatures remains open |
 | Host policy | allowed roots (symlinks resolved), allowed agents, new/fork switches, forbidden flags; enforced on host | no per-action launch profiles |
 | Encryption in transit | TLS terminated by the hub or a reverse proxy; outbound WSS | no end-to-end encryption; hub is trusted in the alpha |
 | Audit | hash-chained append-only table plus host-local JSONL audit, verification endpoint/UI | host-local log is not hash-chained |

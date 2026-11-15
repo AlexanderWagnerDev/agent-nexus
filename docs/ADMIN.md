@@ -205,8 +205,9 @@ backup.
 
 ## Known limitations
 
-- Signed-command mode is not implemented; the hub remains trusted for run
-  commands.
+- Opt-in device-signed commands are implemented hub-side; host-side
+  verification of a device identity remains open, so a compromised hub is still
+  trusted for run commands.
 - PostgreSQL and native mobile/desktop apps are not implemented (the automated accessibility scan is clean).
 - Claude ACP was not exercised against a real Claude installation in this
   release; terminal mode is verified.
@@ -220,8 +221,9 @@ backup.
   resume API and a failed job assignment; see [SECURITY.md](SECURITY.md).
 - Windows Server 2025 uses the same Task Scheduler schema but was not available
   for testing.
-- Official release publication depends on maintainer approval, not personally
-  performed cross-OS acceptance or prescribed extended tests.
+- Further release publication depends on maintainer approval, not personally
+  performed cross-OS acceptance or prescribed extended tests. v0.1.0 was
+  published on 2026-11-15.
 
 ## Troubleshooting
 

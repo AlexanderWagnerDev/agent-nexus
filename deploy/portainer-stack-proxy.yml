@@ -7,8 +7,9 @@
 # Required:
 #   HUB_DOMAIN      external HTTPS hostname (WebAuthn requires a hostname)
 #   PROXY_NETWORK   exact name of the existing proxy network
-#   NEXUS_TAG       alpha for the current development channel, or sha-<short>
-#                   for a pinned commit build. No official release exists yet.
+#   NEXUS_TAG       latest for the stable release channel, alpha for main,
+#                   v0.1.0/0.1.0 for the first release, or sha-<short> for a
+#                   pinned commit build.
 # Optional:
 #   HUB_NAME, WUD_WATCH_DIGEST=true (false when pinning a sha- tag), subnets
 #
@@ -20,7 +21,7 @@
 # honour enable_ipv6.
 services:
   hub:
-    image: ghcr.io/alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-alpha}
+    image: alexanderwagnerdev/agent-nexus:${NEXUS_TAG:-latest}
     container_name: agentnexus-hub
     restart: always
     init: true
@@ -57,12 +58,12 @@ services:
     labels:
       wud.watch: "true"
       wud.watch.digest: "${WUD_WATCH_DIGEST:-true}"
-      # Default watches the development alpha tag and immutable semver tags,
-      # but not sha- tags (a pin must not produce false update hints). Override
+      # Default watches latest, alpha and immutable semver tags, but not sha-
+      # tags (a pin must not produce false update hints). Override
       # WUD_TAG_INCLUDE when a different tag scheme is used.
-      wud.tag.include: "${WUD_TAG_INCLUDE:-^(alpha|v?[0-9]+\\.[0-9]+\\.[0-9]+)}"
+      wud.tag.include: "${WUD_TAG_INCLUDE:-^(latest|alpha|v?[0-9]+\\.[0-9]+\\.[0-9]+)}"
       wud.display.name: "AgentNexus Hub"
-      wud.link.template: "https://github.com/AlexanderWagnerDev/agent-nexus/pkgs/container/agent-nexus"
+      wud.link.template: "https://hub.docker.com/r/alexanderwagnerdev/agent-nexus"
 
 volumes:
   nexus-data:

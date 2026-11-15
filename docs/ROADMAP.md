@@ -29,19 +29,20 @@ flowchart LR
 | [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.0 |
 | [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.0 |
 
-**Versioning:** the first official version is **v0.1.0**. It contains every
-capability marked implemented below; the version number does not gate them.
-Later phases are engineering goals that ship when they are ready. There is no
-obligation to publish intermediate `0.2`/`0.4` versions or a `1.0.0` milestone
-before a capability can be used, and no release candidate series is planned.
+**Versioning:** the first official version is **v0.1.0** (published
+2026-11-15). It contains every capability marked implemented below; the version
+number does not gate them. Later phases are engineering goals that ship when
+they are ready. There is no obligation to publish intermediate `0.2`/`0.4`
+versions or a `1.0.0` milestone before a capability can be used, and no release
+candidate series is planned.
 
 ## Implementation status
 
-The repository now contains a runnable alpha implementation. There is no
-official version and no published release. The criteria below track engineering
-goals; they are not release gates. Publication is a separate maintainer decision.
+The repository now contains the v0.1.0 implementation. The criteria below track
+engineering goals; they are not release gates. Publication is a separate
+maintainer decision.
 
-### Alpha verification (2026-11-12)
+### Verification baseline (2026-11-12)
 
 - Go unit and integration tests pass on Linux, macOS and Windows in CI,
   including `go test -race` on Linux; `go vet`, `gofmt` and staticcheck are

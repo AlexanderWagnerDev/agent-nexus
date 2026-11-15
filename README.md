@@ -2,13 +2,14 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: alpha.** There is no official version and no published release yet. Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: v0.1.0 — first official release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
-**No releases or tags are published during alpha.** All earlier pre-release
-tags and GitHub releases were withdrawn before the first official version was
-approved. The repository is intentionally public. Official tags and releases require
-explicit maintainer approval, not extended stress runs or personal tests. See
-[docs/RELEASING.md](docs/RELEASING.md) for the locked procedure.
+**v0.1.0 is the first official release.** It is published as a GitHub release
+with signed archives and as multi-arch container images tagged `v0.1.0`,
+`0.1.0`, `latest` and `alpha`. The `alpha` tag continues to move with `main` as
+the development channel. Official tags and releases still require explicit
+maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the locked
+procedure.
 
 ## Why AgentNexus?
 
@@ -68,7 +69,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline/disabled, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, rename, disable/enable, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active; mtime fingerprint of agent stores with a 500 ms debounce and a 15 s fallback (new sessions normally appear within 2-3 s) |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key. Native clients can register a per-device Ed25519/P-256 key; signed writes cover WebSocket prompt/approval/input/interrupt and the REST run, queue, task, fan-out and stop paths. The browser UI stays cookie-authenticated, and host-side verification of a *device* identity (independent of the hub) remains open |
-| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | No public release feed during alpha. The `development` update channel follows the prerelease release feed; unsigned CI development builds are only available through the installer's explicit `--development` path, not through auto-update |
+| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | Updates follow the official release feed; v0.1.0 is the first stable release. The `development` update channel follows the prerelease release feed; unsigned CI development builds are only available through the installer's explicit `--development` path, not through auto-update |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -117,7 +118,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
 | **Operations** | Multi-arch GHCR and Docker Hub image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
-### Agent support in the alpha
+### Agent support in v0.1.0
 
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -154,23 +155,25 @@ powershell -ExecutionPolicy Bypass -File scripts\install-host.ps1 `
 ./scripts/install-host.sh --hub https://nexus.example.com --code XXXX-XXXX --name build-box
 ```
 
-During alpha there is no public release yet. Use `-Development` (PowerShell) or
-`--development` (shell) to install the newest CI build as an explicit fallback;
-that path requires `gh auth login`. A source build still works when Go 1.26.11+
-is available:
+Official release archives are available for v0.1.0 and later. For unpublished
+`main` builds use `-Development` (PowerShell) or `--development` (shell) to
+install the newest CI build as an explicit fallback; that path requires
+`gh auth login`. A source build still works when Go 1.26.11+ is available:
 
 ```bash
 make build          # produces bin/nexus-hub, bin/nexusd and bin/nexus
 ```
 
-Container builds from `main` are published as development images only:
+Official images are published for the v0.1.0 release:
 
 ```bash
-docker pull ghcr.io/alexanderwagnerdev/agent-nexus:alpha
+docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-The `alpha` tag moves with `main` and is not an official release. Use a
-`sha-<short>` tag for a pinned build.
+`latest` follows the newest stable release; `v0.1.0` and `0.1.0` pin the first
+release. Container builds from `main` are published under `alpha` and
+`sha-<short>`; `alpha` moves with `main`, is not an official release and can
+differ from `latest`. Use `sha-<short>` or a version tag for a pinned build.
 
 See [docs/INSTALL.md](docs/INSTALL.md) for Docker Compose, Portainer, Windows,
 Linux and macOS host-client installation.
@@ -209,7 +212,7 @@ docker compose up -d
 To build the image from this checkout instead of pulling it, add the development
 override: `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch development images are published to GHCR (`ghcr.io/alexanderwagnerdev/agent-nexus:alpha`) and Docker Hub (`alexanderwagnerdev/agent-nexus:alpha`); see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.0`/`0.1.0` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Host updates
 
@@ -263,7 +266,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This alpha build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.0 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
