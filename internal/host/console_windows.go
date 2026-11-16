@@ -5,8 +5,9 @@ package host
 import "syscall"
 
 var (
+	kernel32          = syscall.NewLazyDLL("kernel32.dll")
 	user32            = syscall.NewLazyDLL("user32.dll")
-	procGetConsoleWnd = user32.NewProc("GetConsoleWindow")
+	procGetConsoleWnd = kernel32.NewProc("GetConsoleWindow")
 	procShowWindow    = user32.NewProc("ShowWindow")
 )
 
