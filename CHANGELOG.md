@@ -4,6 +4,15 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-11-16
+
+### Fixed
+
+- Windows: the per-user `AgentNexus Host` task now starts `nexusd` through a
+  hidden PowerShell launcher. No console window opens, so closing a terminal
+  window can no longer disconnect the host. Existing installations can switch
+  the task once with `nexusd service install`.
+
 ## [0.1.5] - 2026-11-16
 
 ### Added
@@ -142,6 +151,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.6]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.6
 [0.1.5]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.5
 [0.1.4]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.4
 [0.1.3]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.3

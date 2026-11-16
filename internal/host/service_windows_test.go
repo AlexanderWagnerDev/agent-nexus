@@ -38,7 +38,9 @@ func TestWindowsTaskXML(t *testing.T) {
 		"<RestartOnFailure>",
 		"<Count>3</Count>",
 		"<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
-		`<Command>C:\Program Files\AgentNexus\nexusd.exe</Command>`,
+		`<Command>` + windowsPowerShellPath() + `</Command>`,
+		`C:\Program Files\AgentNexus\nexusd.exe`,
+		`-WindowStyle Hidden`,
 	} {
 		if !strings.Contains(xml, want) {
 			t.Fatalf("task XML is missing %q:\n%s", want, xml)

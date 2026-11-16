@@ -45,6 +45,9 @@ func installWindowsTask(exe string) error {
 	if err != nil {
 		return err
 	}
+	// Replacing a running task definition does not restart the running
+	// instance; stop it so the new action takes effect when /Run is called.
+	_, _ = runWindowsCommand("schtasks", "/End", "/TN", windowsTaskName)
 	content := windowsTaskXML(exe, userID)
 	file, err := os.CreateTemp("", "agentnexus-task-*.xml")
 	if err != nil {
@@ -177,8 +180,11 @@ func removeLegacyStartupLauncher() {
 // intentional: the agents and their credentials live in the interactive user
 // profile, so a SYSTEM/boot task would run in the wrong context.
 func windowsTaskXML(exe, userID string) string {
-	escapedExe := xmlEscape(exe)
 	escapedUser := xmlEscape(userID)
+	escapedPowerShell := xmlEscape(windowsPowerShellPath())
+	quotedExe := strings.ReplaceAll(exe, "'", "''")
+	arguments := `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& '` + quotedExe + `' run"`
+	escapedArgs := xmlEscape(arguments)
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -222,8 +228,8 @@ func windowsTaskXML(exe, userID string) string {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>` + escapedExe + `</Command>
-      <Arguments>run</Arguments>
+      <Command>` + escapedPowerShell + `</Command>
+      <Arguments>` + escapedArgs + `</Arguments>
     </Exec>
   </Actions>
 </Task>
