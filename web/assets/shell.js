@@ -52,7 +52,7 @@ export function renderShell(active = 'overview') {
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-top">
           <a class="brand" href="#/" title="AgentNexus home">
-            <span class="brand-mark">A</span>
+            <span class="brand-mark" aria-hidden="true"><img src="/icon.svg" alt=""></span>
             <span class="brand-text"><strong>AgentNexus</strong>${state.hubName && state.hubName !== 'AgentNexus' ? `<small>${esc(state.hubName)}</small>` : ''}</span>
           </a>
           <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" title="${collapsed ? t('Expand sidebar') : t('Collapse sidebar')}" aria-label="${collapsed ? t('Expand sidebar') : t('Collapse sidebar')}">${svgIcon('panelLeft')}</button>

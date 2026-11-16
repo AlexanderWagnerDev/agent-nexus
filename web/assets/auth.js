@@ -17,7 +17,7 @@ export function authFrame(inner, subtitle) {
       </div>
       <div class="auth-card">
         <div class="auth-brand">
-          <div class="brand-mark">A</div>
+          <div class="brand-mark" aria-hidden="true"><img src="/icon.svg" alt=""></div>
           <div><h1>AgentNexus</h1><p>${esc(subtitle || t('Your agents. Your machines. One place.'))}</p></div>
         </div>
         <div class="card">${inner}</div>
