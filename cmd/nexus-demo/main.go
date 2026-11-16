@@ -187,10 +187,11 @@ func (d *demoHost) connect(ctx context.Context) error {
 			{Name: "opencode", Version: "1.4.2", Path: d.fixtures.agentPath, Supported: true, Capabilities: []string{"structured", "attachments", "fork"}},
 			{Name: "codex", Version: "0.58.0", Path: d.fixtures.agentPath, Supported: true, Capabilities: []string{"structured", "attachments"}},
 			{Name: "claude", Version: "2.1.4", Path: d.fixtures.agentPath, Supported: true, Capabilities: []string{"structured", "attachments"}},
+			{Name: "commandcode", Version: "1.89.1", Path: d.fixtures.agentPath, Supported: true, Capabilities: []string{"structured", "attachments"}},
 		},
 		Policy: &protocol.PolicySummary{
 			AllowedRoots:  []string{d.fixtures.root},
-			AllowedAgents: []string{"opencode", "codex", "claude"},
+			AllowedAgents: []string{"opencode", "codex", "claude", "commandcode"},
 			AllowNew:      true,
 			AllowFork:     true,
 		},
@@ -347,6 +348,18 @@ func runOptionsFor(agent string) protocol.RunOptions {
 			{ID: "review", Name: "Review", Description: "Review the working tree"},
 		}
 		out.CurrentModel, out.CurrentProvider, out.CurrentVariant, out.CurrentMode = "opencode/grok-code", "opencode", "medium", "build"
+		out.SupportsFiles = true
+	case "commandcode":
+		out.Models = []protocol.ModelOption{
+			{ID: "deepseek/deepseek-v4.1-flash", Provider: "deepseek", Name: "DeepSeek V4.1 Flash", Variants: []string{"low", "medium", "high", "max"}, DefaultVariant: "high", Inputs: []string{"text"}},
+			{ID: "claude-sonnet-4-6", Provider: "anthropic", Name: "Claude Sonnet 4.6", Variants: []string{"low", "medium", "high"}, DefaultVariant: "medium", Inputs: []string{"text", "image"}},
+		}
+		out.Modes = []protocol.AgentModeOption{
+			{ID: "default", Name: "Default", Description: "Ask before edits and shell commands"},
+			{ID: "accept-edits", Name: "Accept edits", Description: "Apply file edits automatically"},
+			{ID: "plan", Name: "Plan", Description: "Read-only exploration"},
+		}
+		out.CurrentModel, out.CurrentProvider, out.CurrentVariant, out.CurrentMode = "deepseek/deepseek-v4.1-flash", "deepseek", "high", "default"
 		out.SupportsFiles = true
 	}
 	return out
@@ -651,6 +664,13 @@ func fixturesFor(scenario string) fixtures {
 				CreatedAt: now.Add(-4 * 24 * time.Hour), UpdatedAt: now.Add(-8 * time.Hour),
 				MessageCount: 7, State: protocol.StateIdle,
 			},
+			{
+				NativeID: "ses_demo_commandcode_review", Agent: "commandcode",
+				Title: "Review the retry cap with Command Code", Cwd: join("sample-api"),
+				GitBranch: "feat/upload-retry", RepoRoot: join("sample-api"), RepoURL: "https://github.com/example/sample-api",
+				CreatedAt: now.Add(-6 * time.Hour), UpdatedAt: now.Add(-35 * time.Minute),
+				MessageCount: 8, State: protocol.StateIdle,
+			},
 		}
 	}
 	if scenario == "mac" {
@@ -691,6 +711,12 @@ func fixturesFor(scenario string) fixtures {
 
 	transcripts := map[string][]protocol.Message{
 		"ses_demo_upload_retry": {user, assistant, tool, edit, result},
+		"ses_demo_commandcode_review": {
+			{Role: "user", Kind: "text", Text: "Use Command Code to review the retry cap and check that cancellation still stops the loop.", Timestamp: now.Add(-50 * time.Minute)},
+			{Role: "assistant", Kind: "reasoning", Text: "Command Code checks the retry guard and the cancellation path before changing anything.", Timestamp: now.Add(-49 * time.Minute)},
+			{Role: "assistant", Kind: "tool_call", ToolName: "read_file", ToolInput: `{"file_path":"internal/http/retry.go"}`, ToolOutput: "The ceiling is applied in backoff; context cancellation is checked before every attempt.", Timestamp: now.Add(-48 * time.Minute)},
+			{Role: "assistant", Kind: "text", Text: "The 30-second ceiling is enforced and cancellation still stops the loop. No further changes are needed.", Timestamp: now.Add(-47 * time.Minute)},
+		},
 	}
 	return fixtures{
 		os: osName, arch: arch, root: root, agentPath: agentPath,

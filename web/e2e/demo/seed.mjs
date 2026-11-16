@@ -119,7 +119,7 @@ try {
 
   await new Promise((r) => setTimeout(r, 1200));
   const { sessions } = await api('/api/v1/sessions?limit=50');
-  const wanted = [/upload retries/i, /pagination/i, /flaky checkout/i, /Dockerfile/i];
+  const wanted = [/upload retries/i, /pagination/i, /flaky checkout/i, /Dockerfile/i, /Command Code/i];
   const chosen = wanted
     .map((re) => sessions.find((s) => re.test(s.title)))
     .filter(Boolean);

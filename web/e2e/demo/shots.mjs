@@ -82,9 +82,9 @@ for (const theme of ['dark', 'light']) {
   await shot(page, theme === 'dark' ? 'multi-agent-dashboard.png' : 'runs-light.png');
 
   const { runs } = await api(page, '/runs');
-  const chatRun = runs.find((r) => /upload retries/i.test(r.session_title)) || runs[0];
+  const chatRun = runs.find((r) => /Command Code/i.test(r.session_title)) || runs.find((r) => /upload retries/i.test(r.session_title)) || runs[0];
   const sessions = (await api(page, '/sessions?limit=50')).sessions;
-  const demoSession = sessions.find((s) => /upload retries/i.test(s.title)) || sessions[0];
+  const demoSession = sessions.find((s) => /Command Code/i.test(s.title)) || sessions.find((s) => /upload retries/i.test(s.title)) || sessions[0];
 
   if (chatRun) {
     await page.goto(`${base}/#/runs/${chatRun.id}`, { waitUntil: 'domcontentloaded' });
@@ -197,7 +197,7 @@ for (const theme of ['dark', 'light']) {
       await shot(page, 'workspace-mobile.png');
     }
   }
-  const chatRun = runs.find((r) => /upload retries/i.test(r.session_title)) || runs[0];
+  const chatRun = runs.find((r) => /Command Code/i.test(r.session_title)) || runs.find((r) => /upload retries/i.test(r.session_title)) || runs[0];
   if (chatRun) {
     await page.goto(`${base}/#/runs/${chatRun.id}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.turn-assistant', { timeout: 15000 });
