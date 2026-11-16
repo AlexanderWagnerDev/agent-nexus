@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS hosts (
   id TEXT PRIMARY KEY,
   owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  host_name_reported TEXT NOT NULL DEFAULT '',
   public_key BLOB NOT NULL,
   os TEXT NOT NULL DEFAULT '',
   arch TEXT NOT NULL DEFAULT '',
@@ -402,6 +403,10 @@ CREATE TABLE IF NOT EXISTS device_keys (
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE sessions ADD COLUMN repo_url TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN disabled_at INTEGER`)
+	_, _ = s.db.Exec(`ALTER TABLE hosts ADD COLUMN host_name_reported TEXT NOT NULL DEFAULT ''`)
+	// Backfill with the display name so the first reconnect after the upgrade
+	// does not revert an administrator's rename.
+	_, _ = s.db.Exec(`UPDATE hosts SET host_name_reported=name WHERE host_name_reported=''`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`)

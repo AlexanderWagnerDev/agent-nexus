@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -81,8 +82,8 @@ type Host struct {
 func (s *Store) CreateHost(ownerID, name string, publicKey []byte, osName, arch, version string) (string, error) {
 	id := newID()
 	now := time.Now().UTC()
-	_, err := s.db.Exec(`INSERT INTO hosts(id, owner_id, name, public_key, os, arch, version, created_at, last_seen) VALUES(?,?,?,?,?,?,?,?,?)`,
-		id, ownerID, name, publicKey, osName, arch, version, ms(now), ms(now))
+	_, err := s.db.Exec(`INSERT INTO hosts(id, owner_id, name, host_name_reported, public_key, os, arch, version, created_at, last_seen) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		id, ownerID, name, name, publicKey, osName, arch, version, ms(now), ms(now))
 	return id, err
 }
 
@@ -269,6 +270,28 @@ func (s *Store) RevokeHost(ownerID, hostID string) error {
 func (s *Store) RevokeHostByID(hostID string) error {
 	_, err := s.db.Exec(`UPDATE hosts SET revoked_at=? WHERE id=?`, ms(time.Now()), hostID)
 	return err
+}
+
+// SyncReportedHostName applies the hostname a daemon reports when it differs
+// from the last reported value; the display name follows it. An administrator's
+// rename changes only name, so reconnects do not revert it. Returns true when
+// the display name changed.
+func (s *Store) SyncReportedHostName(hostID, name string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false, nil
+	}
+	var reported, display string
+	if err := s.db.QueryRow(`SELECT host_name_reported, name FROM hosts WHERE id=? AND revoked_at IS NULL`, hostID).Scan(&reported, &display); err != nil {
+		return false, err
+	}
+	if name == reported {
+		return false, nil
+	}
+	if _, err := s.db.Exec(`UPDATE hosts SET name=?, host_name_reported=? WHERE id=?`, name, name, hostID); err != nil {
+		return false, err
+	}
+	return display != name, nil
 }
 
 // RenameHost changes only the hub-visible display name. The daemon keeps its

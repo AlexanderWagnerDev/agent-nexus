@@ -66,6 +66,9 @@ type Daemon struct {
 
 	versionMu sync.Mutex
 	versions  map[string]string
+
+	hostname       atomic.Value // string
+	hostnameSaveMu sync.Mutex
 }
 
 func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
@@ -88,6 +91,11 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		versions:     map[string]string{},
 	}
 	d.adapters = DetectAdapters(logger)
+	name := strings.TrimSpace(cfg.HostName)
+	if name == "" {
+		name = ReadHostname()
+	}
+	d.hostname.Store(name)
 	return d
 }
 
@@ -114,8 +122,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 	// left by a killed update must not prevent the verification rollback.
 	clearStaleUpdateLock(0)
 	d.writeRuntimeStatus()
+	d.syncHostname()
 	go d.runtimeStatusLoop(ctx)
 	go d.updateLoop(ctx)
+	go d.hostnameLoop(ctx)
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -139,6 +149,56 @@ func (d *Daemon) Run(ctx context.Context) error {
 		backoff *= 2
 		if backoff > 60*time.Second {
 			backoff = 60 * time.Second
+		}
+	}
+}
+
+// currentHostname returns the name sent in the hub handshake.
+func (d *Daemon) currentHostname() string {
+	name, _ := d.hostname.Load().(string)
+	return name
+}
+
+// syncHostname applies an OS hostname change to the handshake name and persists
+// it. The hub only follows a changed reported name, so an administrator's
+// rename in the hub is not reverted on every reconnect.
+func (d *Daemon) syncHostname() bool {
+	current := strings.TrimSpace(ReadHostname())
+	if current == "" || current == d.currentHostname() {
+		return false
+	}
+	previous := d.currentHostname()
+	d.hostname.Store(current)
+	d.log.Info("hostname changed", "old", previous, "new", current)
+	d.hostnameSaveMu.Lock()
+	cfg := d.cfg
+	cfg.HostName = current
+	if err := SaveConfig(cfg); err != nil {
+		d.log.Warn("cannot persist the hostname", "error", err)
+	}
+	d.hostnameSaveMu.Unlock()
+	return true
+}
+
+// hostnameLoop notices a rename while connected. A reconnect makes the next
+// auth message carry the new name.
+func (d *Daemon) hostnameLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !d.syncHostname() {
+				continue
+			}
+			d.sendMu.Lock()
+			ws := d.ws
+			d.sendMu.Unlock()
+			if ws != nil {
+				_ = ws.Close(websocket.StatusGoingAway, "hostname changed")
+			}
 		}
 	}
 }
@@ -258,7 +318,7 @@ func (d *Daemon) connect(ctx context.Context) error {
 	sig := base64.StdEncoding.EncodeToString(sign(key, []byte(hello.Nonce)))
 	if err := d.send(protocol.Envelope{
 		Type: "auth", Protocol: protocol.Version, Signature: sig,
-		HostName: d.cfg.HostName, OS: platformOS(), Arch: platformArch(), Version: Version,
+		HostName: d.currentHostname(), OS: platformOS(), Arch: platformArch(), Version: Version,
 	}); err != nil {
 		return err
 	}

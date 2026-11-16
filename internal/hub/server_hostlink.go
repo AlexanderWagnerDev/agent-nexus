@@ -103,9 +103,12 @@ func (s *Server) handleHostWS(w http.ResponseWriter, r *http.Request) {
 	defer s.unregisterHost(hostID, hc)
 	go hc.runWriter(ctx)
 
-	// The hub-side name is authoritative after pairing so an administrator's
-	// rename is not reverted by every reconnect. The daemon still reports its
-	// platform and version.
+	// The hub-side name stays authoritative for administrator renames. The
+	// daemon reports its OS hostname on every connection; apply it only when it
+	// changed from the last reported value, so a rename is not reverted.
+	if _, err := s.store.SyncReportedHostName(hostID, auth.HostName); err != nil {
+		s.log.Warn("cannot sync host name", "host_id", hostID, "error", err)
+	}
 	// The platform is reported on every connection. Persist it so a host that
 	// was paired from a different machine or upgraded to another OS does not
 	// keep stale inventory metadata.
