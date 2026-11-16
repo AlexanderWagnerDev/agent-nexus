@@ -65,7 +65,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` - `latest` for the stable release channel, `alpha` for `main`, `v0.1.8`/`0.1.8` for the current release (`v0.1.7`/`0.1.7` the previous, `v0.1.6`/`0.1.6`, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones), or `sha-<short>` to pin a commit.
+- `NEXUS_TAG` - `latest` for the stable release channel, `alpha` for `main`, `v0.1.8`/`0.1.8` for the current release (`v0.1.6`/`0.1.6` the previous stable release, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones; `v0.1.7` was withdrawn), or `sha-<short>` to pin a commit.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided

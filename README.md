@@ -8,8 +8,9 @@ A self-hosted control plane to discover, manage, and continue existing AI coding
 Releases are published through the manual release workflow as
 [GitHub releases](https://github.com/AlexanderWagnerDev/agent-nexus/releases)
 with signed archives and as multi-arch container images tagged `v0.1.8`,
-`0.1.8`, `latest` and `alpha`; the v0.1.0, v0.1.1, v0.1.2, v0.1.3, v0.1.4, v0.1.5, v0.1.6 and v0.1.7 releases remain
-available under their own tags. The `alpha` tag continues to move with `main` as the
+`0.1.8`, `latest` and `alpha`; the v0.1.0 through v0.1.6 releases remain
+available under their own tags (`v0.1.7` was withdrawn after a Windows
+hidden-start regression; use `v0.1.8`). The `alpha` tag continues to move with `main` as the
 development channel. Official tags and releases still require explicit
 maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the release
 procedure and [CHANGELOG.md](CHANGELOG.md) for the changes in this release.
@@ -175,9 +176,9 @@ docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
 `latest` follows the newest stable release; `v0.1.8` and `0.1.8` pin this
-release; `v0.1.7`/`0.1.7` stays the previous release, and `v0.1.6`/`0.1.6`,
-`v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain
-available for the earlier ones. Container builds from `main`
+release; `v0.1.6`/`0.1.6` stays the previous stable release, and `v0.1.5`/`0.1.5`,
+`v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain
+available for the earlier ones. `v0.1.7` was withdrawn. Container builds from `main`
 are published under `alpha` and `sha-<short>`; `alpha` moves with `main`, is
 not an official release and can differ from `latest`. Use `sha-<short>` or a
 version tag for a pinned build.

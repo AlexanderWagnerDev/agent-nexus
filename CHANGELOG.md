@@ -15,6 +15,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [0.1.7] - 2026-11-16
 
+> **Withdrawn:** `GetConsoleWindow` was loaded from `user32.dll`, so the
+> Windows hidden-start task panicked. Use `v0.1.8`.
+
 ### Fixed
 
 - Windows: the host task now runs `nexusd.exe run --hidden` directly instead of

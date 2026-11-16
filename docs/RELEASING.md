@@ -1,16 +1,17 @@
 # Releasing
 
 AgentNexus **v0.1.8** is the current release (published 2026-11-16);
-**v0.1.7** was published on 2026-11-16, **v0.1.6** on 2026-11-16,
-**v0.1.5** on 2026-11-16, **v0.1.4** on 2026-11-16, **v0.1.3** on 2026-11-16,
-**v0.1.2** on 2026-11-16, **v0.1.1** on 2026-11-15, and **v0.1.0** was the
-first official release (published 2026-11-15). Later tags and releases still
-require the maintainer's explicit approval.
+**v0.1.6** was published on 2026-11-16, **v0.1.5** on 2026-11-16,
+**v0.1.4** on 2026-11-16, **v0.1.3** on 2026-11-16, **v0.1.2** on 2026-11-16,
+**v0.1.1** on 2026-11-15, and **v0.1.0** was the first official release
+(published 2026-11-15). **v0.1.7** was withdrawn and its release and tag were
+removed. Later tags and releases still require the maintainer's explicit
+approval.
 
 ## Current policy
 
-- Older withdrawn tags and releases (`v0.1.0-rc.*`, `v0.2.0-rc.*`, `v0.3.*`)
-  stay removed. Do not recreate them.
+- Older withdrawn tags and releases (`v0.1.7`, `v0.1.0-rc.*`, `v0.2.0-rc.*`,
+  `v0.3.*`) stay removed. Do not recreate them.
 - Ordinary commits and pull requests must not produce a GitHub release. The
   release workflow is `workflow_dispatch` only, requires a semver tag and
   dispatches from `main` or from that tag. It creates and pushes the annotated
@@ -38,8 +39,7 @@ require the maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
-| [v0.1.8](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.8`, `0.1.8`, `0.1`, `alpha`, `latest` (digest pending) |
-| [v0.1.7](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.7) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.7`, `0.1.7`, `0.1`, `alpha`, `latest` (digest `sha256:91bf0117dbe050a48e1c56b8b78d2e268c6dac31eb2da3de3ecdfc47d5e11f28`) |
+| [v0.1.8](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.8`, `0.1.8`, `0.1`, `alpha`, `latest` (digest `sha256:b06699e8e37b0b041970c565037ba87a012db6e3a7471ecfb7eb142ef6579d36`) |
 | [v0.1.6](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.6) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.6`, `0.1.6`, `0.1`, `alpha`, `latest` (digest `sha256:fe421ba56fbeb608791250986896844bdae3cb84a39332497760e1a75702c44e`) |
 | [v0.1.5](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.5) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.5`, `0.1.5`, `0.1`, `alpha`, `latest` (digest `sha256:e6d832545502ba7e4832734fbf18e55e857a9c90480adb19cc3554795e2c946e`) |
 | [v0.1.4](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.4) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.4`, `0.1.4`, `0.1`, `alpha`, `latest` (digest `sha256:b21cd84613114413ef9b8f9dd3e02f965cc985a56f3c10cd636c946b174877f7`) |
@@ -47,6 +47,12 @@ require the maintainer's explicit approval.
 | [v0.1.2](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.2`, `0.1.2`, `0.1`, `alpha`, `latest` (digest `sha256:7061c549f2402b0d36c14dfcd5c3605c603bf6d30009ca9d5936a53238e385da`) |
 | [v0.1.1](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.1) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.1`, `0.1.1`, `0.1`, `alpha`, `latest` (digest `sha256:b8716fdea47d4e0efb346a59fcb2dbb9baf2514eac9499b0c034e43b0d8b734c`) |
 | [v0.1.0](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.0) | 2026-11-15 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.0`, `0.1.0`, `latest`, `alpha` |
+
+> **Withdrawn:** `v0.1.7` was published briefly on 2026-11-16 and removed the
+> same day. Its Windows task started `nexusd.exe run --hidden`, but
+> `GetConsoleWindow` was loaded from the wrong DLL and the daemon panicked.
+> Its GitHub release and tag were removed; do not pin it. Use `v0.1.8`.
+> Container tags produced from that build may still exist in the registries.
 
 ## Release decision
 
