@@ -1032,6 +1032,22 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			return nil, err
 		}
 		return map[string]string{"status": "scheduled"}, nil
+	case "update.configure":
+		var p struct {
+			AllowRemoteInstall *bool `json:"allow_remote_install"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if p.AllowRemoteInstall == nil {
+			return nil, errors.New("allow_remote_install is required")
+		}
+		status, err := d.SetRemoteInstall(*p.AllowRemoteInstall)
+		if err != nil {
+			return nil, err
+		}
+		hostAudit("update.remote_install_changed", map[string]any{"enabled": *p.AllowRemoteInstall})
+		return status, nil
 	case "run.options":
 		var p struct {
 			RunID string `json:"run_id"`

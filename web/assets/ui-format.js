@@ -70,6 +70,7 @@ export const AGENTS = {
   opencode: { label: 'OpenCode', short: 'OC' },
   codex: { label: 'Codex', short: 'CX' },
   claude: { label: 'Claude Code', short: 'CL' },
+  commandcode: { label: 'Command Code', short: 'CC' },
   gemini: { label: 'Gemini', short: 'GM' },
   copilot: { label: 'Copilot', short: 'CP' },
   goose: { label: 'Goose', short: 'GO' },

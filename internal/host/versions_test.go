@@ -15,7 +15,7 @@ func TestStructuredVersionBandIsEnforcedOnRunStart(t *testing.T) {
 	d := &Daemon{cfg: Config{}, versions: map[string]string{}}
 	d.rememberAgentVersion("opencode", "1.9.4")
 	if err := d.checkStructuredVersion(context.Background(), "opencode"); err == nil {
-		t.Fatal("structured mode accepted an untested OpenCode version")
+		t.Fatal("structured mode accepted a terminal-only OpenCode version")
 	}
 	d.cfg.AllowUntestedAgentVersions = true
 	if err := d.checkStructuredVersion(context.Background(), "opencode"); err != nil {
@@ -38,10 +38,12 @@ func TestCheckAgentVersion(t *testing.T) {
 		tested, known  bool
 	}{
 		{"opencode", "2.2.7", true, true},
-		{"opencode", "1.4.2", false, true},
-		{"opencode", "2.0.0", false, true},
+		{"opencode", "1.4.2", true, true},
+		{"opencode", "2.0.0", true, true},
 		{"opencode", "3.0.0", false, true},
 		{"opencode", "0.9.9", false, true},
+		{"commandcode", "1.89.1", true, true},
+		{"commandcode", "2.0.0", false, true},
 		{"codex", "0.58.0", true, true},
 		{"codex", "codex-cli 1.2.3", false, true},
 		{"claude", "2.1.4", true, true},
@@ -86,6 +88,21 @@ func TestApplyVersionPolicy(t *testing.T) {
 	d.applyVersionPolicy(&inside)
 	if inside.Untested || inside.VersionWarning != "" || !sliceContains(inside.Capabilities, "structured") {
 		t.Fatalf("inside version changed: %+v", inside)
+	}
+
+	legacy := protocol.AgentInfo{Name: "opencode", Version: "1.4.2", Capabilities: append([]string(nil), base...)}
+	d.applyVersionPolicy(&legacy)
+	if legacy.Untested || !strings.Contains(legacy.VersionWarning, "terminal") {
+		t.Fatalf("legacy version not explained: %+v", legacy)
+	}
+	if sliceContains(legacy.Capabilities, "structured") {
+		t.Fatalf("legacy OpenCode kept structured: %+v", legacy.Capabilities)
+	}
+
+	legacyOverride := protocol.AgentInfo{Name: "opencode", Version: "1.4.2", Capabilities: append([]string(nil), base...)}
+	override.applyVersionPolicy(&legacyOverride)
+	if !sliceContains(legacyOverride.Capabilities, "structured") || !strings.Contains(legacyOverride.VersionWarning, "allow_untested_agent_versions") {
+		t.Fatalf("legacy override was ignored: %+v", legacyOverride)
 	}
 
 	unknown := protocol.AgentInfo{Name: "opencode", Version: "nightly", Capabilities: append([]string(nil), base...)}

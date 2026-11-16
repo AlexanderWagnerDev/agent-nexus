@@ -149,6 +149,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .agent-glyph[data-agent="opencode"] { --glyph: #8c7df0; }
 .agent-glyph[data-agent="codex"] { --glyph: #6f9ae8; }
 .agent-glyph[data-agent="claude"] { --glyph: #d29a64; }
+.agent-glyph[data-agent="commandcode"] { --glyph: #d5d5d5; }
 .agent-glyph[data-agent="gemini"] { --glyph: #5fb5b5; }
 .agent-glyph[data-agent="copilot"] { --glyph: #9aa3af; }
 .agent-glyph[data-agent="goose"] { --glyph: #b08de0; }

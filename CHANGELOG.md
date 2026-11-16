@@ -4,6 +4,43 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-11-16
+
+### Added
+
+- Hub/Web: hosts can be checked and updated from the Hosts page. A per-host
+  action installs an available `nexusd` update, and "Update all" checks every
+  online host and offers to update them together.
+- Hub/Host: an admin with host manage permission can enable or disable
+  `updates.allow_remote_install` from the host page (step-up confirmation).
+  The host still verifies checksums and optional signatures, waits for idle
+  runs and keeps the channel, signature policy and release source local.
+- Host: Command Code is detected as `commandcode` when `command-code`, `cmdc`
+  or `commandcode` is installed. Discovery and transcript read
+  `~/.commandcode/projects`, terminal mode resumes/fork with
+  `command-code --resume`, and structured mode uses `command-code acp` through
+  the generic ACP driver.
+- Host: OpenCode 1.x is now a recognized terminal/discovery/transcript band.
+  Structured mode remains limited to OpenCode 2.2+ because the HTTP server API
+  differs; `allow_untested_agent_versions` can override this explicitly.
+
+### Changed
+
+- Host updates no longer require the external `cosign` binary. SHA-256 is
+  always verified; when `cosign` is installed the signed bundle is verified
+  too, and `updates.require_signature=true` makes that mandatory. This lowers
+  the default trust mode for hosts without cosign from signed to checksum-only.
+
+### Fixed
+
+- Windows: the installer now adds `%LOCALAPPDATA%\AgentNexus` to the user PATH,
+  so `nexusd` and `nexus` work in a new terminal without the full path.
+- Windows: host updates now run the binary replacement in a separate on-demand
+  task (`AgentNexus Host Update`). This avoids the Task Scheduler job object
+  blocking the helper with `Access is denied` when it tries to break away.
+- Web: a host whose update failed because `cosign` is missing now shows the
+  host-local remediation command instead of only the raw error.
+
 ## [0.1.4] - 2026-11-16
 
 ### Changed
@@ -105,6 +142,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.5]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.5
 [0.1.4]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.4
 [0.1.3]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.3
 [0.1.2]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2

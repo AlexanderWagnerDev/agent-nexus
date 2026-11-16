@@ -149,27 +149,29 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 	}
 	adapters := DetectAdapters(discardLogger())
 	if len(adapters) == 0 {
-		fmt.Fprintln(out, "agents:     none detected (claude, codex, opencode, gemini)")
+		fmt.Fprintln(out, "agents:     none detected (claude, codex, opencode, commandcode, gemini)")
 		issues++
 	}
 	for _, a := range adapters {
 		info, err := a.Detect(context.Background())
 		if err != nil {
-			fmt.Fprintf(out, "agent %-9s error: %v\n", a.Name(), err)
+			fmt.Fprintf(out, "agent %-11s error: %v\n", a.Name(), err)
 			issues++
 			continue
 		}
-		fmt.Fprintf(out, "agent %-9s %s (%s)\n", a.Name(), info.Version, info.Path)
+		fmt.Fprintf(out, "agent %-11s %s (%s)\n", a.Name(), info.Version, info.Path)
 		if !info.Supported {
 			fmt.Fprintf(out, "             store not found; discovery disabled\n")
 		}
 		if tested, recognized := CheckAgentVersion(a.Name(), info.Version); recognized && !tested {
 			fmt.Fprintln(out, "             WARNING version is outside the tested range; structured mode is disabled unless allow_untested_agent_versions is set")
+		} else if band, matched := agentVersionBand(a.Name(), info.Version); matched && !band.Structured {
+			fmt.Fprintf(out, "             %s\n", band.Note)
 		}
 	}
 	fmt.Fprintln(out, "version matrix:")
 	for _, band := range AgentMatrix() {
-		fmt.Fprintf(out, "  %-9s %-22s structured=%v\n", band.Agent, band.TestedRange(), band.Structured)
+		fmt.Fprintf(out, "  %-11s %-22s structured=%v\n", band.Agent, band.TestedRange(), band.Structured)
 	}
 	prefs := cfg.UpdatePrefs()
 	fmt.Fprintf(out, "updates:    channel=%s auto=%v idle=%v signature=%s\n",

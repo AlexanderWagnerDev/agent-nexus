@@ -538,7 +538,7 @@ func verifyCosign(ctx context.Context, checksums, signatureURL string, required 
 	path, err := exec.LookPath("cosign")
 	if err != nil {
 		if required {
-			return "", errors.New("cosign is required to verify this update; install cosign or set updates.require_signature=false (checksum-only)")
+			return "", errors.New("cosign is required to verify this update; install cosign or run \"nexusd update --configure --checksum-only\" (weaker trust mode)")
 		}
 		return "checksum-only", nil
 	}

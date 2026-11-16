@@ -14,10 +14,11 @@ nexus logout
 ```
 
 `nexus update` updates only the terminal client from the same official release
-archives as `nexusd`. It verifies the SHA-256 and cosign bundle (checksum-only
-only with `--allow-checksum-only`), keeps `nexus.previous` and never replaces
-the running daemon or touches the host config. On Windows the replacement is
-performed by a detached helper after the client exits.
+archives as `nexusd`. It verifies the SHA-256 and, when `cosign` is installed,
+the cosign bundle; `--require-signature` makes the signature mandatory. It
+keeps `nexus.previous` and never replaces the running daemon or touches the
+host config. On Windows the replacement is performed by a detached helper after
+the client exits.
 
 Create the pairing token in the web app under **Devices & passkeys**. Password
 login is also supported with `--username` and `NEXUS_PASSWORD` (plus `--totp`

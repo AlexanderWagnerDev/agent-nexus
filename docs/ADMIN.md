@@ -93,8 +93,9 @@ allowed agent are indexed. The file contains transcript text, is created with
 
 | Agent | Discovery | Native terminal resume | Structured mode |
 | --- | --- | --- | --- |
-| OpenCode | SQLite v1/v2 | `opencode --session <id>` | `opencode serve` |
+| OpenCode | SQLite v1/v2 | `opencode --session <id>` | `opencode serve` (2.2+); 1.x terminal-only |
 | Codex CLI | rollout JSONL/JSONL.ZST | `codex resume <id>` | `codex app-server` |
+| Command Code | JSONL projects | `command-code --resume <id>` | ACP via `command-code acp` |
 | Claude Code | JSONL projects | `claude --resume <id>` | ACP adapter (optional) |
 | Gemini CLI | best effort | `gemini --resume <id>` | ACP via `gemini --acp` (fake-tested, not real-tested) |
 | Other ACP agents | adapter-dependent | configured command | `nexusd acp` |
@@ -182,9 +183,11 @@ Docker volume commands.
 The host page shows the installed and available versions, channel, automatic
 update and signature mode, current phase and last error. A blocked host version
 can be retried only on that host (`nexusd update --configure --unblock <version>`).
-The hub may request installation only when the host has
-`updates.allow_remote_install=true`; it cannot alter the release source or
-signature policy.
+An admin with host manage permission can enable or disable
+`updates.allow_remote_install` from the host page; the change requires a
+step-up confirmation and is audited. The hub still cannot alter the release
+source, channel or signature policy, and the host performs the install only
+after its checksum, optional signature and idle checks.
 
 Database migrations run automatically. There is no automatic downgrade; keep
 the previous container tag, host `nexusd.previous` binary and database backup
@@ -224,7 +227,8 @@ backup.
 - Further release publication depends on maintainer approval, not personally
   performed cross-OS acceptance or prescribed extended tests. v0.1.0 was
   published on 2026-11-15; v0.1.1 was published on 2026-11-15, v0.1.2 on
-  2026-11-16, v0.1.3 on 2026-11-16 and v0.1.4 is the current release.
+  2026-11-16, v0.1.3 on 2026-11-16, v0.1.4 on 2026-11-16 and v0.1.5 is the
+  current release.
 
 ## Troubleshooting
 

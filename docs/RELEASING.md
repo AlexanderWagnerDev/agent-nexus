@@ -1,10 +1,10 @@
 # Releasing
 
-AgentNexus **v0.1.4** is the current release (published 2026-11-16);
-**v0.1.3** was published on 2026-11-16, **v0.1.2** on 2026-11-16,
-**v0.1.1** on 2026-11-15, and **v0.1.0** was the first official release
-(published 2026-11-15). Later tags and releases still require the maintainer's
-explicit approval.
+AgentNexus **v0.1.5** is the current release (published 2026-11-16);
+**v0.1.4** was published on 2026-11-16, **v0.1.3** on 2026-11-16,
+**v0.1.2** on 2026-11-16, **v0.1.1** on 2026-11-15, and **v0.1.0** was the
+first official release (published 2026-11-15). Later tags and releases still
+require the maintainer's explicit approval.
 
 ## Current policy
 
@@ -25,7 +25,7 @@ explicit approval.
 - Container builds on `main` publish `alpha` (moving) and `sha-<short>`
   (pinned) tags. Official releases use an explicit **Container** workflow
   dispatch with the `release_tag` input, which publishes the matching
-  `v0.1.4`, `0.1.4`, `0.1` and `alpha` tags; the `latest` tag additionally
+  `v0.1.5`, `0.1.5`, `0.1` and `alpha` tags; the `latest` tag additionally
   requires `publish_latest=true`. `alpha` keeps moving with `main` after the
   release.
 - The hub, daemon and terminal client report their version as `alpha` unless a
@@ -37,6 +37,7 @@ explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
+| [v0.1.5](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.5) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.5`, `0.1.5`, `0.1`, `alpha`, `latest` (digest pending) |
 | [v0.1.4](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.4) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.4`, `0.1.4`, `0.1`, `alpha`, `latest` (digest `sha256:b21cd84613114413ef9b8f9dd3e02f965cc985a56f3c10cd636c946b174877f7`) |
 | [v0.1.3](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.3) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.3`, `0.1.3`, `0.1`, `alpha`, `latest` (digest `sha256:a217df4627b032992bc68e5ea58a49e84149a2d174d6f1bd64949e0ea487c14d`) |
 | [v0.1.2](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.2) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.2`, `0.1.2`, `0.1`, `alpha`, `latest` (digest `sha256:7061c549f2402b0d36c14dfcd5c3605c603bf6d30009ca9d5936a53238e385da`) |
@@ -58,7 +59,7 @@ accurately without turning optional testing into release blockers.
 ## Manual release procedure (only after approval)
 
 1. In GitHub Actions, run **Release** from `main` with the approved tag, for
-   example `tag=v0.1.4`. The workflow creates and pushes the annotated tag on
+   example `tag=v0.1.5`. The workflow creates and pushes the annotated tag on
    the dispatched commit and publishes the GitHub release. Re-running it for an
    existing tag publishes that tag as-is.
 2. Review the published release's assets, checksums, SBOMs and the cosign
@@ -66,8 +67,8 @@ accurately without turning optional testing into release blockers.
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
    release, delete the release and the tag before dispatching it again.
-3. Then run **Container** with `release_tag=v0.1.4` and `publish_latest=true`
-   for a stable release. The dispatch publishes `v0.1.4`, `0.1.4`, `0.1`,
+3. Then run **Container** with `release_tag=v0.1.5` and `publish_latest=true`
+   for a stable release. The dispatch publishes `v0.1.5`, `0.1.5`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
    workflow checks out that tag before building, so a newer `main` does not
@@ -98,6 +99,6 @@ workflow logs. At the time of the cleanup:
 
 ## Versioning
 
-The first approved version was `v0.1.0`; the current release is `v0.1.4`.
+The first approved version was `v0.1.0`; the current release is `v0.1.5`.
 Builds without a release tag are identified by commit SHA. Do not infer or
 promise a later version number from this document.

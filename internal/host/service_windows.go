@@ -17,6 +17,12 @@ import (
 // windowsTaskName is per-user, so no administrator rights are required.
 const windowsTaskName = "AgentNexus Host"
 
+// windowsUpdateTaskName is an on-demand task that replaces the daemon binary
+// outside the daemon's own Task Scheduler job object. A child process with
+// CREATE_BREAKAWAY_FROM_JOB is denied when the host task's job disallows
+// breakaway, which made in-process update helpers fail with access denied.
+const windowsUpdateTaskName = "AgentNexus Host Update"
+
 func serviceInstalled() bool {
 	_, err := runWindowsCommand("schtasks", "/Query", "/TN", windowsTaskName)
 	return err == nil
@@ -65,9 +71,46 @@ func installWindowsTask(exe string) error {
 	return nil
 }
 
+// installWindowsUpdateTask creates the on-demand task that runs the update
+// helper outside the daemon's job object. It is recreated with /F before every
+// update so the action always points at the current script.
+func installWindowsUpdateTask(script string) error {
+	userID, err := currentWindowsUserID()
+	if err != nil {
+		return err
+	}
+	content := windowsUpdateTaskXML(windowsPowerShellPath(), script, userID)
+	file, err := os.CreateTemp("", "agentnexus-update-task-*.xml")
+	if err != nil {
+		return err
+	}
+	name := file.Name()
+	defer os.Remove(name)
+	if err := writeUTF16LE(file, content); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if out, err := runWindowsCommand("schtasks", "/Create", "/TN", windowsUpdateTaskName, "/XML", name, "/F"); err != nil {
+		return fmt.Errorf("schtasks create update task failed: %v: %s", err, strings.TrimSpace(out))
+	}
+	return nil
+}
+
+func windowsPowerShellPath() string {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		root = `C:\Windows`
+	}
+	return filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+}
+
 func uninstallWindowsTask() error {
 	if _, err := runWindowsCommand("schtasks", "/Query", "/TN", windowsTaskName); err != nil {
 		removeLegacyStartupLauncher()
+		removeWindowsUpdateTask()
 		fmt.Printf("scheduled task %q is not installed\n", windowsTaskName)
 		return nil
 	}
@@ -75,9 +118,18 @@ func uninstallWindowsTask() error {
 	if out, err := runWindowsCommand("schtasks", "/Delete", "/TN", windowsTaskName, "/F"); err != nil {
 		return fmt.Errorf("schtasks delete failed: %v: %s", err, strings.TrimSpace(out))
 	}
+	removeWindowsUpdateTask()
 	removeLegacyStartupLauncher()
 	fmt.Printf("removed scheduled task %q\n", windowsTaskName)
 	return nil
+}
+
+func removeWindowsUpdateTask() {
+	if _, err := runWindowsCommand("schtasks", "/Query", "/TN", windowsUpdateTaskName); err != nil {
+		return
+	}
+	_, _ = runWindowsCommand("schtasks", "/End", "/TN", windowsUpdateTaskName)
+	_, _ = runWindowsCommand("schtasks", "/Delete", "/TN", windowsUpdateTaskName, "/F")
 }
 
 func statusWindowsTask() error {
@@ -172,6 +224,50 @@ func windowsTaskXML(exe, userID string) string {
     <Exec>
       <Command>` + escapedExe + `</Command>
       <Arguments>run</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`
+}
+
+// windowsUpdateTaskXML builds the on-demand helper task. It deliberately has
+// no logon trigger and runs outside the host task's job object.
+func windowsUpdateTaskXML(powerShell, script, userID string) string {
+	escapedPowerShell := xmlEscape(powerShell)
+	escapedUser := xmlEscape(userID)
+	arguments := `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "` + script + `"`
+	return `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>AgentNexus host update helper</Description>
+  </RegistrationInfo>
+  <Triggers />
+  <Principals>
+    <Principal id="Author">
+      <UserId>` + escapedUser + `</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <Hidden>true</Hidden>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>` + escapedPowerShell + `</Command>
+      <Arguments>` + xmlEscape(arguments) + `</Arguments>
     </Exec>
   </Actions>
 </Task>

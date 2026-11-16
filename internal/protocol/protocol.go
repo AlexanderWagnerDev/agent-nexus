@@ -103,7 +103,8 @@ const (
 
 // UpdateStatus is reported by a host after checking the release feed. The hub
 // stores only this metadata so update availability and the host-local updater
-// state can be shown centrally. The hub cannot change these settings.
+// state can be shown centrally. The hub may toggle RemoteInstall, but the
+// channel, signature policy and release source stay host-local.
 type UpdateStatus struct {
 	Current       string    `json:"current"`
 	Latest        string    `json:"latest,omitempty"`

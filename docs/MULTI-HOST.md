@@ -76,9 +76,10 @@ Restart the task once (`schtasks /End /TN "AgentNexus Host"` and `/Run`) so the
 new environment is visible. The public repository needs no token for normal
 release checks.
 
-Install cosign on hosts that should verify the signed checksum bundle. The
-default local policy requires signature verification; checksum-only is an
-explicit decision (`nexusd update --configure --checksum-only`).
+Install cosign on hosts that should verify the signed checksum bundle. It is
+optional: SHA-256 is always verified, and the cosign bundle is verified when
+cosign is installed. Use `nexusd update --configure --require-signature` to
+make the signature mandatory.
 
 ## 3. Native OpenCode sessions
 
@@ -146,7 +147,7 @@ cd C:\AgentNexus
 .\nexusd.exe update --rollback
 ```
 
-The updater verifies the archive checksum and, with the default policy, the
+The updater verifies the archive checksum and, when cosign is installed, the
 cosign bundle; it preserves the host identity and keeps `nexusd.exe.previous`.
 The Windows helper verifies that the expected version starts before it reports
 success, and restores the previous binary when it does not. Logs are written to
@@ -157,9 +158,9 @@ attempts:
 .\nexusd.exe update --configure --unblock 0.1.1
 ```
 
-`allow_remote_install` is off by default; the hub can request an installation
-only after it is enabled locally. The hub can never change the channel,
-signature policy or release source.
+`allow_remote_install` is off by default. An admin with host manage permission
+can enable it from the host page (step-up required, audited), or locally. The
+hub can never change the channel, signature policy or release source.
 
 ## 6. Troubleshooting
 

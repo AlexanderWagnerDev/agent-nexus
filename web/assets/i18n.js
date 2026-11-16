@@ -984,7 +984,7 @@ Object.assign(de, {
     'Updates werden lokal auf dem Host verwaltet; der Hub zeigt nur den Status an.',
   'Update state': 'Update-Status',
   'Sign-in required again': 'Erneute Anmeldung erforderlich',
-  'This is a weaker trust mode.': 'Dies ist ein schwächerer Vertrauensmodus.',
+  'SHA-256 verified. Install cosign to verify the signed release bundle.': 'SHA-256 geprüft. Installiere cosign, um das signierte Release-Bundle zu prüfen.',
   'No update check recorded yet.': 'Noch keine Update-Prüfung aufgezeichnet.',
   'Checking for updates...': 'Update-Prüfung läuft…',
   'Downloading update...': 'Update wird heruntergeladen…',
@@ -1196,6 +1196,38 @@ Object.assign(de, {
   'read transcript': 'Transkript lesen',
   'terminal input': 'Terminal-Eingabe',
   'Revoking this host closes its connection and fails active runs. The daemon must be paired again.': 'Das Widerrufen dieses Hosts schließt seine Verbindung und lässt aktive Runs fehlschlagen. Der Daemon muss erneut gekoppelt werden.',
+});
+
+// Strings for updating hosts from the hub.
+Object.assign(de, {
+  'Update all': 'Alle aktualisieren',
+  'Update hosts': 'Hosts aktualisieren',
+  '{n} hosts have an update available.': '{n} Hosts haben ein Update verfügbar.',
+  'remote installation off': 'Remote-Installation aus',
+  'Remote installation is off on {n} hosts. Enabling it lets this hub request signed updates for those hosts.':
+    'Auf {n} Hosts ist die Remote-Installation aus. Wenn du sie aktivierst, darf dieser Hub signierte Updates für diese Hosts anfordern.',
+  'Update {n} hosts': '{n} Hosts aktualisieren',
+  'Enable on {n} and update': 'Auf {n} aktivieren und aktualisieren',
+  'Update requested on {n} hosts': 'Update für {n} Hosts angefordert',
+  'No online hosts to update.': 'Keine Online-Hosts zum Aktualisieren.',
+  'No updates available.': 'Keine Updates verfügbar.',
+  '{name} is up to date.': '{name} ist aktuell.',
+  'Update available on {name}: {version}': 'Update für {name} verfügbar: {version}',
+  'Install update': 'Update installieren',
+  'Install the available nexusd update on {name}? The host waits for active runs to finish and verifies the release signature.':
+    'Das verfügbare nexusd-Update auf {name} installieren? Der Host wartet auf aktive Runs und prüft die Release-Signatur.',
+  'Remote installation is disabled on {name}. Enable it for this host and install the update? The host still verifies the release signature and waits for active runs.':
+    'Die Remote-Installation ist auf {name} deaktiviert. Für diesen Host aktivieren und das Update installieren? Der Host prüft weiterhin die Release-Signatur und wartet auf aktive Runs.',
+  'Remote installation enabled; installation requested': 'Remote-Installation aktiviert; Installation angefordert',
+  'Remote installation': 'Remote-Installation',
+  'Allow remote installation': 'Remote-Installation erlauben',
+  'Disable remote installation': 'Remote-Installation deaktivieren',
+  'Remote installation enabled': 'Remote-Installation aktiviert',
+  'Remote installation disabled': 'Remote-Installation deaktiviert',
+  'Enabling remote installation lets this hub request nexusd updates on this host. The host still verifies release signatures and waits for active runs to finish.':
+    'Wenn du die Remote-Installation aktivierst, darf dieser Hub nexusd-Updates auf diesem Host anfordern. Der Host prüft weiterhin Release-Signaturen und wartet auf aktive Runs.',
+  'Install cosign on the host, or explicitly accept checksum-only updates there:':
+    'Installiere cosign auf dem Host oder erlaube dort ausdrücklich reine Prüfsummen-Updates:',
 });
 
 const supported = ['en', 'de'];

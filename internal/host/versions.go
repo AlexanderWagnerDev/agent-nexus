@@ -18,16 +18,21 @@ type AgentVersionRange struct {
 	Min        string
 	Max        string
 	Structured bool
+	// Note explains a supported band that intentionally has no structured
+	// driver, for example OpenCode 1.x.
+	Note string
 }
 
 var agentVersionMatrix = []AgentVersionRange{
 	{Agent: "claude", Min: "2.0.0", Max: "3.0.0", Structured: true},
 	{Agent: "codex", Min: "0.50.0", Max: "1.0.0", Structured: true},
-	// OpenCode 2.2.x is the first line whose HTTP API matches the structured
-	// driver (session/prompt, SSE events, permissions, fork). The old 1.x
-	// endpoints are not exercised by this driver, so terminal mode is the
-	// fallback outside this band.
+	// OpenCode 1.x sessions are discovered, read and resumed in terminal mode.
+	// The structured HTTP driver was verified against 2.2+ and is disabled for
+	// the older server API unless the operator explicitly allows it.
+	{Agent: "opencode", Min: "1.0.0", Max: "2.2.0", Structured: false,
+		Note: "OpenCode 1.x supports terminal, discovery and transcript; structured mode needs 2.2 or newer."},
 	{Agent: "opencode", Min: "2.2.0", Max: "3.0.0", Structured: true},
+	{Agent: "commandcode", Min: "1.0.0", Max: "2.0.0", Structured: true},
 	{Agent: "gemini", Min: "0.1.0", Max: "1.0.0", Structured: true},
 }
 
@@ -77,31 +82,83 @@ func compareVersion(a, b []int) int {
 	return 0
 }
 
-// CheckAgentVersion reports whether a detected version is inside the tested
+// CheckAgentVersion reports whether a detected version is inside any tested
 // band. recognized is false when the matrix has no entry or the version could
 // not be parsed.
 func CheckAgentVersion(agent, version string) (tested, recognized bool) {
-	var band *AgentVersionRange
-	for i := range agentVersionMatrix {
-		if agentVersionMatrix[i].Agent == agent {
-			band = &agentVersionMatrix[i]
-			break
+	hasBand := false
+	got, ok := parseAgentVersion(version)
+	for _, band := range agentVersionMatrix {
+		if band.Agent != agent {
+			continue
+		}
+		hasBand = true
+		if !ok {
+			continue
+		}
+		low, _ := parseAgentVersion(band.Min)
+		high, _ := parseAgentVersion(band.Max)
+		if compareVersion(got, low) >= 0 && compareVersion(got, high) < 0 {
+			return true, true
 		}
 	}
-	if band == nil {
+	if !hasBand || !ok {
 		return true, false
 	}
-	got, ok := parseAgentVersion(version)
-	if !ok {
-		return true, false
-	}
-	low, _ := parseAgentVersion(band.Min)
-	high, _ := parseAgentVersion(band.Max)
-	return compareVersion(got, low) >= 0 && compareVersion(got, high) < 0, true
+	return false, true
 }
 
-// applyVersionPolicy annotates inventory and removes structured mode when the
-// version is outside the tested band and the override is off.
+// agentVersionBand returns the tested band that contains a version.
+func agentVersionBand(agent, version string) (AgentVersionRange, bool) {
+	got, ok := parseAgentVersion(version)
+	if !ok {
+		return AgentVersionRange{}, false
+	}
+	for _, band := range agentVersionMatrix {
+		if band.Agent != agent {
+			continue
+		}
+		low, _ := parseAgentVersion(band.Min)
+		high, _ := parseAgentVersion(band.Max)
+		if compareVersion(got, low) >= 0 && compareVersion(got, high) < 0 {
+			return band, true
+		}
+	}
+	return AgentVersionRange{}, false
+}
+
+// agentSupportedRange renders the union of all bands for an agent.
+func agentSupportedRange(agent string) (string, bool) {
+	min, max := "", ""
+	for _, band := range agentVersionMatrix {
+		if band.Agent != agent {
+			continue
+		}
+		if min == "" {
+			min = band.Min
+		} else if got, _ := parseAgentVersion(band.Min); got != nil {
+			low, _ := parseAgentVersion(min)
+			if compareVersion(got, low) < 0 {
+				min = band.Min
+			}
+		}
+		if max == "" {
+			max = band.Max
+		} else if got, _ := parseAgentVersion(band.Max); got != nil {
+			high, _ := parseAgentVersion(max)
+			if compareVersion(got, high) > 0 {
+				max = band.Max
+			}
+		}
+	}
+	if min == "" {
+		return "", false
+	}
+	return fmt.Sprintf(">= %s < %s", min, max), true
+}
+
+// applyVersionPolicy annotates inventory. A band with Structured=false keeps
+// terminal/discovery/transcript and removes only structured mode.
 func (d *Daemon) applyVersionPolicy(info *protocol.AgentInfo) {
 	if info == nil {
 		return
@@ -114,11 +171,26 @@ func (d *Daemon) applyVersionPolicy(info *protocol.AgentInfo) {
 		}
 		return
 	}
+	if band, matched := agentVersionBand(info.Name, info.Version); matched && !band.Structured {
+		info.VersionWarning = band.Note
+		if !d.cfg.AllowUntestedAgentVersions {
+			filtered := info.Capabilities[:0]
+			for _, capability := range info.Capabilities {
+				if capability != "structured" {
+					filtered = append(filtered, capability)
+				}
+			}
+			info.Capabilities = filtered
+		} else {
+			info.VersionWarning += " Structured mode is allowed by allow_untested_agent_versions."
+		}
+		return
+	}
 	if tested {
 		return
 	}
-	band, _ := agentVersionRange(info.Name)
-	info.VersionWarning = fmt.Sprintf("Version %s is outside the tested range %s.", info.Version, band.TestedRange())
+	rangeText, _ := agentSupportedRange(info.Name)
+	info.VersionWarning = fmt.Sprintf("Version %s is outside the tested range %s.", info.Version, rangeText)
 	if !d.cfg.AllowUntestedAgentVersions {
 		info.VersionWarning += " Structured mode is disabled; terminal mode still works."
 		filtered := info.Capabilities[:0]
@@ -131,15 +203,6 @@ func (d *Daemon) applyVersionPolicy(info *protocol.AgentInfo) {
 	} else {
 		info.VersionWarning += " Structured mode is allowed by allow_untested_agent_versions."
 	}
-}
-
-func agentVersionRange(agent string) (AgentVersionRange, bool) {
-	for _, band := range agentVersionMatrix {
-		if band.Agent == agent {
-			return band, true
-		}
-	}
-	return AgentVersionRange{}, false
 }
 
 // rememberAgentVersion caches the version seen during inventory so a run start
@@ -186,12 +249,15 @@ func (d *Daemon) checkStructuredVersion(ctx context.Context, agent string) error
 		version = info.Version
 		d.rememberAgentVersion(agent, version)
 	}
+	if band, matched := agentVersionBand(agent, version); matched && !band.Structured {
+		return fmt.Errorf("agent version %s supports terminal mode but not structured mode: %s", version, band.Note)
+	}
 	tested, recognized := CheckAgentVersion(agent, version)
 	if !recognized || tested {
 		return nil
 	}
-	band, _ := agentVersionRange(agent)
-	return fmt.Errorf("agent version %s is outside the tested structured range %s; terminal mode still works", version, band.TestedRange())
+	rangeText, _ := agentSupportedRange(agent)
+	return fmt.Errorf("agent version %s is outside the tested structured range %s; terminal mode still works", version, rangeText)
 }
 
 // auditVersionOverrides records once per daemon start when the override is on

@@ -1,7 +1,8 @@
 import { api } from '../api.js';
+import { ensureStepUp } from '../auth.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { agentGlyph, badge, toast } from '../ui.js';
+import { agentGlyph, badge, confirmDanger, toast } from '../ui.js';
 import { shareHostDialog } from '../components/host-share.js';
 import { newSessionDialog } from '../components/new-session.js';
 import { t } from '../i18n.js';
@@ -178,17 +179,20 @@ export async function pageHostDetail(id) {
               <div><span>${t('Channel')}</span><strong>${esc(t(update.channel || 'stable'))}</strong></div>
               <div><span>${t('Auto update')}</span><strong>${update.auto_enabled ? t('on') : t('off')}${update.install_when_idle ? ` · ${t('idle')}` : ''}</strong></div>
               <div><span>${t('Signature')}</span><strong>${esc(update.signature === 'checksum-only' ? t('checksum-only') : (update.signature === 'cosign' ? 'cosign' : '—'))}</strong></div>
+              <div><span>${t('Remote installation')}</span><strong>${update.remote_install ? t('on') : t('off')}</strong></div>
               <div><span>${t('Status')}</span><strong>${esc(updateStateLabel(update))}</strong></div>
               <div><span>${t('Last check')}</span><strong>${esc(fmtTime(update.checked_at))}</strong></div>
               <div><span>${t('Last successful update')}</span><strong>${esc(fmtTime(update.last_success))}</strong></div>
             </div>
             ${update.message ? `<details class="mt-1"><summary class="aside-note">${t('Technical details')}</summary><p class="aside-note">${esc(update.message)}</p></details>` : ''}
             ${update.error && !noRelease ? `<div class="notice error small mt-1">${esc(update.error)}</div>` : ''}
-            ${update.signature === 'checksum-only' ? `<p class="aside-note mt-1">${t('This is a weaker trust mode.')}</p>` : ''}
+            ${update.error?.includes('cosign') ? `<div class="notice small mt-1">${t('Install cosign on the host, or explicitly accept checksum-only updates there:')} <code>nexusd update --configure --checksum-only</code></div>` : ''}
+            ${update.signature === 'checksum-only' ? `<p class="aside-note mt-1">${t('SHA-256 verified. Install cosign to verify the signed release bundle.')}</p>` : ''}
             ${noRelease ? `<p class="aside-note mt-1">${t('The alpha has no release feed. Update checks resume after the first approved version.')}</p>` : ''}
             ${update.blocked_version ? `<div class="notice small mt-1">${t('A blocked version stays disabled until it is removed on the host:')} <code>nexusd update --configure --unblock ${esc(update.blocked_version)}</code></div>` : ''}
             ${update.available && update.remote_install && data.can_manage ? `<button class="btn small mt-1" type="button" id="host-update-install">${t('Install on host')}</button>` : ''}
-            ${update.available && !update.remote_install ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div><p class="aside-note">${t('Remote installation is disabled on this host.')}</p>` : ''}` : `<p class="aside-note">${t('No update check recorded yet.')}</p><p class="aside-note">${t('Updates are managed locally on the host; the hub only displays the state.')}</p>`}
+            ${update.available && !update.remote_install ? `<div class="notice small mt-1">${t('Run on the host:')} <code>nexusd update --install</code> ${t('(refuses while runs are active)')}</div><p class="aside-note">${t('Remote installation is disabled on this host.')}</p>` : ''}
+            ${data.can_manage ? `<button class="btn small ghost mt-1" type="button" id="host-remote-install" ${h.status === 'online' ? '' : 'disabled'}>${update.remote_install ? t('Disable remote installation') : t('Allow remote installation')}</button>` : ''}` : `<p class="aside-note">${t('No update check recorded yet.')}</p><p class="aside-note">${t('Updates are managed locally on the host; the hub only displays the state.')}</p>`}
           </div>
         </div>
         <div class="section-card">
@@ -240,6 +244,28 @@ export async function pageHostDetail(id) {
       toast(err.message, true);
       button.disabled = false;
     }
+  });
+  document.getElementById('host-remote-install')?.addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    if (button.disabled) return;
+    const enable = !update.remote_install;
+    const apply = async () => {
+      button.disabled = true;
+      try {
+        await ensureStepUp();
+        await api(`/hosts/${encodeURIComponent(h.id)}/update/config`, { method: 'POST', body: { allow_remote_install: enable } });
+        toast(enable ? t('Remote installation enabled') : t('Remote installation disabled'));
+        pageHostDetail(h.id).catch(() => {});
+      } catch (err) {
+        toast(err.message, true);
+        button.disabled = false;
+      }
+    };
+    if (enable) {
+      confirmDanger(t('Enabling remote installation lets this hub request nexusd updates on this host. The host still verifies release signatures and waits for active runs to finish.'), apply);
+      return;
+    }
+    apply();
   });
   document.getElementById('host-update-check')?.addEventListener('click', async (event) => {
     const box = document.getElementById('host-update-result');

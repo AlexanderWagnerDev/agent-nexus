@@ -79,6 +79,49 @@ function Fail([string]$Message) {
   exit 1
 }
 
+# Add the install directory to the current user's PATH exactly once. The
+# registry value is written back with its original kind so existing
+# REG_EXPAND_SZ entries such as %USERPROFILE% keep working.
+function Add-UserPath([string]$Directory) {
+  $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  try {
+    $current = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $entries = @($current -split ';' | Where-Object { $_ -ne '' })
+    $present = $false
+    foreach ($entry in $entries) {
+      if ([string]::Equals($entry.TrimEnd('\'), $Directory.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
+        $present = $true
+        break
+      }
+    }
+    if ($present) {
+      Write-Host "$Directory is already on the user PATH."
+    } else {
+      $updated = (@($entries) + $Directory) -join ';'
+      $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+      try { $kind = $key.GetValueKind('Path') } catch { }
+      $key.SetValue('Path', $updated, $kind)
+      Write-Host "Added $Directory to the user PATH; open a new terminal to use 'nexusd' and 'nexus'."
+      # Ask Explorer to refresh its environment block so terminals opened from
+      # the Start menu see the new PATH without a sign-out.
+      try {
+        Add-Type -Namespace AgentNexus -Name Native -MemberDefinition @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@ -ErrorAction SilentlyContinue
+        $result = [UIntPtr]::Zero
+        [AgentNexus.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
+      } catch { }
+    }
+  } finally {
+    $key.Close()
+  }
+  # Make the rest of this installer session use the updated PATH too.
+  $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+  $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $env:Path = (@($machine, $user) | Where-Object { $_ }) -join ';'
+}
+
 if ($Development -and $Version) {
   Fail "-Version cannot be combined with -Development or -Channel development."
 }
@@ -164,6 +207,7 @@ $taskName = "AgentNexus Host"
 
 if ($Uninstall) {
   if (Test-Path $dest) { & $dest service uninstall | Out-Null }
+  & schtasks.exe /Delete /TN "AgentNexus Host Update" /F 2>$null | Out-Null
   Remove-Item -Force -ErrorAction SilentlyContinue $dest, $cli, "$dest.previous", "$cli.previous"
   Write-Host "Removed $dest and $cli"
   if ($PurgeConfig) {
@@ -303,6 +347,7 @@ try {
     Copy-Item $newExe $dest -Force
     Copy-Item $newCli $cli -Force
     Write-Host "Installed $dest and $cli"
+    try { Add-UserPath $dir } catch { Write-Warning "Could not update the user PATH: $($_.Exception.Message)" }
   } catch {
     if (Test-Path "$dest.previous") { Copy-Item "$dest.previous" $dest -Force }
     if (Test-Path "$cli.previous") { Copy-Item "$cli.previous" $cli -Force }
@@ -351,9 +396,9 @@ try {
     & $dest doctor
   }
 
-  if (-not $RequireSignature -and -not $AllowChecksumOnly -and -not (Get-Command cosign -ErrorAction SilentlyContinue)) {
-    Write-Host "Note: automatic updates require cosign by default. Install cosign, or set"
-    Write-Host "      checksum-only explicitly with: nexusd update --configure --checksum-only"
+  if (-not $RequireSignature -and -not (Get-Command cosign -ErrorAction SilentlyContinue)) {
+    Write-Host "Note: automatic updates verify SHA-256. Install cosign to verify the signed bundle too,"
+    Write-Host "      or require signatures with: nexusd update --configure --require-signature"
   }
 } finally {
   Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue

@@ -2,13 +2,13 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: v0.1.4 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: v0.1.5 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini interactions and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
-**v0.1.4 is the current release; v0.1.0 was the first official release.**
+**v0.1.5 is the current release; v0.1.0 was the first official release.**
 Releases are published through the manual release workflow as
 [GitHub releases](https://github.com/AlexanderWagnerDev/agent-nexus/releases)
-with signed archives and as multi-arch container images tagged `v0.1.4`,
-`0.1.4`, `latest` and `alpha`; the v0.1.0, v0.1.1, v0.1.2 and v0.1.3 releases remain
+with signed archives and as multi-arch container images tagged `v0.1.5`,
+`0.1.5`, `latest` and `alpha`; the v0.1.0, v0.1.1, v0.1.2, v0.1.3 and v0.1.4 releases remain
 available under their own tags. The `alpha` tag continues to move with `main` as the
 development channel. Official tags and releases still require explicit
 maintainer approval. See [docs/RELEASING.md](docs/RELEASING.md) for the release
@@ -16,7 +16,7 @@ procedure and [CHANGELOG.md](CHANGELOG.md) for the changes in this release.
 
 ## Why AgentNexus?
 
-Developers increasingly run several terminal-based coding agents — Claude Code, Codex CLI, OpenCode, Gemini CLI and others — on several machines at once: a workstation, a laptop, a home server, a build box. Every agent keeps its own local session history in its own format, and every vendor offers (at most) its own single-agent remote access. Nobody gives you one place to answer:
+Developers increasingly run several terminal-based coding agents - Claude Code, Codex CLI, OpenCode, Command Code, Gemini CLI and others - on several machines at once: a workstation, a laptop, a home server, a build box. Every agent keeps its own local session history in its own format, and every vendor offers (at most) its own single-agent remote access. Nobody gives you one place to answer:
 
 - *Which agent sessions exist on which machine, in which project?*
 - *Which of them is currently running, waiting for my approval, or finished?*
@@ -72,7 +72,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Hosts** | Online/offline/disabled, OS/arch, daemon version, detected agents with versions and tested-band warnings, local search-index progress, rename, disable/enable, revoke |
 | **Session sync** | Capability-negotiated incremental snapshots; full snapshots after reconnect; no full-table rewrite while one session is active; mtime fingerprint of agent stores with a 500 ms debounce and a 15 s fallback (new sessions normally appear within 2-3 s) |
 | **Command signing** | Hub-to-host commands signed with Ed25519, replay nonces and a five-minute timestamp window; hosts pin the hub key. Native clients can register a per-device Ed25519/P-256 key; signed writes cover WebSocket prompt/approval/input/interrupt and the REST run, queue, task, fan-out and stop paths. The browser UI stays cookie-authenticated, and host-side verification of a *device* identity (independent of the hub) remains open |
-| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 plus cosign verification (checksum-only only when explicitly configured), waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status is visible in the hub. Identity, config and native agent stores are preserved | Updates follow the official release feed; v0.1.0 is the first stable release. The `development` update channel follows the prerelease release feed; unsigned CI development builds are only available through the installer's explicit `--development` path, not through auto-update |
+| **Host updates** | Host-local auto-update: checks GitHub releases directly, stable/prerelease/development channels, ETag caching, jitter and backoff, SHA-256 verification with optional cosign when installed, waits for idle runs, restarts the user service, verifies the new version and rolls back on repeated start failures; status and install controls are visible in the hub. Identity, config and native agent stores are preserved | Updates follow the official release feed; v0.1.0 is the first stable release. The `development` update channel follows the prerelease release feed; unsigned CI development builds are only available through the installer's explicit `--development` path, not through auto-update |
 | **Secrets** | TOTP secrets and the VAPID private key encrypted at rest with AES-256-GCM and a local `secret.key`; legacy values are migrated on startup |
 | **Backups** | Online SQLite snapshots via `nexus-hub -backup`, with documented restore and rollback |
 | **Passkeys** | WebAuthn registration/login with username-first flow; password + optional TOTP remains as fallback |
@@ -108,7 +108,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Search** | Federated transcript search across online hosts with a host-local FTS5 index (BM25 ranking, snippets), adapter fallback while indexing and agent/host filters; offline hosts are reported, not silently skipped |
 | **Session browse** | Server-side sort (`updated`, `created`, `title`, `messages`), order, RFC 3339 `since`/`until`, 24 h/7 d/30 d/custom UI filters and a tag filter; filter state lives in the URL, and a windowed virtual list renders only visible rows with automatic page loading (tested with 10,000 sessions) |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js; stopping a run terminates the whole process tree (Unix process group, Windows Job Object with a suspended-start handshake); a bounded 1 MiB per-run ring buffer replays output after a hub outage |
-| **Structured mode** | OpenCode 2.2.x (including native forks), Codex, plus any ACP adapter (for example `claude-agent-acp`), with the same chat experience |
+| **Structured mode** | OpenCode 2.2.x (including native forks), Codex, and any ACP adapter (Command Code, Claude, Gemini, or a custom command), with the same chat experience |
 | **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects; push categories can be switched off per user and overridden per host without losing inbox events |
 | **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events; terminal output is replayed from a bounded host buffer. A hub restart drops in-memory approval cards and structured event history; the transcript is re-read from the native store and a pending approval default-denies after the adapter timeout |
 | **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host; includes staged and unstaged tracked changes plus new/deleted files in the status, bounds large output with visible truncation, and opens a full-width changes page with unified and split layouts; the chat details panel refreshes the working tree every five seconds while a run is active and refreshes once more when it goes idle, without flicker or discarding a readable diff on a transient host error |
@@ -121,13 +121,14 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Host sharing** | Per-host grants for `view`, `read_transcript`, `resume`, `create`, `fork`, `terminal_input`, `approve`, `manage` |
 | **Operations** | Multi-arch GHCR and Docker Hub image, Docker Compose with Caddy, Portainer stack, per-user services (systemd user unit, launchd agent, Windows Task Scheduler task with crash restart), `nexusd doctor` |
 
-### Agent support in v0.1.4
+### Agent support
 
 | Agent | Discovery | Transcript | Terminal resume | Structured | New | Fork |
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
 | Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>`; structured `thread/fork` |
-| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ implemented (`serve`) | ✅ | ✅ structured (`POST /api/session/{id}/fork`); no terminal fork |
+| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ 2.2+ (`serve`); 1.x terminal-only | ✅ | ✅ structured 2.2+ (`POST /api/session/{id}/fork`); no terminal fork |
+| Command Code | ✅ JSONL projects (`~/.commandcode/projects`) | ✅ | ✅ `command-code --resume <id>` | ⚠️ ACP via `command-code acp` (implemented, not real-tested) | ✅ | ✅ `--resume <id> --fork-session` |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ⚠️ ACP via `gemini --acp` (fake-tested, not real-tested) | ✅ | ❌ |
 
 A tested version band is recorded per agent in `internal/host/versions.go` and
@@ -136,7 +137,7 @@ version outside the band disables structured mode with a visible warning while
 terminal mode keeps working; `allow_untested_agent_versions` overrides this and
 is audited. Unknown versions are warned about but not disabled.
 
-Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex CLI 0.156.1 and OpenCode 2.2.7 were exercised against real local stores on Windows 11; Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
+Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex CLI 0.156.1, OpenCode 2.2.7 and Command Code 1.89.1 were exercised against real local stores on Windows 11; the Command Code adapter also has a committed JSONL fixture test. OpenCode 1.x is supported for terminal, discovery and transcript; structured mode requires 2.2+. Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
 
@@ -167,15 +168,15 @@ install the newest CI build as an explicit fallback; that path requires
 make build          # produces bin/nexus-hub, bin/nexusd and bin/nexus
 ```
 
-Official images are published for the v0.1.4 release:
+Official images are published for the v0.1.5 release:
 
 ```bash
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-`latest` follows the newest stable release; `v0.1.4` and `0.1.4` pin this
-release; `v0.1.3`/`0.1.3` stays the previous release, and `v0.1.2`/`0.1.2`,
-`v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain
+`latest` follows the newest stable release; `v0.1.5` and `0.1.5` pin this
+release; `v0.1.4`/`0.1.4` stays the previous release, and `v0.1.3`/`0.1.3`,
+`v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` remain
 available for the earlier ones. Container builds from `main`
 are published under `alpha` and `sha-<short>`; `alpha` moves with `main`, is
 not an official release and can differ from `latest`. Use `sha-<short>` or a
@@ -218,15 +219,16 @@ docker compose up -d
 To build the image from this checkout instead of pulling it, add the development
 override: `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.4`/`0.1.4` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.5`/`0.1.5` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Host updates
 
 Each `nexusd` installation checks the official release feed directly (never
 through the hub) at startup and every six hours with jitter, ETag caching and
 exponential backoff. On the `stable` channel only non-prerelease releases are
-accepted. Updates are staged, SHA-256 verified and cosign-verified before
-installation; checksum-only is an explicit local setting, not a silent fallback.
+accepted. Updates are staged and SHA-256 verified before installation. If
+`cosign` is installed, the signed bundle is verified too;
+`updates.require_signature=true` makes that verification mandatory.
 
 The default local policy is:
 
@@ -236,7 +238,7 @@ The default local policy is:
     "channel": "stable",
     "check_interval_minutes": 360,
     "install_when_idle": true,
-    "require_signature": true,
+    "require_signature": false,
     "allow_remote_install": false
   }
 }
@@ -246,15 +248,18 @@ Automatic installation waits until no terminal, structured or ACP run is active,
 blocks new runs during the replacement, restarts the per-user service and
 verifies the new version. Repeated failed starts roll back to
 `nexusd.previous`, and the failed version is blocked until an operator removes
-it. The hub can display the state and, only when `allow_remote_install` is
-enabled locally, request installation; it cannot change the channel, signature
-policy or trusted source.
+it. The hub can display the state and request installation when the host allows
+it. An admin with host-manage permission can enable or disable
+`allow_remote_install` from the host page (step-up required); the host still
+verifies checksums and optional signatures, waits for idle runs, and keeps the
+channel and trusted source local.
 
 ```bash
 nexusd update --status
 nexusd update --check
 nexusd update --configure --channel stable --auto on --install-when-idle on
-nexusd update --configure --checksum-only   # explicit weaker trust mode
+nexusd update --configure --checksum-only      # force SHA-256 only (default)
+nexusd update --configure --require-signature  # require cosign
 nexusd update --rollback
 ```
 
@@ -272,7 +277,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.4 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.5 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 

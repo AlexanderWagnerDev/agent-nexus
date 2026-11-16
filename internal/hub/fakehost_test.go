@@ -209,6 +209,50 @@ func sessionViewByNative(t *testing.T, hub *apiTestHub, owner User, hostID, nati
 	return protocol.SessionView{}
 }
 
+func TestHostUpdateConfigRequiresStepUpAndUpdatesStatus(t *testing.T) {
+	hub := newAPITestHub(t, Config{HubName: "Test Hub"})
+	if status, body := hub.setup(); status != http.StatusCreated {
+		t.Fatalf("setup: %d %s", status, body)
+	}
+	signer, err := OpenHubSigner(filepath.Join(t.TempDir(), "signing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub.server.SetSigner(signer)
+	owner, _ := hub.store.UserByUsername("owner")
+	host := startFakeHost(t, hub, owner, "fake-update-config")
+	host.setAnswer(func(method string, params json.RawMessage) (any, string) {
+		switch method {
+		case "update.configure":
+			return protocol.UpdateStatus{Current: "0.1.2", Latest: "0.1.4", Available: true, RemoteInstall: true, CheckedAt: time.Now().UTC()}, ""
+		default:
+			return nil, "unsupported method " + method
+		}
+	})
+
+	status, body := hub.do(nil, http.MethodPost, "/api/v1/hosts/"+host.hostID+"/update/config", map[string]any{"allow_remote_install": true}, nil)
+	expectStatus(t, status, http.StatusForbidden, body, "update config without step-up")
+	token := sessionTokenFromJar(t, hub)
+	if err := hub.store.MarkStepUp(token, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	status, body = hub.do(nil, http.MethodPost, "/api/v1/hosts/"+host.hostID+"/update/config", map[string]any{"allow_remote_install": true}, nil)
+	expectStatus(t, status, http.StatusOK, body, "update config")
+	if !strings.Contains(string(body), `"remote_install":true`) {
+		t.Fatalf("update config response: %s", body)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/hosts/"+host.hostID, nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "host detail")
+	if !strings.Contains(string(body), `"remote_install":true`) {
+		t.Fatalf("host detail missing remote install: %s", body)
+	}
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/audit", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "audit")
+	if !strings.Contains(string(body), "host.update_remote_install") {
+		t.Fatalf("audit: %s", body)
+	}
+}
+
 func TestHubFakeHostSessionsTranscriptSearchAndExport(t *testing.T) {
 	hub := newSetupHub(t)
 	signer, err := OpenHubSigner(filepath.Join(t.TempDir(), "signing"))

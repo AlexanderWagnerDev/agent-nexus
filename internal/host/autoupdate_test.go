@@ -16,6 +16,39 @@ import (
 	"time"
 )
 
+func TestUpdateConfigurePersistsRemoteInstall(t *testing.T) {
+	t.Setenv("NEXUSD_CONFIG", filepath.Join(t.TempDir(), "nexusd.json"))
+	cfg := Config{HubURL: "https://hub.example", HostID: "host-1", PrivateKey: "test-key", Policy: DefaultPolicy()}
+	if err := SaveConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	d := silentDaemon()
+	d.cfg = cfg
+	if _, err := d.dispatchRequest("update.configure", []byte(`{"allow_remote_install":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.UpdatePrefs().AllowRemoteInstall {
+		t.Fatal("remote installation was not persisted")
+	}
+	if _, err := d.dispatchRequest("update.configure", []byte(`{}`)); err == nil {
+		t.Fatal("update.configure accepted a missing allow_remote_install")
+	}
+	if _, err := d.dispatchRequest("update.configure", []byte(`{"allow_remote_install":false}`)); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UpdatePrefs().AllowRemoteInstall {
+		t.Fatal("remote installation was not disabled")
+	}
+}
+
 func TestUpdateChannelSelection(t *testing.T) {
 	assetFor := func(version string) []map[string]string {
 		return []map[string]string{
@@ -144,8 +177,8 @@ func TestUpdateSettingsDefaults(t *testing.T) {
 	if prefs.Disabled || prefs.Channel != UpdateChannelStable {
 		t.Fatalf("unexpected defaults: %+v", prefs)
 	}
-	if !prefs.InstallIdle() || !prefs.SignatureRequired() {
-		t.Fatalf("idle installation or signatures disabled by default: %+v", prefs)
+	if !prefs.InstallIdle() || prefs.SignatureRequired() {
+		t.Fatalf("idle installation disabled or signatures required by default: %+v", prefs)
 	}
 	if prefs.Interval() != DefaultUpdateInterval {
 		t.Fatalf("interval = %v", prefs.Interval())
@@ -158,6 +191,11 @@ func TestUpdateSettingsDefaults(t *testing.T) {
 	explicit := UpdateSettings{InstallWhenIdle: &disabled, RequireSignature: &disabled}.Resolve()
 	if explicit.InstallIdle() || explicit.SignatureRequired() {
 		t.Fatalf("explicit opt-outs were ignored: %+v", explicit)
+	}
+	required := true
+	strict := UpdateSettings{RequireSignature: &required}.Resolve()
+	if !strict.SignatureRequired() {
+		t.Fatal("explicit signature requirement was ignored")
 	}
 	explicit.BlockedVersions = []string{"1.2.3"}
 	if !explicit.IsBlocked("v1.2.3") {

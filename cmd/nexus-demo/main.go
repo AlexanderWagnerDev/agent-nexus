@@ -304,6 +304,13 @@ func (d *demoHost) answer(method string, params []byte) ([]byte, error) {
 		})
 	case "update.check":
 		return json.Marshal(protocol.UpdateStatus{Current: "alpha", CheckedAt: time.Now().UTC(), Error: "no published release"})
+	case "update.configure":
+		var p struct {
+			AllowRemoteInstall *bool `json:"allow_remote_install"`
+		}
+		_ = json.Unmarshal(params, &p)
+		enabled := p.AllowRemoteInstall != nil && *p.AllowRemoteInstall
+		return json.Marshal(protocol.UpdateStatus{Current: "alpha", CheckedAt: time.Now().UTC(), RemoteInstall: enabled, Error: "no published release"})
 	}
 	return nil, fmt.Errorf("unsupported method %q", method)
 }

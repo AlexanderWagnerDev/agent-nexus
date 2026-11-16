@@ -1,6 +1,6 @@
 # AgentNexus — Operations
 
-Practical runbook for the v0.1.4 release. It describes what the code does and
+Practical runbook for the v0.1.5 release. It describes what the code does and
 what has actually been tested, not the 1.0 target.
 
 ## Data locations
@@ -26,7 +26,7 @@ agents' own stores; the hub never rewrites them.
 
 Images are published to
 [Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus).
-`latest` follows the newest stable release, `v0.1.4`/`0.1.4` pin the current
+`latest` follows the newest stable release, `v0.1.5`/`0.1.5` pin the current
 release (`v0.1.3`/`0.1.3` the previous, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0`
 the earlier ones), `alpha` tracks `main`, and `sha-<short>` pins a commit.
 
@@ -34,7 +34,7 @@ the earlier ones), `alpha` tracks `main`, and `sha-<short>` pins a commit.
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-Use `:v0.1.4` or `:sha-167a829` when a fixed build is required.
+Use `:v0.1.5` or `:sha-167a829` when a fixed build is required.
 
 The Docker Hub push in `.github/workflows/docker.yml` needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
@@ -65,7 +65,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` — `latest` for the stable release channel, `alpha` for `main`, `v0.1.4`/`0.1.4` for the current release (`v0.1.3`/`0.1.3` the previous, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones), or `sha-<short>` to pin a commit.
+- `NEXUS_TAG` - `latest` for the stable release channel, `alpha` for `main`, `v0.1.5`/`0.1.5` for the current release (`v0.1.4`/`0.1.4` the previous, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones), or `sha-<short>` to pin a commit.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
@@ -171,10 +171,11 @@ current process.
 ### Verification and installation
 
 - SHA-256 is always verified against `checksums.txt`.
-- `updates.require_signature` defaults to `true`: a cosign keyless bundle for
-  this repository's release workflow must verify. A missing/invalid signature
-  is an error, never a silent downgrade. Checksum-only is an explicit local
-  decision and is shown as a weaker mode in the UI.
+- `updates.require_signature` defaults to `false`: SHA-256 is always verified,
+  and the cosign keyless bundle for this repository's release workflow is
+  verified when `cosign` is installed. Set it to `true` to require signatures;
+  a missing or invalid signature then fails the update instead of falling back.
+- Checksum-only mode is shown as a weaker mode in the UI.
 - Download URLs are restricted to GitHub hosts for token forwarding, HTTPS
   downgrades are rejected, downloads are size-limited and only the expected
   binary is extracted (no path traversal or symlink following).
@@ -195,8 +196,8 @@ runs. Do not use it in an automatic maintenance task.
 
 **Hosts** shows the installed and latest versions, channel, auto-update and
 signature mode, last check, last success, update state and any error. A manager
-can request installation from the host page only when `allow_remote_install` is
-enabled locally; the host still applies its own channel, signature and idle
+can enable remote installation and request an installation from the host page;
+the host still applies its own channel, checksum, optional signature and idle
 policy. Keep the hub and host protocol majors compatible: if a release changes
 the host-link major version, update hosts before or together with the hub.
 

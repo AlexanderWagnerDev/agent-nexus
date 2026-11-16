@@ -2,9 +2,9 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The v0.1.4 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The v0.1.5 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### v0.1.4 implementation notes
+### v0.1.5 implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
@@ -392,14 +392,17 @@ sessions and fork enabled, and the forbidden-argument list above.
 
 - The hub never serves or selects `nexusd` binaries. The host queries the
   official GitHub release feed configured locally and downloads the archive and
-  `checksums.txt` directly. Local settings can only be changed on the host;
-  `updates.allow_remote_install` defaults to `false`.
-- Every archive is matched against the release checksum (SHA-256). With the
-  default `updates.require_signature: true`, the checksum file must also verify
-  with cosign keyless verification against this repository's release workflow
-  identity. A missing or invalid signature fails the update; it never falls
-  back silently. `nexusd update --configure --checksum-only` is an explicit
-  weaker mode and is shown as such in the UI.
+  `checksums.txt` directly. `updates.allow_remote_install` defaults to `false`;
+  an admin with host manage permission can toggle it from the hub (step-up
+  required), but the channel, signature policy and release source can only be
+  changed on the host.
+- Every archive is matched against the release checksum (SHA-256). When
+  `cosign` is installed, the checksum file is also verified with cosign keyless
+  verification against this repository's release workflow identity. Set
+  `updates.require_signature: true` to make that verification mandatory; a
+  missing or invalid signature then fails the update and never falls back
+  silently. Without cosign the updater uses SHA-256 only, which is shown as a
+  weaker mode in the UI.
 - Downloads accept only GitHub hosts for token forwarding, reject HTTPS-to-HTTP
   redirects, are size-bounded, and extract only the expected regular file.
   The GitHub token is never sent to a lookalike host.

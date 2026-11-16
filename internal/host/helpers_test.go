@@ -31,6 +31,9 @@ func TestCopyFile(t *testing.T) {
 }
 
 func TestUpdateInstallGuards(t *testing.T) {
+	if serviceInstalled() {
+		t.Skip("an AgentNexus host task is installed on this machine")
+	}
 	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	staged := filepath.Join(t.TempDir(), "nexusd")

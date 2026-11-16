@@ -8,6 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +44,23 @@ func TestACPCommandOverride(t *testing.T) {
 	}
 	if got := cfg.ACPCommand("missing"); got != "" {
 		t.Fatalf("missing agent = %q", got)
+	}
+}
+
+func TestACPCommandAutoDetectsCommandCode(t *testing.T) {
+	dir := t.TempDir()
+	name := "command-code"
+	if runtime.GOOS == "windows" {
+		name += ".cmd"
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("@echo off\r\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	got := (Config{}).ACPCommand("commandcode")
+	if !strings.Contains(got, "acp") || !strings.Contains(got, path) {
+		t.Fatalf("command code ACP command = %q", got)
 	}
 }
 

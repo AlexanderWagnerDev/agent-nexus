@@ -12,12 +12,13 @@ Technical analysis of how AgentNexus discovers existing sessions of each coding 
 3. [Claude Code](#3-claude-code)
 4. [Codex CLI](#4-codex-cli)
 5. [OpenCode](#5-opencode)
-6. [Gemini CLI](#6-gemini-cli)
-7. [Other agents and the generic ACP adapter](#7-other-agents-and-the-generic-acp-adapter)
-8. [Support tiers](#8-support-tiers)
-9. [Concurrency and "active elsewhere" detection](#9-concurrency-and-active-elsewhere-detection)
-10. [Verification backlog](#10-verification-backlog)
-11. [Sources](#11-sources)
+6. [Command Code](#6-command-code)
+7. [Gemini CLI](#7-gemini-cli)
+8. [Other agents and the generic ACP adapter](#8-other-agents-and-the-generic-acp-adapter)
+9. [Support tiers](#9-support-tiers)
+10. [Concurrency and "active elsewhere" detection](#10-concurrency-and-active-elsewhere-detection)
+11. [Verification backlog](#11-verification-backlog)
+12. [Sources](#12-sources)
 
 ---
 
@@ -66,6 +67,15 @@ vendor documentation above:
   present; the legacy `session`/`message`/`part` tables remain as a fallback.
   A fixture test builds the v2 schema, verifies discovery, transcript, search
   and the `--session` resume command.
+- **OpenCode 1.x** is recognized as a supported terminal/discovery/transcript
+  band. The structured HTTP driver targets the 2.2+ server API, so structured
+  mode is disabled for 1.x unless the operator explicitly allows untested
+  versions.
+- **Command Code** sessions are JSONL under
+  `~/.commandcode/projects/<project-slug>/`; discovery and transcript read the
+  header, message tree and `.meta.json` title. Structured mode uses
+  `command-code acp` through the generic ACP driver; terminal mode resumes and
+  forks with `--resume <id>` and `--resume <id> --fork-session`.
 - **Structured mode:** OpenCode uses `opencode serve`, Codex uses
   `codex app-server --stdio`, and any ACP adapter can be configured with
   `nexusd acp`. Codex `thread/resume` and ACP `session/load` are used for
@@ -76,7 +86,7 @@ vendor documentation above:
   by the host on resume; the hub returns a machine-readable 409 and only sends
   `force: true` after a step-up-confirmed dialog.
 - **Discovery latency:** the daemon fingerprints the Claude, Codex, OpenCode
-  (including `-wal`/`-shm`) and Gemini store paths every 2 seconds, debounces
+  (including `-wal`/`-shm`), Command Code and Gemini store paths every 2 seconds, debounces
   changes for 500 ms and keeps the 15-second full rescan as a fallback. A new
   session normally reaches the hub in 2-3 seconds.
 - **Terminal replay:** each terminal run keeps a bounded 1 MiB ring buffer
@@ -95,7 +105,7 @@ vendor documentation above:
 - **Gemini ACP:** the generic ACP driver works with
   `nexusd acp --agent gemini --command "gemini --acp"` when that flag exists in
   the installed Gemini version. The path is implemented and fake-tested, not
-  real-tested; see the status labels in §6.
+  real-tested; see the status labels in §7.
 - **Usage metadata:** Codex reports `thread/tokenUsage/updated` with cumulative
   input, cached input, output and reasoning tokens; OpenCode emits
   `session.usage.recorded` with per-call tokens and USD cost; ACP prompt
@@ -103,10 +113,7 @@ vendor documentation above:
   cost. The hub stores only these numeric fields. No token counts or prices are
   estimated, non-USD ACP costs are not converted, and runs without a report are
   shown as unavailable.
-- **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2 and policy/
-  concurrency guards have unit tests. Real Codex CLI 0.156.1 and OpenCode 2.2.7
-  stores were exercised on Windows 11; real Claude and Gemini sessions were not
-  available (neither CLI is installed). Linux and macOS are covered by CI
+- **Test coverage:** Claude JSONL, Codex rollout, OpenCode v2, Command Code JSONL and policy/concurrency guards have unit tests. Real Codex CLI 0.156.1, OpenCode 2.2.7 and Command Code 1.89.1 stores were exercised on Windows 11; real Claude and Gemini sessions were not available (neither CLI is installed). Linux and macOS are covered by CI
   build/tests only.
 
 
@@ -284,11 +291,43 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
 - Verified against OpenCode 2.2.7: `POST /api/session` creates a session, `POST /api/session/{id}/prompt` sends a prompt, `GET /api/event` streams SSE events, `POST /api/session/{id}/interrupt` aborts, and `POST /api/session/{id}/fork` creates a native fork. The OpenAPI document at `/doc` and `/openapi.json` is the source for these paths.
 - Streaming events handled by the driver include `session.text.*`, `session.reasoning.*`, `session.tool.*`, `permission.asked/replied`, `session.execution.*`, `session.status` and `session.usage.recorded`. Reasoning deltas are forwarded once; the final ended event is used only when no deltas arrived.
 - Permission replies pass `once`, `always` or `reject` through unchanged. Unanswered approvals are denied by the daemon after ten minutes.
-- The tested band is `>= 2.2.0 < 3.0.0`. OpenCode 1.x and untested 2.x builds keep terminal mode but structured mode is disabled unless `allow_untested_agent_versions` is set. Terminal mode has no fork flag.
+- The tested bands are `>= 1.0.0 < 2.2.0` (terminal, discovery and transcript; structured disabled) and `>= 2.2.0 < 3.0.0` (structured driver). Untested builds keep terminal mode; structured mode is disabled unless `allow_untested_agent_versions` is set. OpenCode 1.x terminal mode has no fork flag; OpenCode 2.x forks only in structured mode.
 - Alternative: `opencode acp` (ACP over stdio) through the generic ACP driver — evaluated in SP-3 against the native API.
 - mDNS (`--mdns`) and `--cors` are never enabled by AgentNexus.
 
-## 6. Gemini CLI
+## 6. Command Code
+
+- **CLI:** `npm i -g command-code` installs `command-code` (also `cmdc` and
+  `commandcode`); on Windows `cmd` is the system shell and is never used. The
+  adapter was checked against Command Code 1.89.1.
+- **Store:** `~/.commandcode/projects/<project-slug>/<session-id>.jsonl`. The
+  first line is `{"type":"session", ...}` with the native id, timestamp and
+  cwd; every following line is a tree entry (`type:"message"` with
+  `message.role` and `content[]`). `.meta.json` carries the display title and
+  parent session. Sidecars (`*.checkpoints.jsonl`, `*.prompts.jsonl`,
+  `*.share.json`) are ignored.
+- **Discovery, transcript and search** read the JSONL and meta files directly;
+  they never start the agent. Normalized parts cover user text, assistant text,
+  thinking, tool calls and tool results. Tool results are paired with their
+  tool call by `tool_use_id`.
+- **Terminal mode:** resume `command-code --resume <id>`; fork
+  `command-code --resume <id> --fork-session`; new starts the TUI in the
+  session's project directory.
+- **Structured mode:** ACP over stdio via `command-code acp`. The daemon
+  detects the binary and uses the generic ACP driver. Override it with
+  `nexusd acp --agent commandcode --command "command-code acp"`. The ACP driver
+  uses `session/load` for resume when advertised; fork is capability-gated on
+  `session/fork`.
+- **Tested band:** `>= 1.0.0 < 2.0.0`. Outside the band, structured mode is
+  disabled with the usual warning unless `allow_untested_agent_versions` is set.
+- **Auth:** the ACP and terminal paths reuse the same local login
+  (`command-code login`). The headless `COMMAND_CODE_API_KEY` path is not used by
+  the structured driver.
+- **Status:** discovery, transcript, terminal resume/fork and ACP wiring are
+  implemented; the ACP session was not exercised against a real Command Code
+  account in the test environment.
+
+## 7. Gemini CLI
 
 - Storage ✅: `~/.gemini/tmp/<project_hash>/chats/`, sessions are **project-specific**; retention via `general.sessionRetention` (default 30 days).
 - Discovery: `gemini --list-sessions` lists only the **current project's** sessions ✅. Because `<project_hash>` cannot be mapped back to a path without additional data ❓, discovery runs `--list-sessions` in each project directory known to the host (from policy roots and from other agents' session `cwd`s), or reads a project path from the chat files if present ❓.
@@ -298,7 +337,7 @@ Claude Code **Remote Control** connects claude.ai / the Claude app to a locally 
   `nexusd acp --agent gemini --command "gemini --acp"`.
 - The version band stays `>= 0.1.0 < 1.0.0`; an outside-band version disables structured mode with the usual warning unless `allow_untested_agent_versions` is set.
 
-## 7. Other agents and the generic ACP adapter
+## 8. Other agents and the generic ACP adapter
 
 The [Agent Client Protocol](https://agentclientprotocol.com) (ACP) standardizes JSON-RPC communication between clients and coding agents over stdio. The official registry (`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`) lists launch commands for many agents, for example (at research time):
 
@@ -336,7 +375,7 @@ Generic adapter behavior:
 
 **Aider** (no ACP, no session IDs; chat history in `.aider.chat.history.md` per repository, `--restore-chat-history`): terminal mode only, through a custom command template; discovery of history files inside allowed roots is a *Could*.
 
-## 8. Support tiers
+## 9. Support tiers
 
 | Tier | Agents | Guarantees |
 | --- | --- | --- |
@@ -344,7 +383,7 @@ Generic adapter behavior:
 | **Tier 2** | Gemini CLI, selected ACP agents (decided in Q-04) | Discovery where the agent allows it, terminal resume, ACP structured mode; nightly contract tests. |
 | **Tier 3** | Any ACP agent or custom command | Best effort, capability-driven, no contract tests by the project. |
 
-## 9. Concurrency and "active elsewhere" detection
+## 10. Concurrency and "active elsewhere" detection
 
 Writing to a session from two processes at once can interleave or corrupt history (documented for Claude Code). AgentNexus therefore combines:
 
@@ -374,7 +413,7 @@ Decision table when a user requests *resume*:
 | Active elsewhere and attachable (Claude background session, OpenCode server with known URL) | Attach, view read-only, fork |
 | Active elsewhere, not attachable | View transcript read-only, fork, or resume anyway after explicit confirmation (logged) |
 
-## 9.1 Tested version matrix
+## 10.1 Tested version matrix
 
 The single source of truth is `internal/host/versions.go`; a test compares this
 block with the code, so update both together.
@@ -382,7 +421,9 @@ block with the code, so update both together.
 ```text
 matrix: claude   >= 2.0.0 < 3.0.0   structured=yes
 matrix: codex    >= 0.50.0 < 1.0.0  structured=yes
+matrix: opencode >= 1.0.0 < 2.2.0   structured=no
 matrix: opencode >= 2.2.0 < 3.0.0   structured=yes
+matrix: commandcode >= 1.0.0 < 2.0.0   structured=yes
 matrix: gemini   >= 0.1.0 < 1.0.0   structured=yes
 ```
 
@@ -392,7 +433,7 @@ keeps structured mode on and is audited once per daemon start. Unknown versions
 are marked with a warning but not disabled, because the range cannot be
 compared.
 
-## 10. Verification backlog
+## 11. Verification backlog
 
 Items to resolve in Phase 0 spikes (WP-0.1 … WP-0.3) before the dependent phase starts:
 
@@ -409,7 +450,7 @@ Items to resolve in Phase 0 spikes (WP-0.1 … WP-0.3) before the dependent phas
 | V-09 | CGO-free process `cwd`/argv inspection on macOS | [SP-1](spikes/SP-1-claude.md), [SP-5](spikes/SP-5-pty.md) | ⚠️ `ps` fallback, not verified on macOS |
 | V-10 | Gemini CLI mapping from `<project_hash>` to project path | [SP-3](spikes/SP-3-opencode.md) | ⚠️ best effort; hash mapping not decoded |
 
-## 11. Sources
+## 12. Sources
 
 Official vendor documentation consulted on 2026-11-10:
 

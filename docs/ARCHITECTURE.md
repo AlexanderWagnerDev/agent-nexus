@@ -226,7 +226,8 @@ flowchart TB
 1. The updater checks the official GitHub release feed with an ETag and applies
    the locally configured channel (`stable`, `prerelease`, `development`).
 2. A new release is downloaded to a temporary directory, bounded in size and
-   verified against `checksums.txt` (SHA-256) and, by default, the cosign
+   verified against `checksums.txt` (SHA-256) and, when cosign is installed,
+   the cosign
    keyless bundle.
 3. Only `nexusd` is extracted from the archive; the staged executable must
    report the release version.

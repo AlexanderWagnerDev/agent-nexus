@@ -201,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", s.requireAuth(s.requireStepUp(s.handleRevokeHost)))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/confirm", s.requireAuth(s.handleConfirmHost))
 	mux.HandleFunc("GET /api/v1/hosts/{id}/update", s.requireAuth(s.handleHostUpdate))
+	mux.HandleFunc("POST /api/v1/hosts/{id}/update/config", s.requireAuth(s.requireStepUp(s.handleHostUpdateConfig)))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/update/install", s.requireAuth(s.requireStepUp(s.handleHostUpdateInstall)))
 	mux.HandleFunc("GET /api/v1/hosts/{id}/diagnostics", s.requireAuth(s.handleHostDiagnostics))
 	mux.HandleFunc("POST /api/v1/hosts/{id}/runs", s.requireAuth(s.handleNewRun))

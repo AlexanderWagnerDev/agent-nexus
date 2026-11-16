@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { ensureStepUp } from '../auth.js';
 import { renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
-import { badge, confirmDanger, copyText, modal, toast } from '../ui.js';
+import { badge, closeModal, confirmDanger, copyText, modal, toast } from '../ui.js';
 import { shareHostDialog } from '../components/host-share.js';
 import { newSessionDialog } from '../components/new-session.js';
 import { installCommand } from '../install-command.js';
@@ -27,12 +27,17 @@ let hostRefreshTimer = null;
 export async function pageHosts() {
   const pageGen = state.pageGen;
   renderShell('hosts');
-  const view = setPage(t('Hosts'), t('Machines running nexusd. Pairing is always initiated from this hub.'), `<button class="btn primary small" id="pair-host">${t('Pair a host')}</button>`);
+  const view = setPage(t('Hosts'), t('Machines running nexusd. Pairing is always initiated from this hub.'), `<button class="btn small" id="update-all-hosts" type="button" hidden>${t('Update all')}</button><button class="btn primary small" id="pair-host">${t('Pair a host')}</button>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const [{ hosts }] = await Promise.all([api('/hosts')]);
   if (pageGen !== state.pageGen) return;
   hosts.sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name));
   document.getElementById('pair-host').addEventListener('click', pairHostDialog);
+  const updateAll = document.getElementById('update-all-hosts');
+  if (updateAll) {
+    updateAll.hidden = !hosts.some((h) => h.status === 'online' && !h.disabled && !h.pending);
+    updateAll.addEventListener('click', () => updateAllHosts(hosts, updateAll));
+  }
   for (const handler of state.wsHandlers) {
     if (handler.hostsPage) state.wsHandlers.delete(handler);
   }
@@ -67,6 +72,8 @@ export async function pageHosts() {
         <details class="action-menu">
           <summary class="icon-btn" aria-label="${t('More host actions')}" title="${t('More host actions')}">${svgIcon('menu', 16)}</summary>
           <div class="action-menu-panel">
+            ${h.status === 'online' && !h.disabled ? `<button type="button" data-check-update="${esc(h.id)}">${svgIcon('refresh', 14)}${t('Check for updates')}</button>` : ''}
+            ${h.status === 'online' && !h.disabled && h.update?.available ? `<button type="button" data-install-update="${esc(h.id)}">${svgIcon('arrowDown', 14)}${t('Install update')}</button>` : ''}
             <button type="button" data-rename-host="${esc(h.id)}">${svgIcon('edit', 14)}${t('Rename host')}</button>
             <button type="button" data-toggle-host="${esc(h.id)}" class="${h.disabled ? '' : 'danger'}">${svgIcon(h.disabled ? 'check' : 'stop', 14)}${h.disabled ? t('Enable host') : t('Disable host')}</button>
             <button type="button" data-share-host="${esc(h.id)}">${svgIcon('external', 14)}${t('Share')}</button>
@@ -86,6 +93,25 @@ export async function pageHosts() {
     } catch (err) {
       toast(err.message, true);
     }
+  }));
+  view.querySelectorAll('[data-check-update]').forEach((b) => b.addEventListener('click', async () => {
+    const h = hosts.find((host) => host.id === b.dataset.checkUpdate);
+    if (!h || b.disabled) return;
+    b.disabled = true;
+    try {
+      const info = await api(`/hosts/${encodeURIComponent(h.id)}/update`);
+      toast(info.available
+        ? t('Update available on {name}: {version}', { name: h.name, version: info.latest })
+        : t('{name} is up to date.', { name: h.name }));
+      pageHosts();
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+    }
+  }));
+  view.querySelectorAll('[data-install-update]').forEach((b) => b.addEventListener('click', () => {
+    const h = hosts.find((host) => host.id === b.dataset.installUpdate);
+    if (h) installHostUpdate(h);
   }));
   view.querySelectorAll('[data-rename-host]').forEach((b) => b.addEventListener('click', () => {
     const h = hosts.find((host) => host.id === b.dataset.renameHost);
@@ -134,6 +160,101 @@ export async function pageHosts() {
       pageHosts();
     });
   }));
+}
+
+async function installHostUpdate(host) {
+  if (host.update?.remote_install) {
+    confirmDanger(t('Install the available nexusd update on {name}? The host waits for active runs to finish and verifies the release signature.', { name: host.name }), async () => {
+      try {
+        await ensureStepUp();
+        await api(`/hosts/${encodeURIComponent(host.id)}/update/install`, { method: 'POST' });
+        toast(t('Installation requested'));
+        pageHosts();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    return;
+  }
+  confirmDanger(t('Remote installation is disabled on {name}. Enable it for this host and install the update? The host still verifies the release signature and waits for active runs.', { name: host.name }), async () => {
+    try {
+      await ensureStepUp();
+      await api(`/hosts/${encodeURIComponent(host.id)}/update/config`, { method: 'POST', body: { allow_remote_install: true } });
+      await api(`/hosts/${encodeURIComponent(host.id)}/update/install`, { method: 'POST' });
+      toast(t('Remote installation enabled; installation requested'));
+      pageHosts();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+async function updateAllHosts(hosts, button) {
+  const online = hosts.filter((h) => h.status === 'online' && !h.disabled && !h.pending);
+  if (!online.length) {
+    toast(t('No online hosts to update.'));
+    return;
+  }
+  button.disabled = true;
+  button.innerHTML = `<span class="spinner"></span> ${t('Checking...')}`;
+  try {
+    await Promise.allSettled(online.map((h) => api(`/hosts/${encodeURIComponent(h.id)}/update`)));
+    const { hosts: fresh } = await api('/hosts');
+    const targets = fresh.filter((h) => h.status === 'online' && !h.disabled && !h.pending && h.update?.available);
+    if (!targets.length) {
+      toast(t('No updates available.'));
+      pageHosts();
+      return;
+    }
+    openUpdateAllDialog(targets);
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = t('Update all');
+  }
+}
+
+function openUpdateAllDialog(targets) {
+  const ready = targets.filter((h) => h.update?.remote_install);
+  const blocked = targets.filter((h) => !h.update?.remote_install);
+  const rows = targets.map((h) => `<li><b>${esc(h.name)}</b>${h.update?.latest ? ` → ${esc(h.update.latest)}` : ''}${h.update?.remote_install ? '' : ` · ${t('remote installation off')}`}</li>`).join('');
+  modal(`
+    <h2>${t('Update hosts')}</h2>
+    <p class="hint">${t('{n} hosts have an update available.', { n: targets.length })}</p>
+    <ul class="small">${rows}</ul>
+    ${blocked.length ? `<div class="notice small mt-1">${t('Remote installation is off on {n} hosts. Enabling it lets this hub request signed updates for those hosts.', { n: blocked.length })}</div>` : ''}
+    <div class="modal-actions">
+      <button class="btn ghost" type="button" data-close>${t('Cancel')}</button>
+      ${ready.length ? `<button class="btn primary" type="button" id="update-all-ready">${t('Update {n} hosts', { n: ready.length })}</button>` : ''}
+      ${blocked.length ? `<button class="btn ${ready.length ? '' : 'primary'}" type="button" id="update-all-enable">${t('Enable on {n} and update', { n: blocked.length })}</button>` : ''}
+    </div>`);
+  const run = async (selected, enableRemote) => {
+    try {
+      await ensureStepUp();
+      let ok = 0;
+      const failures = [];
+      for (const h of selected) {
+        try {
+          if (enableRemote) {
+            await api(`/hosts/${encodeURIComponent(h.id)}/update/config`, { method: 'POST', body: { allow_remote_install: true } });
+          }
+          await api(`/hosts/${encodeURIComponent(h.id)}/update/install`, { method: 'POST' });
+          ok += 1;
+        } catch (err) {
+          failures.push(`${h.name}: ${err.message}`);
+        }
+      }
+      closeModal();
+      if (ok) toast(t('Update requested on {n} hosts', { n: ok }));
+      if (failures.length) toast(failures.join(' · '), true);
+      pageHosts();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  document.getElementById('update-all-ready')?.addEventListener('click', () => run(ready, false));
+  document.getElementById('update-all-enable')?.addEventListener('click', () => run(blocked, true));
 }
 
 export async function pairHostDialog() {

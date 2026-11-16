@@ -3,10 +3,12 @@
 package host
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -19,6 +21,23 @@ func scheduleWindowsUpdate(staged, target string) error {
 	log := filepath.Join(dir, "update.log")
 	content := `param([string]$NewBinary,[string]$Target,[string]$Task,[string]$Log)
 $ErrorActionPreference = "Stop"
+if (-not $Log) { $Log = Join-Path $PSScriptRoot "update.log" }
+if (-not $NewBinary) {
+  try {
+    $args = Get-Content -LiteralPath (Join-Path $PSScriptRoot "apply-update.json") -Raw | ConvertFrom-Json
+    $NewBinary = $args.new_binary
+    $Target = $args.target
+    $Task = $args.task
+    if ($args.log) { $Log = $args.log }
+  } catch {
+    Add-Content -LiteralPath $Log -Value "$(Get-Date -Format o) cannot read apply-update.json: $_"
+    exit 1
+  }
+}
+if (-not $NewBinary -or -not $Target -or -not $Task) {
+  Add-Content -LiteralPath $Log -Value "$(Get-Date -Format o) update arguments are incomplete"
+  exit 1
+}
 if ((Test-Path -LiteralPath $Log) -and ((Get-Item -LiteralPath $Log).Length -gt 5MB)) {
   Move-Item -LiteralPath $Log -Destination "$Log.old" -Force
 }
@@ -98,16 +117,27 @@ try {
 	if err := os.WriteFile(script, []byte(content), 0o600); err != nil {
 		return err
 	}
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-		"-ExecutionPolicy", "Bypass", "-File", script, staged, target, windowsTaskName, log)
-	// Break away from the daemon's job object so Task Scheduler can stop the
-	// daemon without killing the helper that replaces its binary.
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: 0x00000008 | 0x00000200 | 0x01000000,
+	argsPath := filepath.Join(dir, "apply-update.json")
+	payload, err := json.Marshal(map[string]string{
+		"new_binary": staged,
+		"target":     target,
+		"task":       windowsTaskName,
+		"log":        log,
+	})
+	if err != nil {
+		return err
 	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("cannot schedule update helper: %w", err)
+	if err := os.WriteFile(argsPath, payload, 0o600); err != nil {
+		return err
+	}
+	// A child started with CREATE_BREAKAWAY_FROM_JOB is denied when the Task
+	// Scheduler job does not allow breakaway. Let a separate on-demand task
+	// perform the replacement instead; it runs outside the daemon's job.
+	if err := installWindowsUpdateTask(script); err != nil {
+		return err
+	}
+	if out, err := runWindowsCommand("schtasks", "/Run", "/TN", windowsUpdateTaskName); err != nil {
+		return fmt.Errorf("cannot start update helper task: %v: %s", err, strings.TrimSpace(out))
 	}
 	return nil
 }

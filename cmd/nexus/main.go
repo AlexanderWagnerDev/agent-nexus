@@ -408,7 +408,8 @@ func updateCmd(args []string) {
 	check := fs.Bool("check", false, "check the release feed without installing")
 	install := fs.Bool("install", false, "download, verify and replace the nexus client")
 	channel := fs.String("channel", "stable", "stable, prerelease or development")
-	allowChecksumOnly := fs.Bool("allow-checksum-only", false, "accept checksum-only verification (weaker)")
+	_ = fs.Bool("allow-checksum-only", false, "deprecated: checksum-only is the default")
+	requireSignature := fs.Bool("require-signature", false, "require a verified cosign bundle")
 	_ = fs.Parse(args)
 	if !*check && !*install {
 		*check = true
@@ -433,7 +434,7 @@ func updateCmd(args []string) {
 		fail(err)
 	}
 	stagedDir := filepath.Join(dir, "updates", "nexus-"+info.Latest)
-	staged, _, err := host.StageUpdateNamed(ctx, info, stagedDir, "nexus", !*allowChecksumOnly)
+	staged, _, err := host.StageUpdateNamed(ctx, info, stagedDir, "nexus", *requireSignature)
 	if err != nil {
 		fail(err)
 	}

@@ -59,8 +59,8 @@ bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
 enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 
 The stack includes WUD labels. `latest` follows the newest stable release,
-`alpha` tracks `main`, `sha-<short>` pins a commit and `v0.1.4` (or `0.1.4`)
-pins the current release (`v0.1.3`/`0.1.3` the previous, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and
+`alpha` tracks `main`, `sha-<short>` pins a commit and `v0.1.5` (or `0.1.5`)
+pins the current release (`v0.1.4`/`0.1.4` the previous, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and
 `v0.1.0`/`0.1.0` the earlier ones). Digest watching is enabled by default so WUD notices
 new `latest` and `alpha` builds; set `WUD_WATCH_DIGEST=false` when you pin a
 `sha-` tag or a version tag. The default `WUD_TAG_INCLUDE` watches `latest`,
@@ -135,7 +135,8 @@ powershell -ExecutionPolicy Bypass -File C:\AgentNexus\scripts\install-host.ps1 
 
 For an unreleased `main` build, add `-Development` to install the newest
 authenticated workflow build. Upgrades run without `-Code`; an existing pairing
-is kept. The daemon
+is kept. The installer adds `%LOCALAPPDATA%\AgentNexus` to the user PATH, so
+`nexusd` and `nexus` work in a new terminal without the full path. The daemon
 prints a **Pairing SAS** (for example `123-456`) on first pairing. In the hub,
 open **Hosts**, compare the SAS and click **Confirm host**.
 
@@ -194,7 +195,7 @@ if your projects live under `~/Documents`, `~/Desktop` or iCloud Drive.
 Downloaded release binaries are not notarized; if Gatekeeper blocks one,
 inspect and remove the
 quarantine attribute explicitly (`xattr -d com.apple.quarantine <path>`) only
-after verifying the release checksum and cosign bundle.
+after verifying the release checksum and, when cosign is available, the cosign bundle.
 
 ## 3.1 Host updates
 
@@ -209,7 +210,7 @@ Default policy for an official installation:
     "channel": "stable",
     "check_interval_minutes": 360,
     "install_when_idle": true,
-    "require_signature": true,
+    "require_signature": false,
     "allow_remote_install": false
   }
 }
@@ -225,10 +226,12 @@ Default policy for an official installation:
 - Downloads are limited to GitHub; redirects may not downgrade HTTPS and the
   GitHub token is only sent to GitHub hosts. Archives are size-bounded and only
   the expected binary is extracted (no path traversal or symlink following).
-- SHA-256 is always verified. With the default `require_signature: true`, a
-  valid cosign keyless bundle for this repository's release workflow is
-  required; a missing or invalid signature never falls back silently.
-  Checksum-only is an explicit weaker mode:
+- SHA-256 is always verified. If `cosign` is installed, the signed bundle is
+  verified too. Set `updates.require_signature: true` (or run
+  `nexusd update --configure --require-signature`) to make the signature
+  mandatory; a missing or invalid signature then fails the update. Without
+  cosign the updater uses SHA-256 only. To force that mode even when cosign is
+  installed:
 
   ```bash
   nexusd update --configure --checksum-only
@@ -264,15 +267,17 @@ is an emergency environment override for the current process.
 
 The hub shows the host version, available update, channel, auto-update and
 signature mode, last check, last success, current state and the last error. A
-manager may request installation from the host page, but the host performs it
-only when `allow_remote_install` is enabled locally. A blocked version must be
+manager may enable remote installation and request installation from the host
+page. Enabling is step-up protected and audited; the host still applies its own
+checksum, optional signature and idle policy. A blocked version must be
 unblocked on the host.
 
 Windows update logs are written to `%APPDATA%\AgentNexus\update.log`. The
 detached helper stops the Task Scheduler task, replaces the executable, starts
 the task and checks that the expected version reports from `runtime.json`; it
-restores the previous binary when that check fails. Linux uses the systemd user
-unit and macOS the LaunchAgent.
+restores the previous binary when that check fails. The helper runs as the
+separate on-demand task `AgentNexus Host Update`, outside the host task's job
+object. Linux uses the systemd user unit and macOS the LaunchAgent.
 
 ## 4. Start using existing chats
 

@@ -25,12 +25,12 @@ flowchart LR
 | [1](#phase-1--hub-host-daemon-and-pairing) | Secure hub, paired hosts on all three OSes | L | **M1** Hosts online | implemented |
 | [2](#phase-2--session-discovery-and-transcript-viewer) | See all existing sessions and transcripts | L | **M2** Discovery complete | implemented |
 | [3](#phase-3--native-resume-in-terminal-mode-mvp) | Natively resume sessions from the browser | L | **M3** MVP | implemented |
-| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | largely implemented; continues after v0.1.4 |
-| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.4 |
-| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.4 |
+| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | largely implemented; continues after v0.1.5 |
+| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.5 |
+| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.5 |
 
 **Versioning:** the first official version was **v0.1.0** (published
-2026-11-15); **v0.1.4** is the current release. It contains every capability
+2026-11-15); **v0.1.5** is the current release. It contains every capability
 marked implemented below; the version number does not gate them. Later phases
 are engineering goals that ship when they are ready. There is no obligation to
 publish intermediate `0.2`/`0.4` versions or a `1.0.0` milestone before a
@@ -38,7 +38,7 @@ capability can be used, and no release candidate series is planned.
 
 ## Implementation status
 
-The repository now contains the v0.1.4 implementation. The criteria below track
+The repository now contains the v0.1.5 implementation. The criteria below track
 engineering goals; they are not release gates. Publication is a separate
 maintainer decision.
 
@@ -489,7 +489,7 @@ is already in v0.1.0 and the remainder ships without a separate major release.**
 - [ ] RBAC roles and per-host grants enforced in API and UI; permission matrix covered by tests.
 - [ ] Signed-command mode: with `require_signed_commands = true`, a hub-forged command (simulated compromised hub) is rejected by the host; device keys require local approval on the host; replayed commands are rejected.
 - [ ] PostgreSQL backend passes the same test suite as SQLite.
-- [ ] Release artifacts have SBOMs, SHA-256 checksums and cosign signatures; `nexusd` auto-update verifies them, waits for idle work and rolls back on failure. Apple notarization and Windows Authenticode signing remain future work (Q-03).
+- [ ] Release artifacts have SBOMs, SHA-256 checksums and cosign signatures; `nexusd` auto-update verifies SHA-256 and, when cosign is installed, the signature, waits for idle work and rolls back on failure. Apple notarization and Windows Authenticode signing remain future work (Q-03).
 - [ ] Confirmed high/critical vulnerabilities are prioritized; security limitations are documented without imposing a third-party audit as a release gate.
 - [ ] Daemon idle footprint meets NFR-06; optional automated benchmarks can verify performance goals.
 - [ ] Documentation complete: installation per OS, deployment topologies, hardening checklist, upgrade guide, supported agent version matrix.

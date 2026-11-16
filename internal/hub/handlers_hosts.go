@@ -390,6 +390,53 @@ func (s *Server) storeUpdateCheck(key string, raw []byte) {
 	s.updateChecks[key] = updateCheckCache{at: time.Now(), raw: raw}
 }
 
+// handleHostUpdateConfig toggles the host-local remote-install switch. It is
+// deliberately limited to that one setting: the channel, signature policy and
+// release source remain host-local.
+func (s *Server) handleHostUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	hostID := r.PathValue("id")
+	if !s.hostPermission(u, hostID, "manage") {
+		writeError(w, http.StatusForbidden, "host manage permission required")
+		return
+	}
+	if !s.hostOnline(hostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	var req struct {
+		AllowRemoteInstall *bool `json:"allow_remote_install"`
+	}
+	if err := decodeJSON(r, &req); err != nil || req.AllowRemoteInstall == nil {
+		writeError(w, http.StatusBadRequest, "allow_remote_install is required")
+		return
+	}
+	params, _ := json.Marshal(map[string]bool{"allow_remote_install": *req.AllowRemoteInstall})
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	raw, err := s.hostRequest(ctx, hostID, "update.configure", params)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var status protocol.UpdateStatus
+	if err := json.Unmarshal(raw, &status); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	if status.CheckedAt.IsZero() {
+		status.CheckedAt = time.Now().UTC()
+	}
+	s.updateMu.Lock()
+	s.hostUpdates[hostID] = status
+	s.updateMu.Unlock()
+	s.broadcastHostUpdate(hostID)
+	s.audit(u.Username, "host.update_remote_install", map[string]any{
+		"host_id": hostID, "enabled": *req.AllowRemoteInstall,
+	})
+	writeJSON(w, http.StatusOK, status)
+}
+
 // handleHostUpdateInstall asks the host to start its automatic update flow.
 // The host still enforces updates.allow_remote_install, its channel, signature
 // policy and idle gate; the hub cannot force an installation.

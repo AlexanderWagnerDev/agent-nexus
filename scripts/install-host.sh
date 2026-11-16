@@ -388,7 +388,7 @@ case "$PATH" in
   *) echo "Note: add $dest_dir to PATH to run nexusd and nexus without the full path." ;;
 esac
 
-if [ "$REQUIRE_SIGNATURE" -eq 0 ] && [ "$ALLOW_CHECKSUM_ONLY" -eq 0 ] && ! command -v cosign >/dev/null 2>&1; then
-  echo "Note: automatic updates require cosign by default. Install cosign, or set"
-  echo "      checksum-only explicitly with: nexusd update --configure --checksum-only"
+if [ "$REQUIRE_SIGNATURE" -eq 0 ] && ! command -v cosign >/dev/null 2>&1; then
+  echo "Note: automatic updates verify SHA-256. Install cosign to verify the signed bundle too,"
+  echo "      or require signatures with: nexusd update --configure --require-signature"
 fi

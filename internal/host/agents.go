@@ -18,6 +18,7 @@ var agentSpecs = []agentSpec{
 	{name: "claude", binary: "claude", capabilities: []string{"terminal", "discovery", "transcript"}},
 	{name: "codex", binary: "codex", capabilities: []string{"terminal", "discovery", "transcript"}},
 	{name: "opencode", binary: "opencode", capabilities: []string{"terminal", "discovery", "transcript"}},
+	{name: "commandcode", binary: "command-code", capabilities: []string{"terminal", "discovery", "transcript"}},
 	{name: "gemini", binary: "gemini", capabilities: []string{"terminal", "discovery"}},
 }
 
@@ -27,6 +28,14 @@ func DetectAdapters(logger *slog.Logger) []Adapter {
 	var out []Adapter
 	for _, spec := range agentSpecs {
 		path, err := exec.LookPath(spec.binary)
+		if err != nil && spec.name == "commandcode" {
+			for _, alias := range []string{"cmdc", "commandcode"} {
+				if found, findErr := exec.LookPath(alias); findErr == nil {
+					path, err = found, nil
+					break
+				}
+			}
+		}
 		if err != nil {
 			continue
 		}
@@ -37,6 +46,8 @@ func DetectAdapters(logger *slog.Logger) []Adapter {
 			out = append(out, NewCodexAdapter(path))
 		case "opencode":
 			out = append(out, NewOpenCodeAdapter(path))
+		case "commandcode":
+			out = append(out, NewCommandCodeAdapter(path))
 		case "gemini":
 			out = append(out, NewGeminiAdapter(path))
 		}

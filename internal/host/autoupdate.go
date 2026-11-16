@@ -738,6 +738,22 @@ func (d *Daemon) CheckUpdateNow(ctx context.Context, channel string) (UpdateInfo
 	return info, nil
 }
 
+// SetRemoteInstall persists the host-local remote-install switch. It never
+// changes the channel, signature policy or release source, which stay local.
+func (d *Daemon) SetRemoteInstall(enabled bool) (*protocol.UpdateStatus, error) {
+	prefs := d.updatePrefs()
+	prefs.AllowRemoteInstall = enabled
+	if err := SaveUpdatePrefs(prefs); err != nil {
+		return nil, err
+	}
+	status := d.buildUpdateStatus()
+	d.updateMu.Lock()
+	d.lastUpdate = status
+	d.updateMu.Unlock()
+	d.sendUpdateStatus(status)
+	return status, nil
+}
+
 // InstallUpdateNow honours the host-local remote-install policy. The caller
 // may be the hub, but only the host decides whether that request is allowed.
 func (d *Daemon) InstallUpdateNow(ctx context.Context) error {

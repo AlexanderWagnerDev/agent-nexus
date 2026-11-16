@@ -54,7 +54,7 @@ func (p Policy) ProcessGrace() time.Duration {
 // UpdateSettings controls the host-local auto-updater. The settings live on
 // the host and are never pushed by the hub. A nil Updates field in an existing
 // config means "official defaults": enabled, stable, every six hours, install
-// when idle, signed releases only.
+// when idle, SHA-256 verification and optional cosign when installed.
 type UpdateSettings struct {
 	Disabled             bool     `json:"disabled,omitempty"`
 	Channel              string   `json:"channel,omitempty"`
@@ -116,9 +116,10 @@ func (u UpdateSettings) InstallIdle() bool {
 }
 
 // SignatureRequired reports whether a cosign bundle must verify successfully.
-// The default is true; checksum-only is an explicit local decision.
+// The default is false: SHA-256 is always verified, and cosign is optional.
+// Set require_signature to true on hosts that have cosign installed.
 func (u UpdateSettings) SignatureRequired() bool {
-	return u.RequireSignature == nil || *u.RequireSignature
+	return u.RequireSignature != nil && *u.RequireSignature
 }
 
 // IsBlocked reports whether a version was temporarily blocked after failures.
@@ -210,6 +211,13 @@ func (c Config) ACPCommand(agent string) string {
 		for _, name := range []string{"claude-agent-acp", "claude-code-acp"} {
 			if path, err := exec.LookPath(name); err == nil {
 				return path
+			}
+		}
+	}
+	if agent == "commandcode" {
+		for _, name := range []string{"command-code", "cmdc", "commandcode"} {
+			if path, err := exec.LookPath(name); err == nil {
+				return `"` + path + `" acp`
 			}
 		}
 	}
