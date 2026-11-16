@@ -26,7 +26,7 @@
   stable (default), prerelease or development.
 
 .PARAMETER Version
-  Install a specific release tag, for example v0.1.3.
+  Install a specific release tag, for example v0.1.4.
 
 .PARAMETER Development
   Use the newest successful GitHub Actions development build instead of a

@@ -1,9 +1,10 @@
 # Releasing
 
-AgentNexus **v0.1.3** is the current release (published 2026-11-16);
-**v0.1.2** was published on 2026-11-16, **v0.1.1** on 2026-11-15, and
-**v0.1.0** was the first official release (published 2026-11-15). Later tags
-and releases still require the maintainer's explicit approval.
+AgentNexus **v0.1.4** is the current release (published 2026-11-16);
+**v0.1.3** was published on 2026-11-16, **v0.1.2** on 2026-11-16,
+**v0.1.1** on 2026-11-15, and **v0.1.0** was the first official release
+(published 2026-11-15). Later tags and releases still require the maintainer's
+explicit approval.
 
 ## Current policy
 
@@ -24,7 +25,7 @@ and releases still require the maintainer's explicit approval.
 - Container builds on `main` publish `alpha` (moving) and `sha-<short>`
   (pinned) tags. Official releases use an explicit **Container** workflow
   dispatch with the `release_tag` input, which publishes the matching
-  `v0.1.3`, `0.1.3`, `0.1` and `alpha` tags; the `latest` tag additionally
+  `v0.1.4`, `0.1.4`, `0.1` and `alpha` tags; the `latest` tag additionally
   requires `publish_latest=true`. `alpha` keeps moving with `main` after the
   release.
 - The hub, daemon and terminal client report their version as `alpha` unless a
@@ -56,7 +57,7 @@ accurately without turning optional testing into release blockers.
 ## Manual release procedure (only after approval)
 
 1. In GitHub Actions, run **Release** from `main` with the approved tag, for
-   example `tag=v0.1.3`. The workflow creates and pushes the annotated tag on
+   example `tag=v0.1.4`. The workflow creates and pushes the annotated tag on
    the dispatched commit and publishes the GitHub release. Re-running it for an
    existing tag publishes that tag as-is.
 2. Review the published release's assets, checksums, SBOMs and the cosign
@@ -64,8 +65,8 @@ accurately without turning optional testing into release blockers.
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
    release, delete the release and the tag before dispatching it again.
-3. Then run **Container** with `release_tag=v0.1.3` and `publish_latest=true`
-   for a stable release. The dispatch publishes `v0.1.3`, `0.1.3`, `0.1`,
+3. Then run **Container** with `release_tag=v0.1.4` and `publish_latest=true`
+   for a stable release. The dispatch publishes `v0.1.4`, `0.1.4`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
    workflow checks out that tag before building, so a newer `main` does not
@@ -96,6 +97,6 @@ workflow logs. At the time of the cleanup:
 
 ## Versioning
 
-The first approved version was `v0.1.0`; the current release is `v0.1.3`.
+The first approved version was `v0.1.0`; the current release is `v0.1.4`.
 Builds without a release tag are identified by commit SHA. Do not infer or
 promise a later version number from this document.
