@@ -16,6 +16,7 @@ type recordAdapter struct {
 	searchHits      []protocol.SearchHit
 	searchLimit     int
 	transcriptCalls int
+	sessions        []protocol.Session
 }
 
 func (a *recordAdapter) Name() string { return a.name }
@@ -24,7 +25,9 @@ func (a *recordAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	return protocol.AgentInfo{Name: a.name, Supported: true}, nil
 }
 
-func (a *recordAdapter) ListSessions(context.Context) ([]protocol.Session, error) { return nil, nil }
+func (a *recordAdapter) ListSessions(context.Context) ([]protocol.Session, error) {
+	return a.sessions, nil
+}
 
 func (a *recordAdapter) Transcript(context.Context, string, int, int) (protocol.Transcript, error) {
 	a.transcriptCalls++

@@ -743,6 +743,18 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 	for i := range out {
 		out[i].Cwd = filepath.ToSlash(out[i].Cwd)
 	}
+	// Only advertise sessions the policy can actually serve. The hub cannot
+	// read a transcript, start a run or show git status for a session outside
+	// allowed_roots, and its title and working directory must not leak either.
+	// lastByAgent above keeps the raw snapshot so a stale hub request still
+	// gets the explicit "outside the allowed roots" error instead of "unknown".
+	allowed := out[:0]
+	for _, s := range out {
+		if s.Cwd != "" && d.policy.WithinRoots(s.Cwd) {
+			allowed = append(allowed, s)
+		}
+	}
+	out = allowed
 	// Fill in branch names for adapters whose store does not record them.
 	// Branches are cached by directory so discovery stays cheap.
 	for i := range out {

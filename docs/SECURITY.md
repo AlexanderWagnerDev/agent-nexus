@@ -2,9 +2,9 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The v0.1.8 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The v0.1.9 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### v0.1.8 implementation notes
+### v0.1.9 implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
@@ -350,6 +350,9 @@ daemon start, and are audited locally.
 - An empty `allowed_roots` list allows nothing. Only `null`/missing falls back
   to the user's home directory; an explicitly empty array is a deny-all policy
   for runs, transcripts, search and git.
+- The host advertises only sessions whose working directory is inside
+  `allowed_roots`. Titles and working directories of other sessions never
+  reach the hub, and the hub cannot offer an action the host would reject.
 - `allowed_agents` is enforced for **new** and resumed sessions in every mode,
   including OpenCode, Codex and ACP structured runs.
 - `forbidden_args` rejects permission-bypass flags even if a future hub or

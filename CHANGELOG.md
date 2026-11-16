@@ -4,6 +4,17 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] - 2026-11-17
+
+### Fixed
+
+- Host: sessions whose working directory is outside `allowed_roots` are no
+  longer advertised to the hub. The web UI used to list them and then failed
+  every transcript read, run start and git view with "session is outside the
+  allowed roots". Codex sessions under the home directory worked while
+  OpenCode sessions in project roots did not, which made the failure look
+  agent-specific. The policy itself is unchanged; the snapshot now matches it.
+
 ## [0.1.8] - 2026-11-16
 
 ### Fixed
@@ -173,6 +184,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.9]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.9
 [0.1.8]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8
 [0.1.7]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.7
 [0.1.6]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.6
