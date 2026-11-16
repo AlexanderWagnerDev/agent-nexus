@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [0.1.4] - 2026-11-16
 
+### Changed
+
+- Web: the boot screen, the sign-in card and the sidebar show the app icon
+  instead of a plain letter tile, so the brand matches the favicon and the
+  installed PWA icon.
+
 ### Fixed
 
 - Hub: a host that missed a read deadline was reported as a bare `502` whose
