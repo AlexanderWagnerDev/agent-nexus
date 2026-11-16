@@ -244,7 +244,14 @@ export async function pageSession(id) {
     const scroller = scrollTarget();
     scroller.scrollTop = scroller.scrollHeight;
   };
-  await loadLatest();
+  // The transcript is the only host round-trip on this page. A slow or
+  // unreachable host must not tear down the session view: the metadata above
+  // is already rendered and stays usable.
+  await loadLatest().catch((err) => {
+    const box = document.getElementById('transcript');
+    if (box) box.innerHTML = `<div class="empty"><strong>${t('Transcript unavailable')}</strong>${esc(err.message)}</div>`;
+    renderLoadMore(false);
+  });
 }
 
 export async function pageSessionChanges(id) {

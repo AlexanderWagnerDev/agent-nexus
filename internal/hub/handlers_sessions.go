@@ -11,6 +11,14 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+// Budgets for host-backed reads. The values are shared with the error mapping
+// so the logged timeout and the response the browser receives always agree.
+const (
+	transcriptTimeout = 15 * time.Second
+	gitTimeout        = 20 * time.Second
+	runOptionsTimeout = 25 * time.Second
+)
+
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	q := r.URL.Query()
@@ -295,11 +303,11 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		limit = 500
 	}
 	params, _ := json.Marshal(map[string]any{"native_id": sess.NativeID, "agent": sess.Agent, "offset": offset, "limit": limit})
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), transcriptTimeout)
 	defer cancel()
 	result, err := s.hostRequest(ctx, sess.HostID, "transcript", params)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeHostError(w, sess.HostID, "transcript", transcriptTimeout, err)
 		return
 	}
 	var tr protocol.Transcript
@@ -326,11 +334,11 @@ func (s *Server) handleSessionGit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params, _ := json.Marshal(map[string]any{"cwd": sess.Cwd, "stat_only": r.URL.Query().Get("stat") == "1"})
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), gitTimeout)
 	defer cancel()
 	raw, err := s.hostRequest(ctx, sess.HostID, "git", params)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeHostError(w, sess.HostID, "git", gitTimeout, err)
 		return
 	}
 	var view map[string]any
@@ -663,11 +671,11 @@ func (s *Server) handleRunOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params, _ := json.Marshal(map[string]string{"run_id": run.ID})
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), runOptionsTimeout)
 	defer cancel()
 	raw, err := s.hostRequest(ctx, run.HostID, "run.options", params)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		s.writeHostError(w, run.HostID, "run.options", runOptionsTimeout, err)
 		return
 	}
 	var options protocol.RunOptions

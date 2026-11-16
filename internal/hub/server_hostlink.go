@@ -474,18 +474,51 @@ func (s *Server) hostOnline(id string) bool {
 	return ok
 }
 
+// Sentinel errors for host-link failures the browser can act on. They are
+// mapped onto 503 instead of a generic 502 so the client can tell "host is
+// gone" from "host answered something wrong".
+var (
+	errHostOffline = errors.New("host is offline")
+	errHostBusy    = errors.New("host send queue is full")
+)
+
+// writeHostError answers a failed host round-trip with a status the client can
+// act on: a timeout is a 504 with reason=host_timeout, a link that cannot take
+// the request is a 503, and everything else stays a 502. Each case is logged
+// with the host and method, so a slow host no longer looks like a broken hub
+// and leaves no trace to search for.
+func (s *Server) writeHostError(w http.ResponseWriter, hostID, method string, timeout time.Duration, err error) {
+	status, reason := http.StatusBadGateway, "host_error"
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		status, reason = http.StatusGatewayTimeout, "host_timeout"
+	case errors.Is(err, errHostOffline):
+		status, reason = http.StatusServiceUnavailable, "host_offline"
+	case errors.Is(err, errHostBusy):
+		status, reason = http.StatusServiceUnavailable, "host_busy"
+	}
+	s.log.Warn("host request failed", "host_id", hostID, "method", method,
+		"reason", reason, "timeout_ms", timeout.Milliseconds(), "error", err)
+	msg := err.Error()
+	if reason == "host_timeout" {
+		// The browser shows this string; a Go context error means nothing there.
+		msg = "the host did not answer in time"
+	}
+	writeJSON(w, status, map[string]string{"error": msg, "reason": reason})
+}
+
 func (s *Server) sendHost(hostID string, msg protocol.Envelope) error {
 	s.mu.RLock()
 	hc := s.hosts[hostID]
 	s.mu.RUnlock()
 	if hc == nil {
-		return errors.New("host is offline")
+		return errHostOffline
 	}
 	select {
 	case hc.send <- msg:
 		return nil
 	case <-time.After(5 * time.Second):
-		return errors.New("host send queue is full")
+		return errHostBusy
 	}
 }
 
@@ -549,7 +582,7 @@ func (s *Server) broadcastHostView(hostID string, msg protocol.ServerEnvelope) {
 // hostRequest sends one request to a host and waits for the matching result.
 func (s *Server) hostRequest(ctx context.Context, hostID, method string, params []byte) ([]byte, error) {
 	if !s.hostOnline(hostID) {
-		return nil, errors.New("host is offline")
+		return nil, errHostOffline
 	}
 	id := newID()
 	requestID := requestIDFrom(ctx)

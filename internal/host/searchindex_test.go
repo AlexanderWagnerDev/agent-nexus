@@ -54,6 +54,9 @@ func newIndexFixture(t *testing.T) (*SearchIndex, *indexTestAdapter, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Tests index immediately; the production quiet period only exists to keep
+	// the refresh off transcripts that a live turn is still writing.
+	index.quiet = 0
 	t.Cleanup(func() { index.Close() })
 	updated := time.Now().UTC()
 	adapter := &indexTestAdapter{
@@ -267,5 +270,34 @@ func TestTranscriptBodyStopsAtLimitWithoutPanicking(t *testing.T) {
 	}
 	if len(body) == 0 {
 		t.Fatal("expected a truncated body")
+	}
+}
+
+func TestSearchIndexSkipsTranscriptsStillBeingWritten(t *testing.T) {
+	index, adapter, root := newIndexFixture(t)
+	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"opencode"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// A live turn is still writing this transcript; the refresh must not read it
+	// and compete with the transcript request the hub is serving.
+	index.quiet = time.Hour
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, log); err != nil {
+		t.Fatal(err)
+	}
+	if hits, err := index.Search(context.Background(), "upload", 10); err != nil || len(hits) != 0 {
+		t.Fatalf("live transcript was indexed: %+v %v", hits, err)
+	}
+
+	// After the turn stops, the next refresh indexes it.
+	index.quiet = 0
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, log); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := index.Search(context.Background(), "upload", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].NativeID != "inside" {
+		t.Fatalf("quiet transcript was not indexed: %+v", hits)
 	}
 }

@@ -22,8 +22,9 @@ import (
 // second local copy of transcript text, so the file is created with 0600
 // permissions and can be disabled with search_index=false.
 type SearchIndex struct {
-	db   *sql.DB
-	path string
+	db    *sql.DB
+	path  string
+	quiet time.Duration
 
 	mu     sync.RWMutex
 	status protocol.IndexStatus
@@ -34,6 +35,13 @@ const (
 	indexMessages  = 4000
 	snippetMarker  = "\u0001"
 	snippetEnd     = "\u0002"
+
+	// indexQuietPeriod keeps the incremental refresh off a transcript that is
+	// still being written. Re-reading a live transcript on every refresh
+	// competed with the transcript read the hub serves, and on a large file the
+	// hub's deadline lost. Discovery triggers another refresh after the last
+	// write, so the session is indexed as soon as it goes quiet.
+	indexQuietPeriod = 30 * time.Second
 )
 
 // OpenSearchIndex opens or creates the index in a host-local directory.
@@ -49,7 +57,7 @@ func OpenSearchIndex(path string) (*SearchIndex, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	x := &SearchIndex{db: db, path: path, status: protocol.IndexStatus{State: "building"}}
+	x := &SearchIndex{db: db, path: path, quiet: indexQuietPeriod, status: protocol.IndexStatus{State: "building"}}
 	if err := x.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -153,6 +161,9 @@ func (x *SearchIndex) build(ctx context.Context, adapters []Adapter, policy Poli
 		if ctx.Err() != nil {
 			x.setStatus(i, len(corpus), "building", "")
 			return ctx.Err()
+		}
+		if !rebuild && x.quiet > 0 && time.Since(sess.updated) < x.quiet {
+			continue
 		}
 		if err := x.indexOne(ctx, adapters, sess, rebuild); err != nil {
 			if log != nil {

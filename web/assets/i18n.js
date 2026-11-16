@@ -167,6 +167,7 @@ const de = {
   'The host could not parse this transcript.':
     'Der Host konnte dieses Transkript nicht lesen.',
   'Load earlier messages': 'Frühere Nachrichten laden',
+  'Transcript unavailable': 'Transkript nicht verfügbar',
 
   // projects
   'Search projects…': 'Projekte durchsuchen…',
