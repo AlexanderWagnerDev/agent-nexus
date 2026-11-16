@@ -206,6 +206,8 @@ $cli = Join-Path $dir "nexus.exe"
 $taskName = "AgentNexus Host"
 
 if ($Uninstall) {
+  schtasks.exe /End /TN "AgentNexus Host" 2>$null | Out-Null
+  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
   if (Test-Path $dest) { & $dest service uninstall | Out-Null }
   & schtasks.exe /Delete /TN "AgentNexus Host Update" /F 2>$null | Out-Null
   Remove-Item -Force -ErrorAction SilentlyContinue $dest, $cli, "$dest.previous", "$cli.previous"
@@ -338,6 +340,8 @@ try {
   }
 
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  schtasks.exe /End /TN "AgentNexus Host" 2>$null | Out-Null
+  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
   if (Test-Path $dest) { & $dest service uninstall | Out-Null }
   Start-Sleep -Milliseconds 800
   if (Test-Path $dest) { Copy-Item $dest "$dest.previous" -Force }

@@ -58,6 +58,8 @@ try {
   Write-Log "applying $expected to $Target"
   schtasks.exe /End /TN $Task | Out-Null
   if (-not (Wait-TaskState "Ready")) { throw "the running task did not stop" }
+  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
+  Start-Sleep -Milliseconds 500
   $copied = $false
   for ($i = 0; $i -lt 30; $i++) {
     try {
@@ -95,6 +97,8 @@ try {
   if (Test-Path -LiteralPath $previous) {
     schtasks.exe /End /TN $Task | Out-Null
     Wait-TaskState "Ready" | Out-Null
+    taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
+    Start-Sleep -Milliseconds 500
     for ($i = 0; $i -lt 20; $i++) {
       try {
         Copy-Item -LiteralPath $previous -Destination $Target -Force -ErrorAction Stop

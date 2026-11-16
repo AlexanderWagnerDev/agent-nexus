@@ -227,8 +227,8 @@ backup.
 - Further release publication depends on maintainer approval, not personally
   performed cross-OS acceptance or prescribed extended tests. v0.1.0 was
   published on 2026-11-15; v0.1.1 was published on 2026-11-15, v0.1.2 on
-  2026-11-16, v0.1.3 on 2026-11-16, v0.1.4 on 2026-11-16, v0.1.5 on 2026-11-16
-  and v0.1.6 is the current release.
+  2026-11-16, v0.1.3 on 2026-11-16, v0.1.4 on 2026-11-16, v0.1.5 on 2026-11-16,
+  v0.1.6 on 2026-11-16 and v0.1.7 is the current release.
 
 ## Troubleshooting
 

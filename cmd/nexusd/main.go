@@ -126,7 +126,11 @@ func pairCmd(args []string) {
 func runCmd(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	level := fs.String("log-level", "info", "debug, info, warn or error")
+	hidden := fs.Bool("hidden", false, "internal: hide the console window")
 	fs.Parse(args)
+	if *hidden {
+		host.HideConsoleWindow()
+	}
 	cfg, err := host.LoadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

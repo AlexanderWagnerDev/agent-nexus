@@ -4,6 +4,16 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] - 2026-11-16
+
+### Fixed
+
+- Windows: the host task now runs `nexusd.exe run --hidden` directly instead of
+  through a PowerShell wrapper. The wrapper could leave the daemon running when
+  Task Scheduler stopped the task, which kept the binary locked during updates.
+  The daemon hides its own console window, and the update/uninstall helpers
+  stop a stray daemon before replacing files.
+
 ## [0.1.6] - 2026-11-16
 
 ### Fixed
@@ -151,6 +161,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.7]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.7
 [0.1.6]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.6
 [0.1.5]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.5
 [0.1.4]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.4

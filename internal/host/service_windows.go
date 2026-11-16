@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf16"
 )
 
@@ -48,6 +49,9 @@ func installWindowsTask(exe string) error {
 	// Replacing a running task definition does not restart the running
 	// instance; stop it so the new action takes effect when /Run is called.
 	_, _ = runWindowsCommand("schtasks", "/End", "/TN", windowsTaskName)
+	if !waitWindowsTaskReady(10 * time.Second) {
+		return fmt.Errorf("the previous %q task did not stop", windowsTaskName)
+	}
 	content := windowsTaskXML(exe, userID)
 	file, err := os.CreateTemp("", "agentnexus-task-*.xml")
 	if err != nil {
@@ -135,6 +139,25 @@ func removeWindowsUpdateTask() {
 	_, _ = runWindowsCommand("schtasks", "/Delete", "/TN", windowsUpdateTaskName, "/F")
 }
 
+// waitWindowsTaskReady waits until Task Scheduler no longer reports the host
+// task as running. Replacing a running task definition leaves the old instance
+// alive; stopping it first keeps the new hidden action effective immediately.
+func waitWindowsTaskReady(timeout time.Duration) bool {
+	script := `$t = Get-ScheduledTask -TaskName '` + windowsTaskName + `' -ErrorAction SilentlyContinue; if ($null -eq $t) { 'missing' } elseif ($t.State -eq 'Running') { 'running' } else { 'stopped' }`
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		out, err := runWindowsCommand("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+		if err != nil {
+			return true
+		}
+		if strings.TrimSpace(out) != "running" {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
+}
+
 func statusWindowsTask() error {
 	out, err := runWindowsCommand("schtasks", "/Query", "/TN", windowsTaskName, "/V", "/FO", "LIST")
 	if err != nil {
@@ -180,11 +203,8 @@ func removeLegacyStartupLauncher() {
 // intentional: the agents and their credentials live in the interactive user
 // profile, so a SYSTEM/boot task would run in the wrong context.
 func windowsTaskXML(exe, userID string) string {
+	escapedExe := xmlEscape(exe)
 	escapedUser := xmlEscape(userID)
-	escapedPowerShell := xmlEscape(windowsPowerShellPath())
-	quotedExe := strings.ReplaceAll(exe, "'", "''")
-	arguments := `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& '` + quotedExe + `' run"`
-	escapedArgs := xmlEscape(arguments)
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -228,8 +248,8 @@ func windowsTaskXML(exe, userID string) string {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>` + escapedPowerShell + `</Command>
-      <Arguments>` + escapedArgs + `</Arguments>
+      <Command>` + escapedExe + `</Command>
+      <Arguments>run --hidden</Arguments>
     </Exec>
   </Actions>
 </Task>
