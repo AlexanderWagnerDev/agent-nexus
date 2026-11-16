@@ -268,9 +268,22 @@ try {
   Write-Host "Checksum and executable verified."
 
   $activeRuns = 0
-  $statusJson = & $newExe status --json 2>$null
-  if ($LASTEXITCODE -eq 0 -and $statusJson) {
-    try { $activeRuns = [int](($statusJson | ConvertFrom-Json).active_runs) } catch { $activeRuns = 0 }
+  # Windows PowerShell 5.1 turns the daemon's "not paired yet" stderr into a
+  # terminating error under ErrorActionPreference=Stop. A fresh install has no
+  # status to read, and a paired host's stderr must not abort the update.
+  $existingConfig = Join-Path $env:APPDATA "AgentNexus\nexusd.json"
+  if (Test-Path $existingConfig) {
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+      $statusJson = & $newExe status --json 2>$null
+      $statusExit = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorAction
+    }
+    if ($statusExit -eq 0 -and $statusJson) {
+      try { $activeRuns = [int](($statusJson | ConvertFrom-Json).active_runs) } catch { $activeRuns = 0 }
+    }
   }
   if ($activeRuns -gt 0 -and -not $Force) {
     Fail "Refusing to replace the daemon: $activeRuns active agent run(s). Wait until idle, or pass -Force after checking the runs."
