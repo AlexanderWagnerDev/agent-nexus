@@ -18,10 +18,15 @@ function psQuote(value) {
 
 /** Command that installs nexusd, pairs it with the hub and installs the service. */
 export function installCommand(os, hubUrl, code, version) {
-  const base = `${RAW_BASE}/${installScriptRef(version)}/scripts`;
+  const ref = installScriptRef(version);
+  const base = `${RAW_BASE}/${ref}/scripts`;
+  // Pin the release installer instead of resolving /releases/latest through
+  // the GitHub API, which can be rate-limited or blocked on a host network.
+  const pinned = ref === 'main' ? '' : ref;
   if (os === 'windows') {
-    const inner = `iwr -UseBasicParsing ${psQuote(`${base}/install-host.ps1`)} -OutFile $env:TEMP\\agentnexus-install.ps1; & $env:TEMP\\agentnexus-install.ps1 -Hub ${psQuote(hubUrl)} -Code ${psQuote(code)}`;
+    const args = `${pinned ? ` -Version ${pinned}` : ''}`;
+    const inner = `iwr -UseBasicParsing ${psQuote(`${base}/install-host.ps1`)} -OutFile $env:TEMP\\agentnexus-install.ps1; & $env:TEMP\\agentnexus-install.ps1 -Hub ${psQuote(hubUrl)} -Code ${psQuote(code)}${args}`;
     return `powershell -NoProfile -ExecutionPolicy Bypass -Command "${inner}"`;
   }
-  return `curl -fsSL ${base}/install-host.sh | bash -s -- --hub ${shellQuote(hubUrl)} --code ${shellQuote(code)}`;
+  return `curl -fsSL ${base}/install-host.sh | bash -s -- --hub ${shellQuote(hubUrl)} --code ${shellQuote(code)}${pinned ? ` --version ${pinned}` : ''}`;
 }

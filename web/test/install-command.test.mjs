@@ -14,7 +14,7 @@ test('builds a shell one-liner for linux and macos', () => {
   for (const os of ['linux', 'macos']) {
     const command = installCommand(os, 'https://nexus.example.com', 'ABCD-1234', '0.1.1');
     assert.ok(command.startsWith('curl -fsSL https://raw.githubusercontent.com/AlexanderWagnerDev/agent-nexus/v0.1.1/scripts/install-host.sh | bash -s --'));
-    assert.ok(command.includes("--hub 'https://nexus.example.com' --code 'ABCD-1234'"));
+    assert.ok(command.includes("--hub 'https://nexus.example.com' --code 'ABCD-1234' --version v0.1.1"));
   }
 });
 
@@ -22,7 +22,12 @@ test('builds a Windows one-liner with PowerShell parameters', () => {
   const command = installCommand('windows', 'https://nexus.example.com', 'ABCD-1234', '0.1.1');
   assert.ok(command.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -Command "'));
   assert.ok(command.includes("install-host.ps1' -OutFile $env:TEMP\\agentnexus-install.ps1"));
-  assert.ok(command.includes("-Hub 'https://nexus.example.com' -Code 'ABCD-1234'"));
+  assert.ok(command.includes("-Hub 'https://nexus.example.com' -Code 'ABCD-1234' -Version v0.1.1"));
+});
+
+test('does not pin development builds', () => {
+  assert.ok(!installCommand('linux', 'https://nexus.example.com', 'ABCD-1234', 'alpha-abc1234').includes('--version'));
+  assert.ok(!installCommand('windows', 'https://nexus.example.com', 'ABCD-1234', 'alpha-abc1234').includes('-Version'));
 });
 
 test('quotes values for the target shell', () => {
