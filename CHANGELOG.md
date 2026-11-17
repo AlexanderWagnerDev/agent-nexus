@@ -4,6 +4,14 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- CI fuzz smoke uses an execution-count budget instead of wall-clock time.
+  Go 1.26 can report "context deadline exceeded" from a timed run without a
+  crashing input (golang/go#82362).
+
 ## [0.1.14] - 2026-11-18
 
 ### Fixed

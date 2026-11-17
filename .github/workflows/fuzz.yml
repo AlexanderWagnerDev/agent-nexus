@@ -37,8 +37,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Run ${{ matrix.target }} for 30 seconds
-        run: go test ${{ matrix.pkg }} -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime=30s
+      # Count-based: Go 1.26's -fuzztime can fail with "context deadline
+      # exceeded" even without a crashing input (golang/go#82362).
+      - name: Run ${{ matrix.target }} for 200000 executions
+        run: go test ${{ matrix.pkg }} -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime=200000x
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:

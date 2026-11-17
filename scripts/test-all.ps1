@@ -112,7 +112,7 @@ if ($Full) {
     )
     foreach ($target in $targets) {
         Step "fuzz $($target.Name)" {
-            go test $target.Pkg -run '^$' -fuzz "^$($target.Name)$" -fuzztime=10s
+            go test $target.Pkg -run '^$' -fuzz "^$($target.Name)$" -fuzztime=50000x
         }
     }
 }
