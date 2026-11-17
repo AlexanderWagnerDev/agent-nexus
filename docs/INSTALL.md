@@ -59,8 +59,8 @@ bridge (`agentnexus-net`). IPv6 requires the Docker daemon to have IPv6
 enabled; adjust or remove the IPv6 `ipam` entry if your engine does not.
 
 The stack includes WUD labels. `latest` follows the newest stable release,
-`alpha` tracks `main`, `sha-<short>` pins a commit and `v0.1.13` (or `0.1.13`)
-pins the current release (`v0.1.12`/`0.1.12` the previous stable release, `v0.1.11`/`0.1.11`,
+`alpha` tracks `main`, `sha-<short>` pins a commit and `v0.1.14` (or `0.1.14`)
+pins the current release (`v0.1.13`/`0.1.13` the previous stable release, `v0.1.12`/`0.1.12`, `v0.1.11`/`0.1.11`,
 `v0.1.10`/`0.1.10`, `v0.1.9`/`0.1.9`, `v0.1.8`/`0.1.8`, `v0.1.6`/`0.1.6`, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and
 `v0.1.0`/`0.1.0` the earlier ones; `v0.1.7` was withdrawn). Digest watching is enabled by default so WUD notices
 new `latest` and `alpha` builds; set `WUD_WATCH_DIGEST=false` when you pin a

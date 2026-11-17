@@ -1,6 +1,6 @@
 # AgentNexus — Operations
 
-Practical runbook for the v0.1.13 release. It describes what the code does and
+Practical runbook for the v0.1.14 release. It describes what the code does and
 what has actually been tested, not the 1.0 target.
 
 ## Data locations
@@ -26,8 +26,8 @@ agents' own stores; the hub never rewrites them.
 
 Images are published to
 [Docker Hub](https://hub.docker.com/r/alexanderwagnerdev/agent-nexus).
-`latest` follows the newest stable release, `v0.1.13`/`0.1.13` pin the current
-release (`v0.1.12`/`0.1.12` the previous, `v0.1.11`/`0.1.11`, `v0.1.10`/`0.1.10`, `v0.1.9`/`0.1.9`, `v0.1.8`/`0.1.8`,
+`latest` follows the newest stable release, `v0.1.14`/`0.1.14` pin the current
+release (`v0.1.13`/`0.1.13` the previous, `v0.1.12`/`0.1.12`, `v0.1.11`/`0.1.11`, `v0.1.10`/`0.1.10`, `v0.1.9`/`0.1.9`, `v0.1.8`/`0.1.8`,
 `v0.1.6`/`0.1.6`, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`,
 `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones),
 `alpha` tracks `main`, and `sha-<short>` pins a commit.
@@ -36,7 +36,7 @@ release (`v0.1.12`/`0.1.12` the previous, `v0.1.11`/`0.1.11`, `v0.1.10`/`0.1.10`
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-Use `:v0.1.13` or `:sha-167a829` when a fixed build is required.
+Use `:v0.1.14` or `:sha-167a829` when a fixed build is required.
 
 The Docker Hub push in `.github/workflows/docker.yml` needs two repository
 secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub personal
@@ -67,7 +67,7 @@ Portainer stack, paste the file, and set:
 - `HUB_DOMAIN` — the public HTTPS hostname. WebAuthn passkeys require a
   hostname, not an IP address.
 - `HUB_PORT` — the host port the proxy points at (default `8787`).
-- `NEXUS_TAG` - `latest` for the stable release channel, `alpha` for `main`, `v0.1.13`/`0.1.13` for the current release (`v0.1.12`/`0.1.12` the previous stable release, `v0.1.11`/`0.1.11`, `v0.1.10`/`0.1.10`, `v0.1.9`/`0.1.9`, `v0.1.8`/`0.1.8`, `v0.1.6`/`0.1.6`, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones; `v0.1.7` was withdrawn), or `sha-<short>` to pin a commit.
+- `NEXUS_TAG` - `latest` for the stable release channel, `alpha` for `main`, `v0.1.14`/`0.1.14` for the current release (`v0.1.13`/`0.1.13` the previous stable release, `v0.1.12`/`0.1.12`, `v0.1.11`/`0.1.11`, `v0.1.10`/`0.1.10`, `v0.1.9`/`0.1.9`, `v0.1.8`/`0.1.8`, `v0.1.6`/`0.1.6`, `v0.1.5`/`0.1.5`, `v0.1.4`/`0.1.4`, `v0.1.3`/`0.1.3`, `v0.1.2`/`0.1.2`, `v0.1.1`/`0.1.1` and `v0.1.0`/`0.1.0` the earlier ones; `v0.1.7` was withdrawn), or `sha-<short>` to pin a commit.
 
 Nginx Proxy Manager: forward the hostname to `<docker-host>:8787`, enable
 WebSockets, and enable TLS. Caddy: use the provided
