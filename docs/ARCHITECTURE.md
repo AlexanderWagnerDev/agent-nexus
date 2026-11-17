@@ -319,7 +319,7 @@ message Envelope {
 | --- | --- | --- |
 | Terminal | PTY master ↔ agent TUI | All agents |
 | Structured — Codex | stdio JSON-RPC (`codex app-server`, JSONL) | Codex CLI |
-| Structured — OpenCode | HTTP + SSE on `127.0.0.1:<random port>` with random basic-auth password (`opencode serve`) | OpenCode |
+| Structured — OpenCode | HTTP + SSE on a loopback service, reusing a running desktop/TUI service when one is available, otherwise a random-port `opencode serve` with a random basic-auth password | OpenCode |
 | Structured — ACP | stdio JSON-RPC (ACP) | Claude Code (via `claude-agent-acp`), Gemini CLI, other ACP agents |
 | Discovery | Read-only filesystem access, short-lived CLI calls (`opencode session list --format json`, `claude agents --json`) | All agents |
 

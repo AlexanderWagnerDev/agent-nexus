@@ -40,6 +40,9 @@ type StructuredRun struct {
 	daemon     *Daemon
 	stdout     *os.File
 	stderr     *os.File
+	// shared marks a driver that attached to an OpenCode server owned by the
+	// native desktop/TUI client. That server must never be stopped by us.
+	shared bool
 
 	mu        sync.Mutex
 	calls     map[string]string
@@ -129,6 +132,21 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("opencode executable not found")
 		return
 	}
+	// Prefer the service an OpenCode desktop or TUI client is already using.
+	// Prompts then reach that client through its own event stream; a private
+	// server would write the same SQLite store without notifying it.
+	if svc, ok := openCodeServiceInfo(binPath); ok {
+		runCtx, cancel := context.WithCancel(context.Background())
+		sr := newStructuredRun(d, spec, cwd, svc.URL, svc.Password)
+		sr.cancel = cancel
+		sr.shared = true
+		d.log.Info("structured run reuses the running OpenCode service", "run_id", spec.RunID, "url", svc.URL)
+		if err := d.activateStructuredRun(spec, sr, runCtx, nil); err != nil {
+			sr.Stop()
+			fail(err.Error())
+		}
+		return
+	}
 	path, args := commandFor(binPath, []string{"serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port)})
 	password := serverPassword()
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -159,15 +177,9 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	if err := guard.Attach(cmd.Process.Pid); err != nil {
 		d.log.Warn("cannot attach a process guard", "run_id", spec.RunID, "error", err)
 	}
-	sr := &StructuredRun{
-		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
-		sessionKey: sessionKey, state: protocol.StateIdle, password: password,
-		cmd: cmd, guard: guard, cancel: cancel, calls: map[string]string{}, approvals: map[string]*time.Timer{},
-		reasoningStreamed: map[string]bool{},
-		client:            &http.Client{Timeout: 30 * time.Second},
-		readyOnce:         new(sync.Once),
-		stdout:            stdout, stderr: stderr,
-	}
+	sr := newStructuredRun(d, spec, cwd, "", password)
+	sr.cmd, sr.guard, sr.cancel = cmd, guard, cancel
+	sr.stdout, sr.stderr = stdout, stderr
 	ready := make(chan struct{})
 	go sr.scanServerOutput(stdout, ready)
 	go sr.scanServerOutput(stderr, ready)
@@ -197,23 +209,41 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		fail("opencode server did not report its listening address")
 		return
 	}
+	if err := d.activateStructuredRun(spec, sr, runCtx, waitExit); err != nil {
+		sr.Stop()
+		fail(err.Error())
+	}
+}
+
+func newStructuredRun(d *Daemon, spec protocol.RunSpec, cwd, baseURL, password string) *StructuredRun {
+	return &StructuredRun{
+		id: spec.RunID, agent: spec.Agent, cwd: cwd, daemon: d,
+		sessionKey: spec.Agent + ":" + spec.NativeID, state: protocol.StateIdle,
+		baseURL: baseURL, password: password,
+		calls: map[string]string{}, approvals: map[string]*time.Timer{},
+		reasoningStreamed: map[string]bool{},
+		client:            &http.Client{Timeout: 30 * time.Second},
+		readyOnce:         new(sync.Once),
+	}
+}
+
+// activateStructuredRun binds the driver to its native session and registers
+// it. exited is the process wait channel for a server this daemon spawned; for
+// a shared service it is nil and the run ends when it is stopped.
+func (d *Daemon) activateStructuredRun(spec protocol.RunSpec, sr *StructuredRun, runCtx context.Context, exited <-chan error) error {
 	reportedNativeID := ""
 	switch spec.Action {
 	case protocol.ActionNew:
-		sessionID, err := sr.createSession(cwd)
+		sessionID, err := sr.createSession(sr.cwd)
 		if err != nil {
-			sr.Stop()
-			fail("cannot create opencode session: " + err.Error())
-			return
+			return fmt.Errorf("cannot create opencode session: %w", err)
 		}
 		sr.sessionID = sessionID
 		reportedNativeID = sessionID
 	case protocol.ActionFork:
 		sessionID, err := sr.forkSession(spec.NativeID)
 		if err != nil {
-			sr.Stop()
-			fail("cannot fork opencode session: " + err.Error())
-			return
+			return fmt.Errorf("cannot fork opencode session: %w", err)
 		}
 		sr.sessionID = sessionID
 		reportedNativeID = sessionID
@@ -221,50 +251,62 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		sr.sessionID = spec.NativeID
 	}
 	if sr.sessionID == "" {
-		sr.Stop()
-		fail("no native session id")
-		return
+		return errors.New("no native session id")
 	}
 
 	d.runMu.Lock()
 	d.structured[spec.RunID] = sr
-	if sr.sessionID != "" {
-		// Bind the run to the native session the driver just created. The
-		// discovery overlay and the duplicate-run guard are keyed by this
-		// value; leaving the synthetic "new"/"fork" key hid a live session
-		// (reported idle) and let a second run attach to it.
-		sr.sessionKey = spec.Agent + ":" + sr.sessionID
-	}
+	// Bind the run to the native session the driver just created. The
+	// discovery overlay and the duplicate-run guard are keyed by this value;
+	// leaving the synthetic "new"/"fork" key hid a live session (reported
+	// idle) and let a second run attach to it.
+	sr.sessionKey = spec.Agent + ":" + sr.sessionID
 	d.runMu.Unlock()
-	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: cwd})
+	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: "structured", Action: spec.Action, ForkedFrom: forkSource(spec), NativeID: reportedNativeID, Agent: spec.Agent, Cwd: sr.cwd})
 	if d.consumePendingStop(spec.RunID) {
 		d.log.Info("structured run was stopped while starting", "run_id", spec.RunID)
 		go sr.Stop()
 	}
-	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", cwd)
-	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": cwd})
+	d.log.Info("structured run started", "run_id", spec.RunID, "agent", spec.Agent, "session", sr.sessionID, "cwd", sr.cwd)
+	hostAudit("structured.started", map[string]any{"run_id": spec.RunID, "agent": spec.Agent, "cwd": sr.cwd})
 	_ = d.send(protocol.Envelope{Type: "run.event", RunID: spec.RunID, Event: &protocol.RunEvent{
 		Type: "run.state", State: protocol.StateIdle, Text: "ready for a prompt",
 	}})
 	go sr.streamEvents(runCtx)
+	if exited != nil {
+		go func() {
+			err := <-exited
+			code := 0
+			if sr.cmd != nil && sr.cmd.ProcessState != nil {
+				code = sr.cmd.ProcessState.ExitCode()
+			}
+			sr.markFinished()
+			d.runMu.Lock()
+			delete(d.structured, spec.RunID)
+			d.runMu.Unlock()
+			reason := "opencode server exited"
+			if err != nil {
+				reason = err.Error()
+			}
+			_ = d.send(protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: code, Reason: reason})
+			d.log.Info("structured run exited", "run_id", spec.RunID, "code", code)
+			hostAudit("structured.exited", map[string]any{"run_id": spec.RunID, "code": code})
+		}()
+		return nil
+	}
+	// A shared service outlives the run. Stop only this run's event stream and
+	// registration; never terminate the native client's server.
 	go func() {
-		err := <-waitExit
-		code := 0
-		if cmd.ProcessState != nil {
-			code = cmd.ProcessState.ExitCode()
-		}
+		<-runCtx.Done()
 		sr.markFinished()
 		d.runMu.Lock()
 		delete(d.structured, spec.RunID)
 		d.runMu.Unlock()
-		reason := "opencode server exited"
-		if err != nil {
-			reason = err.Error()
-		}
-		_ = d.send(protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: code, Reason: reason})
-		d.log.Info("structured run exited", "run_id", spec.RunID, "code", code)
-		hostAudit("structured.exited", map[string]any{"run_id": spec.RunID, "code": code})
+		_ = d.send(protocol.Envelope{Type: "run.exit", RunID: spec.RunID, Code: 0, Reason: "run stopped"})
+		d.log.Info("structured run stopped", "run_id", spec.RunID)
+		hostAudit("structured.exited", map[string]any{"run_id": spec.RunID, "code": 0})
 	}()
+	return nil
 }
 
 func (d *Daemon) agentBinary(a Adapter) string {
@@ -647,6 +689,12 @@ func (r *StructuredRun) streamEvents(ctx context.Context) {
 		if attempt >= 5 {
 			ev := protocol.RunEvent{Type: "run.error", Error: "opencode event stream stopped; the run is no longer receiving events"}
 			_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
+			if r.shared {
+				// The native client's service is gone; release the run instead
+				// of leaving it registered forever. Stop never kills a shared
+				// service, so this only removes our registration.
+				r.Stop()
+			}
 			return
 		}
 		select {

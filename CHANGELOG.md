@@ -4,6 +4,17 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] - 2026-11-17
+
+### Fixed
+
+- OpenCode chats now reuse the HTTP service an already running OpenCode
+  desktop or TUI client uses. The host previously started a private server per
+  run; it wrote the same SQLite store, but the native client never received
+  those events, so messages sent through AgentNexus only appeared after the
+  native chat was reopened. If no native service answers, the host still starts
+  a private server as before.
+
 ## [0.1.9] - 2026-11-17
 
 ### Fixed
@@ -184,6 +195,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.10]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10
 [0.1.9]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.9
 [0.1.8]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8
 [0.1.7]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.7
