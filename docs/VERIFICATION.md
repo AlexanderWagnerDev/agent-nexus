@@ -11,6 +11,8 @@ request for the maintainer to perform tests personally.
 | Go unit/integration | `gofmt -l .`, `go vet ./...`, `go test ./...` pass locally (Windows, Go 1.27.4); CI runs Linux, macOS and Windows plus `go test -race` with the minimum version from `go.mod`, and a separate job compiles with the newest supported `1.27.x` toolchain |
 | Static analysis | `staticcheck` v0.8.2 passes; `govulncheck` v1.9.0 reports no vulnerabilities; `actionlint` v1.7.12 passes on all workflows |
 | Browser unit tests | `node web/scripts/check-syntax.mjs`, `npm test` pass |
+| Cross-platform CI | The `Test` job passes `go vet` and `go test ./...` on Linux, Windows and macOS (commit `852e431`); the Linux race job and fuzz-smoke jobs pass, and the browser E2E job passes the privacy and smoke checks |
+| OpenCode API contract | The `Agent contracts` workflow starts real `opencode serve` from 2.0.0, 2.1.0, 2.2.0 and 2.3.0 and verifies the session, prompt, event, interrupt, permission and fork paths; the 2.0 fork boundary is accepted through the driver's `through` retry. All four jobs pass |
 | Browser smoke | `E2E_SPAWN_HUB=1 npm run e2e` passes, including bell badge geometry, focus return for palette/notifications and the five-entry mobile bar with a More menu |
 | Browser UI regressions | `npm run e2e:demo-ui` (with `E2E_SPAWN_DEMO=1`) covers tab dedupe, cross-host project grouping, the bell badge, host overflow actions, the Git diffstat list and the mobile sticky header |
 | Installer syntax | `bash -n scripts/install-host.sh` and the PowerShell parser accept the reworked installers; Docker Compose and both Portainer stacks validate with `docker compose config` when their required variables are set |
