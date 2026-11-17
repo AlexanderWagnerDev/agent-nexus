@@ -39,7 +39,7 @@ releases still require the maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
-| [v0.1.10](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.10`, `0.1.10`, `0.1`, `alpha`, `latest` (digest pending) |
+| [v0.1.10](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.10`, `0.1.10`, `0.1`, `alpha`, `latest` (digest `sha256:185cfdc1fc139b5e93b846e7c6f586b5bdab5ec3d474e7c3f4d291fda0bc533b`) |
 | [v0.1.9](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.9) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.9`, `0.1.9`, `0.1`, `alpha`, `latest` (digest `sha256:7d069601396e486005d0c2c1d108904f82a1b9df83158edf522a5b59d43bb3c5`) |
 | [v0.1.8](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.8`, `0.1.8`, `0.1`, `alpha`, `latest` (digest `sha256:b06699e8e37b0b041970c565037ba87a012db6e3a7471ecfb7eb142ef6579d36`) |
 | [v0.1.6](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.6) | 2026-11-16 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.6`, `0.1.6`, `0.1`, `alpha`, `latest` (digest `sha256:fe421ba56fbeb608791250986896844bdae3cb84a39332497760e1a75702c44e`) |
