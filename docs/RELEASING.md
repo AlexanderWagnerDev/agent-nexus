@@ -1,13 +1,13 @@
 # Releasing
 
-AgentNexus **v0.1.12** is the current release (published 2026-11-17);
-**v0.1.11** was published on 2026-11-17, **v0.1.10** on 2026-11-17,
-**v0.1.9** on 2026-11-17, **v0.1.8** on 2026-11-16, **v0.1.6** on 2026-11-16,
-**v0.1.5** on 2026-11-16, **v0.1.4** on 2026-11-16, **v0.1.3** on 2026-11-16,
-**v0.1.2** on 2026-11-16, **v0.1.1** on 2026-11-15, and **v0.1.0** was the first
-official release (published 2026-11-15). **v0.1.7** was withdrawn and its
-release and tag were removed. Later tags and releases still require the
-maintainer's explicit approval.
+AgentNexus **v0.1.13** is the current release (published 2026-11-17);
+**v0.1.12** was published on 2026-11-17, **v0.1.11** on 2026-11-17,
+**v0.1.10** on 2026-11-17, **v0.1.9** on 2026-11-17, **v0.1.8** on 2026-11-16,
+**v0.1.6** on 2026-11-16, **v0.1.5** on 2026-11-16, **v0.1.4** on 2026-11-16,
+**v0.1.3** on 2026-11-16, **v0.1.2** on 2026-11-16, **v0.1.1** on 2026-11-15, and
+**v0.1.0** was the first official release (published 2026-11-15). **v0.1.7** was
+withdrawn and its release and tag were removed. Later tags and releases still
+require the maintainer's explicit approval.
 
 ## Current policy
 
@@ -28,7 +28,7 @@ maintainer's explicit approval.
 - Container builds on `main` publish `alpha` (moving) and `sha-<short>`
   (pinned) tags. Official releases use an explicit **Container** workflow
   dispatch with the `release_tag` input, which publishes the matching
-  `v0.1.12`, `0.1.12`, `0.1` and `alpha` tags; the `latest` tag additionally
+  `v0.1.13`, `0.1.13`, `0.1` and `alpha` tags; the `latest` tag additionally
   requires `publish_latest=true`. `alpha` keeps moving with `main` after the
   release.
 - The hub, daemon and terminal client report their version as `alpha` unless a
@@ -40,6 +40,7 @@ maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
+| [v0.1.13](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.13) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.13`, `0.1.13`, `0.1`, `alpha`, `latest` (digest pending) |
 | [v0.1.12](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.12) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.12`, `0.1.12`, `0.1`, `alpha`, `latest` (digest `sha256:63d42c625b9810fc52fbedbdc175abd87782652c42c07365f91d23b5950a27a8`) |
 | [v0.1.11](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.11) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.11`, `0.1.11`, `0.1`, `alpha`, `latest` (digest `sha256:bf466d80224a447664a67d9891c383439215d419289a78c1bbd4aa81793f97ae`) |
 | [v0.1.10](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.10`, `0.1.10`, `0.1`, `alpha`, `latest` (digest `sha256:185cfdc1fc139b5e93b846e7c6f586b5bdab5ec3d474e7c3f4d291fda0bc533b`) |
@@ -56,7 +57,7 @@ maintainer's explicit approval.
 > **Withdrawn:** `v0.1.7` was published briefly on 2026-11-16 and removed the
 > same day. Its Windows task started `nexusd.exe run --hidden`, but
 > `GetConsoleWindow` was loaded from the wrong DLL and the daemon panicked.
-> Its GitHub release and tag were removed; do not pin it. Use `v0.1.12`.
+> Its GitHub release and tag were removed; do not pin it. Use `v0.1.13`.
 > Container tags produced from that build may still exist in the registries.
 
 ## Release decision
@@ -74,7 +75,7 @@ accurately without turning optional testing into release blockers.
 ## Manual release procedure (only after approval)
 
 1. In GitHub Actions, run **Release** from `main` with the approved tag, for
-   example `tag=v0.1.12`. The workflow creates and pushes the annotated tag on
+   example `tag=v0.1.13`. The workflow creates and pushes the annotated tag on
    the dispatched commit and publishes the GitHub release. Re-running it for an
    existing tag publishes that tag as-is.
 2. Review the published release's assets, checksums, SBOMs and the cosign
@@ -82,8 +83,8 @@ accurately without turning optional testing into release blockers.
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
    release, delete the release and the tag before dispatching it again.
-3. Then run **Container** with `release_tag=v0.1.12` and `publish_latest=true`
-   for a stable release. The dispatch publishes `v0.1.12`, `0.1.12`, `0.1`,
+3. Then run **Container** with `release_tag=v0.1.13` and `publish_latest=true`
+   for a stable release. The dispatch publishes `v0.1.13`, `0.1.13`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
    workflow checks out that tag before building, so a newer `main` does not
@@ -114,6 +115,6 @@ workflow logs. At the time of the cleanup:
 
 ## Versioning
 
-The first approved version was `v0.1.0`; the current release is `v0.1.12`.
+The first approved version was `v0.1.0`; the current release is `v0.1.13`.
 Builds without a release tag are identified by commit SHA. Do not infer or
 promise a later version number from this document.

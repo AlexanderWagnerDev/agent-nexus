@@ -25,12 +25,12 @@ flowchart LR
 | [1](#phase-1--hub-host-daemon-and-pairing) | Secure hub, paired hosts on all three OSes | L | **M1** Hosts online | implemented |
 | [2](#phase-2--session-discovery-and-transcript-viewer) | See all existing sessions and transcripts | L | **M2** Discovery complete | implemented |
 | [3](#phase-3--native-resume-in-terminal-mode-mvp) | Natively resume sessions from the browser | L | **M3** MVP | implemented |
-| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | largely implemented; continues after v0.1.12 |
-| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.12 |
-| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.12 |
+| [4](#phase-4--structured-mode-approvals-and-notifications) | Chat UI, approvals, push, mobile | L | **M4** Structured mode | largely implemented; continues after v0.1.13 |
+| [5](#phase-5--hardening-multi-user-and-10) | Production readiness and security | L | **M5** Hardening | partially implemented; continues after v0.1.13 |
+| [6](#phase-6--additional-agents-and-native-apps) | More agents, native apps | M per item | **M6.x** per item | started; continues after v0.1.13 |
 
 **Versioning:** the first official version was **v0.1.0** (published
-2026-11-15); **v0.1.12** is the current release. It contains every capability
+2026-11-15); **v0.1.13** is the current release. It contains every capability
 marked implemented below; the version number does not gate them. Later phases
 are engineering goals that ship when they are ready. There is no obligation to
 publish intermediate `0.2`/`0.4` versions or a `1.0.0` milestone before a
@@ -38,7 +38,7 @@ capability can be used, and no release candidate series is planned.
 
 ## Implementation status
 
-The repository now contains the v0.1.12 implementation. The criteria below track
+The repository now contains the v0.1.13 implementation. The criteria below track
 engineering goals; they are not release gates. Publication is a separate
 maintainer decision.
 
