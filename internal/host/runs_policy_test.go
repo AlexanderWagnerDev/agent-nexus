@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -231,6 +232,9 @@ func TestResolveRunCwdUsesTheDiscoveredSessionDirectory(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
 	inside := filepath.Join(root, "repo")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	d := &Daemon{
 		policy: Policy{AllowedRoots: []string{root}},
 		lastByAgent: map[string][]protocol.Session{

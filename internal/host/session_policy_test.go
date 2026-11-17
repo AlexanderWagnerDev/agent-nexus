@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -16,6 +17,9 @@ import (
 func TestListSessionsHidesSessionsOutsideAllowedRoots(t *testing.T) {
 	root := t.TempDir()
 	inside := filepath.Join(root, "repo")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	outside := filepath.Join(filepath.Dir(root), "private")
 	adapter := &recordAdapter{
 		name: "opencode",

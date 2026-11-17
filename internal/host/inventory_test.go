@@ -1,6 +1,7 @@
 package host
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -40,6 +41,9 @@ func TestInventoryDoesNotInventStructuredWithoutACP(t *testing.T) {
 func TestSessionWithinRootsAppliesToTranscriptReads(t *testing.T) {
 	root := t.TempDir()
 	inside := filepath.Join(root, "repo")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	outside := filepath.Join(filepath.Dir(root), "private")
 	d := &Daemon{
 		policy: Policy{AllowedRoots: []string{root}},

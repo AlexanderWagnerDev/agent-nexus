@@ -60,7 +60,7 @@ func cursorFixture(t *testing.T) *CursorAdapter {
 }
 
 func TestCursorAbsolutePath(t *testing.T) {
-	for _, value := range []string{`C:\Users\demo`, `C:/Users/demo`, `\\server\share\repo`, `/home/demo`, `relative\path`} {
+	for _, value := range []string{`C:\Users\demo\repo`, `C:/Users/demo/repo`, `\\server\share\repo`, `/home/demo/repo`, `relative\path`} {
 		want := !strings.HasPrefix(value, "relative")
 		if got := cursorAbsolutePath(value); got != want {
 			t.Errorf("cursorAbsolutePath(%q) = %v, want %v", value, got, want)
