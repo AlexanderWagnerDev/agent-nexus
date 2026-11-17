@@ -4,6 +4,14 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Windows host updates no longer fail when the scheduled task has already
+  stopped the daemon before `taskkill` runs; a missing process is ignored during
+  replacement and rollback.
+
 ## [0.1.12] - 2026-11-17
 
 ### Added

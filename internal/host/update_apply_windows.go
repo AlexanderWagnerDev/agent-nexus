@@ -56,9 +56,11 @@ try {
   $expected = (& $NewBinary version 2>$null) -replace '^nexusd\s+', ''
   if (-not $expected) { throw "the staged binary did not report a version" }
   Write-Log "applying $expected to $Target"
-  schtasks.exe /End /TN $Task | Out-Null
+  try { schtasks.exe /End /TN $Task | Out-Null } catch {}
   if (-not (Wait-TaskState "Ready")) { throw "the running task did not stop" }
-  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
+  # The task stop may already have ended the daemon; a missing process is not
+  # an error and must not abort the replacement.
+  try { taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null } catch {}
   Start-Sleep -Milliseconds 500
   $copied = $false
   for ($i = 0; $i -lt 30; $i++) {
@@ -95,9 +97,9 @@ try {
   $previous = "$Target.previous"
   $restored = $false
   if (Test-Path -LiteralPath $previous) {
-    schtasks.exe /End /TN $Task | Out-Null
+    try { schtasks.exe /End /TN $Task | Out-Null } catch {}
     Wait-TaskState "Ready" | Out-Null
-    taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
+    try { taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null } catch {}
     Start-Sleep -Milliseconds 500
     for ($i = 0; $i -lt 20; $i++) {
       try {
