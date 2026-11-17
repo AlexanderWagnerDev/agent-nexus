@@ -10,6 +10,41 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestOpenCodeLegacyReasoning(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "opencode.db")
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`
+		CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+		CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO message(id,session_id,time_created,data) VALUES(?,?,?,?)`,
+		"msg1", "ses_legacy", 1000, `{"role":"assistant"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES(?,?,?,?,?)`,
+		"part1", "msg1", "ses_legacy", 1000, `{"type":"reasoning","text":"legacy thinking"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &OpenCodeAdapter{bin: os.DevNull, db: dbPath}
+	tr, err := a.Transcript(context.Background(), "ses_legacy", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Total != 1 || tr.Messages[0].Kind != "reasoning" || tr.Messages[0].Text != "legacy thinking" {
+		t.Fatalf("legacy reasoning part was dropped: %+v", tr.Messages)
+	}
+}
+
 func TestOpenCodeV2(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "opencode.db")

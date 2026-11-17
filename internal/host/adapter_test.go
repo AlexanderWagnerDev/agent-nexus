@@ -19,7 +19,7 @@ func TestClaudeAdapter(t *testing.T) {
 	}
 	lines := strings.Join([]string{
 		`{"type":"user","sessionId":"abc-123","cwd":"/tmp/project","gitBranch":"main","timestamp":"2026-01-02T03:04:05Z","message":{"role":"user","content":"Add a rate limiter"}}`,
-		`{"type":"assistant","sessionId":"abc-123","cwd":"/tmp/project","timestamp":"2026-01-02T03:04:06Z","message":{"role":"assistant","content":[{"type":"text","text":"Done."},{"type":"tool_use","name":"Bash","input":{"command":"go test ./..."}}]}}`,
+		`{"type":"assistant","sessionId":"abc-123","cwd":"/tmp/project","timestamp":"2026-01-02T03:04:06Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"A token bucket is simplest."},{"type":"text","text":"Done."},{"type":"tool_use","name":"Bash","input":{"command":"go test ./..."}}]}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "abc-123.jsonl"), []byte(lines), 0o600); err != nil {
 		t.Fatal(err)
@@ -39,8 +39,17 @@ func TestClaudeAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Total != 3 {
-		t.Fatalf("expected 3 transcript entries, got %d: %+v", tr.Total, tr.Messages)
+	if tr.Total != 4 {
+		t.Fatalf("expected 4 transcript entries, got %d: %+v", tr.Total, tr.Messages)
+	}
+	reasoning := false
+	for _, message := range tr.Messages {
+		if message.Kind == "reasoning" && message.Text == "A token bucket is simplest." {
+			reasoning = true
+		}
+	}
+	if !reasoning {
+		t.Fatalf("Claude thinking blocks were dropped: %+v", tr.Messages)
 	}
 	cmd, err := a.BuildCommand(Action{Kind: protocol.ActionResume, NativeID: "abc-123", Cwd: "/tmp/project"})
 	if err != nil {
@@ -65,6 +74,7 @@ func TestCodexAdapter(t *testing.T) {
 		`{"timestamp":"2026-01-02T03:04:05Z","type":"session_meta","payload":{"id":"codex-1","session_id":"codex-1","cwd":"/tmp/project","timestamp":"2026-01-02T03:04:05Z"}}`,
 		`{"timestamp":"2026-01-02T03:04:06Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Fix the failing test"}]}}`,
 		`{"timestamp":"2026-01-02T03:04:07Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fixed."}]}}`,
+		`{"timestamp":"2026-01-02T03:04:07Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Check the failing assertion first."}]}}`,
 		`{"timestamp":"2026-01-02T03:04:08Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"cmd\":\"go test\"}"}}`,
 	}, "\n") + "\n"
 	path := filepath.Join(dir, "rollout-2026-01-02T03-04-05-codex-1.jsonl")
@@ -83,8 +93,17 @@ func TestCodexAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Total != 3 || tr.Messages[0].Text != "Fix the failing test" {
+	if tr.Total != 4 || tr.Messages[0].Text != "Fix the failing test" {
 		t.Fatalf("unexpected transcript: %+v", tr)
+	}
+	reasoning := false
+	for _, message := range tr.Messages {
+		if message.Kind == "reasoning" && message.Text == "Check the failing assertion first." {
+			reasoning = true
+		}
+	}
+	if !reasoning {
+		t.Fatalf("Codex reasoning items were dropped: %+v", tr.Messages)
 	}
 	if _, err := a.Transcript(context.Background(), "", 0, 10); err == nil {
 		t.Fatal("an empty native session id selected the first rollout")

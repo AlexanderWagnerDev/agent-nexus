@@ -378,6 +378,10 @@ func (a *OpenCodeAdapter) legacyTranscript(ctx context.Context, db *sql.DB, nati
 				if strings.TrimSpace(p.Text) != "" {
 					all = append(all, protocol.Message{Role: msg.role, Kind: "text", Text: p.Text, Timestamp: ts})
 				}
+			case "reasoning":
+				if strings.TrimSpace(p.Text) != "" {
+					all = append(all, protocol.Message{Role: "assistant", Kind: "reasoning", Text: p.Text, Timestamp: ts})
+				}
 			case "tool":
 				all = append(all, toolMessage(p, ts))
 			case "patch":

@@ -6,6 +6,7 @@ import { badge, closeModal, copyText, modal, toast } from '../ui.js';
 import { getLang, setLang, t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { esc, fmtStamp } from '../ui-format.js';
+import { setTranscriptDetail, transcriptDetail } from '../components/transcript.js';
 
 export async function pageSettings() {
   const pageGen = state.pageGen;
@@ -42,6 +43,17 @@ export async function pageSettings() {
           <option value="de" ${getLang() === 'de' ? 'selected' : ''}>Deutsch</option>
         </select></label>
         <p class="hint mt-1">${t('The interface language is stored on this device. English is the default; changing it reloads the page.')}</p>
+      </section>
+      <section class="card">
+        <h2 class="mt-0">${t('Transcript detail')}</h2>
+        <p class="hint">${t('Choose how much of the agent transcript is shown in chats and session transcripts. Stored on this device.')}</p>
+        <label class="label">${t('Detail level')}<select class="select" id="settings-transcript-detail">
+          ${[
+            ['chat', t('Chat only'), t('Only your prompts and the agent replies.')],
+            ['normal', t('Normal'), t('Reasoning and tool calls stay collapsed.')],
+            ['full', t('Full'), t('Reasoning, tool output and raw agent input are expanded.')],
+          ].map(([value, label, hint]) => `<option value="${value}" ${transcriptDetail() === value ? 'selected' : ''}>${esc(label)} — ${esc(hint)}</option>`).join('')}
+        </select></label>
       </section>
       <section class="card">
         <h2 class="mt-0">${t('Account')}</h2>
@@ -101,6 +113,10 @@ export async function pageSettings() {
   document.getElementById('settings-language').addEventListener('change', (event) => {
     setLang(event.target.value);
     location.reload();
+  });
+  document.getElementById('settings-transcript-detail').addEventListener('change', (event) => {
+    setTranscriptDetail(event.target.value);
+    toast(t('Transcript detail saved'));
   });
   view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {
     try {

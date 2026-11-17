@@ -5,7 +5,7 @@ import { draftKey, state, storeGet, storeSet } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, badge, closeModal, modal, toast } from '../ui.js';
 import { wsSend } from '../ws.js';
-import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, toolCardHtml, workingHtml } from '../components/transcript.js';
+import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, toolCardHtml, transcriptDetail, workingHtml } from '../components/transcript.js';
 import { startRun } from './session-detail.js';
 import { describeTool, parseDiffStat } from '../chat-format.js';
 import { getLang, t } from '../i18n.js';
@@ -463,7 +463,9 @@ export async function pageStructuredRun(id, run) {
   });
 
   let gitRefreshHook = null;
+  let refreshTranscript = () => {};
   const setState = (state) => {
+    const wasBusy = currentState === 'running' || currentState === 'starting';
     currentState = state || 'unknown';
     run.state = state;
     const label = (state || 'unknown').replaceAll('_', ' ');
@@ -477,6 +479,9 @@ export async function pageStructuredRun(id, run) {
     topStop.hidden = !busy;
     topStop.disabled = !busy;
     if (!busy && gitRefreshHook) gitRefreshHook();
+    // The live stream can miss reasoning or tool parts while it reconnects.
+    // Re-read the host transcript once a turn ends so the chat matches F5.
+    if (wasBusy && !busy) refreshTranscript();
     scrollBottom();
   };
   setState(run.state || 'starting');
@@ -529,6 +534,7 @@ export async function pageStructuredRun(id, run) {
   };
 
   const updateTool = (callID, name, input, output, status) => {
+    if (transcriptDetail() === 'chat') return;
     const key = callID || ('tool-' + toolRecords.size);
     let rec = toolRecords.get(key);
     if (!rec) {
@@ -554,7 +560,7 @@ export async function pageStructuredRun(id, run) {
   };
 
   const updateReasoning = (messageID, text) => {
-    if (!text) return;
+    if (!text || transcriptDetail() === 'chat') return;
     const key = messageID || 'reasoning';
     let rec = reasoningRecords.get(key);
     if (!rec) {
@@ -710,6 +716,7 @@ export async function pageStructuredRun(id, run) {
         // cursor above the new epoch's sequence numbers when history loads.
         pendingLiveEvents.length = 0;
         sendSubscribe();
+        refreshTranscript();
       }
       setState(msg.state);
       noteText(msg.state === 'idle' ? t('Idle — ready for your next message') : t('Agent status: {state}', { state: t(msg.state.replaceAll('_', ' ')) }), msg.state === 'running');
@@ -721,7 +728,20 @@ export async function pageStructuredRun(id, run) {
     if (msg.type === 'error') {
       const errorText = String(msg.error || 'error');
       toast(errorText, true);
-      if (/lease|permission|read-only/i.test(errorText)) {
+      if (/controller lease/i.test(errorText)) {
+        // Another tab or device took the write lease. Reclaim it for the next
+        // message instead of turning this composer read-only.
+        api(`/runs/${encodeURIComponent(id)}/lease`, { method: 'POST' }).catch(() => {});
+        noteText(t('Write lease reclaimed. Send the message again.'), true);
+        if (lastPrompt && !textarea.value) {
+          textarea.value = lastPrompt.text;
+          storeSet(draftKey(id), lastPrompt.text);
+          autosize();
+        }
+        lastPrompt = null;
+        return;
+      }
+      if (/permission|read-only/i.test(errorText)) {
         noteText(t('Read-only:') + ' ' + errorText);
         textarea.disabled = true;
         sendButton.disabled = true;
@@ -760,7 +780,8 @@ export async function pageStructuredRun(id, run) {
     document.getElementById('load-earlier')?.addEventListener('click', () => loadEarlier().catch((err) => toast(err.message, true)));
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async (onlyIfIdle = false) => {
+    if (onlyIfIdle && currentState !== 'idle') return;
     if (run.session_id) {
       try {
         const head = await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=0&limit=1`);
@@ -769,8 +790,10 @@ export async function pageStructuredRun(id, run) {
           const limit = Math.min(200, historyTotal);
           const offset = Math.max(0, historyTotal - limit);
           const tr = historyTotal > 1 ? await api(`/sessions/${encodeURIComponent(run.session_id)}/transcript?offset=${offset}&limit=${limit}`) : head;
+          if (onlyIfIdle && currentState !== 'idle') return;
           historyOffset = offset;
-          const visible = (tr.messages || []).filter((m) => m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
+          const detail = transcriptDetail();
+          const visible = (tr.messages || []).filter((m) => detail === 'full' || m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
           for (const message of visible) {
             if (message.role === 'assistant' && (!message.kind || message.kind === 'text')) {
               const text = String(message.text || '').trim();
@@ -778,6 +801,13 @@ export async function pageStructuredRun(id, run) {
             }
           }
           messagesEl.innerHTML = renderTranscriptMessages(visible, run.agent || session?.agent);
+          // The re-render replaced every live node. Forget the old records so
+          // the next streamed turn creates fresh ones instead of appending to
+          // detached elements.
+          assistantRecords.clear();
+          toolRecords.clear();
+          reasoningRecords.clear();
+          completedMessages.clear();
           historyTop.innerHTML = offset > 0
             ? `<button class="btn small ghost history-button" id="load-earlier">${t('Load earlier messages ({n} remaining)', { n: offset.toLocaleString() })}</button>`
             : '';
@@ -793,6 +823,11 @@ export async function pageStructuredRun(id, run) {
     // event forever.
     historyReady = true;
     flushPendingLiveEvents();
+  };
+
+  refreshTranscript = () => {
+    if (!run.session_id || !historyReady || !isNearBottom() || currentState !== 'idle') return;
+    loadHistory(true).catch(() => {});
   };
 
   api(`/runs/${id}/lease`, { method: 'POST' }).then(() => {
@@ -912,6 +947,9 @@ export async function pageStructuredRun(id, run) {
     const promptOptions = currentPromptOptions();
     const message = { type: 'prompt', run_id: id, text };
     if (Object.keys(promptOptions).length) message.options = promptOptions;
+    // Another tab or device may have taken the write lease since this page
+    // opened. Reclaim it before every prompt so this chat stays writable.
+    await api(`/runs/${encodeURIComponent(id)}/lease`, { method: 'POST' }).catch(() => {});
     if (!wsSend(message)) {
       toast(t('WebSocket is reconnecting; try again in a moment'), true);
       return;
@@ -1216,7 +1254,12 @@ export async function pageStructuredRun(id, run) {
   const timer = setInterval(() => {
     if (!state.me) { clearInterval(timer); return; }
     if (state.ws?.readyState === WebSocket.OPEN) {
-      if (subscribedGen !== state.wsGen) sendSubscribe();
+      if (subscribedGen !== state.wsGen) {
+        sendSubscribe();
+        // Events buffered only in the hub are gone after a reconnect. Pull the
+        // host transcript once so a missed turn is not hidden until F5.
+        refreshTranscript();
+      }
       if (note.textContent.includes(t('Connecting…'))) noteText(t('Connected. Send a message.'));
     } else if (!note.textContent.includes(t('Reconnecting…'))) {
       // Do not rebuild the live region four times per second while offline.

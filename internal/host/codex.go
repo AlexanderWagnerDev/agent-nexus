@@ -64,6 +64,7 @@ type codexPayload struct {
 	Type      string          `json:"type"`
 	Role      string          `json:"role"`
 	Content   json.RawMessage `json:"content"`
+	Summary   json.RawMessage `json:"summary"`
 	Name      string          `json:"name"`
 	Arguments string          `json:"arguments"`
 	Output    string          `json:"output"`
@@ -220,6 +221,14 @@ func (a *CodexAdapter) Transcript(ctx context.Context, nativeID string, offset, 
 					continue
 				}
 				all = append(all, protocol.Message{Role: p.Role, Kind: "text", Text: text, Timestamp: ts})
+			}
+		case "reasoning":
+			thoughts := append(codexContent(p.Summary), codexContent(p.Content)...)
+			for _, text := range thoughts {
+				if strings.TrimSpace(text) == "" {
+					continue
+				}
+				all = append(all, protocol.Message{Role: "assistant", Kind: "reasoning", Text: text, Timestamp: ts})
 			}
 		case "function_call":
 			all = append(all, protocol.Message{Role: "assistant", Kind: "tool_call", ToolName: p.Name, ToolInput: truncate(p.Arguments, 8000), Timestamp: ts})

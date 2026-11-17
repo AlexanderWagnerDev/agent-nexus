@@ -209,65 +209,83 @@ export async function pageSession(id) {
       ? `<button class="btn" id="load-more">${t('Load earlier messages')}</button>` : '';
     document.getElementById('load-more')?.addEventListener('click', () => loadEarlier().catch((e) => toast(e.message, true)));
   };
+  const messageMark = (messages) => messages.map((m) => [m.role, m.kind, m.tool_name, (m.text || '').length, (m.tool_output || '').length, m.timestamp].join(':')).join('|');
+  const isNearBottom = () => {
+    const scroller = scrollTarget();
+    return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+  };
+  let liveBusy = false;
+  let lastMark = '';
   const loadEarlier = async () => {
     const box = document.getElementById('transcript');
-    if (transcriptStart <= 0) return;
+    if (transcriptStart <= 0 || liveBusy) return;
     const nextStart = Math.max(0, transcriptStart - TRANSCRIPT_PAGE);
     const scroller = scrollTarget();
     const before = scroller.scrollHeight;
-    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${nextStart}&limit=${transcriptStart - nextStart}`);
-    if (pageGen !== state.pageGen) return;
-    renderTranscriptWarning(tr);
-    box.insertAdjacentHTML('afterbegin', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : '');
-    transcriptStart = nextStart;
-    scroller.scrollTop += scroller.scrollHeight - before;
-    renderLoadMore(transcriptStart > 0);
-  };
-  const loadLatest = async () => {
-    const box = document.getElementById('transcript');
-    const probe = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=0&limit=1`);
-    if (pageGen !== state.pageGen) return;
-    const total = Number(probe.total) || 0;
-    transcriptStart = Math.max(0, total - TRANSCRIPT_PAGE);
-    if (transcriptStart === 0 && total === 0) {
-      box.innerHTML = `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
-      renderLoadMore(false);
-      return;
-    }
-    const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${transcriptStart}&limit=${TRANSCRIPT_PAGE}`);
-    if (pageGen !== state.pageGen) return;
-    renderTranscriptWarning(tr);
-    box.innerHTML = tr.messages.length
-      ? renderTranscriptMessages(tr.messages, s.agent)
-      : `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
-    renderLoadMore(transcriptStart > 0);
-    const scroller = scrollTarget();
-    scroller.scrollTop = scroller.scrollHeight;
-  };
-  // Native OpenCode/TUI writes do not go through a hub run, so the hub only
-  // reports them as a session metadata change. Compare this session and
-  // reload the newest page when it actually changed; F5 is no longer needed.
-  let liveTimer = null;
-  let liveBusy = false;
-  const refreshFromHost = async () => {
-    if (pageGen !== state.pageGen || liveBusy) return;
     liveBusy = true;
     try {
-      const fresh = await api(`/sessions/${encodeURIComponent(id)}`);
+      const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${nextStart}&limit=${transcriptStart - nextStart}`);
       if (pageGen !== state.pageGen) return;
-      const changed = Number(fresh.message_count) !== Number(s.message_count)
-        || String(fresh.updated_at) !== String(s.updated_at);
-      s.message_count = fresh.message_count;
-      s.updated_at = fresh.updated_at;
-      if (changed) await loadLatest();
-    } catch { /* metadata refresh is best effort */ }
-    finally { liveBusy = false; }
+      renderTranscriptWarning(tr);
+      box.insertAdjacentHTML('afterbegin', tr.messages.length ? renderTranscriptMessages(tr.messages, s.agent) : '');
+      transcriptStart = nextStart;
+      scroller.scrollTop += scroller.scrollHeight - before;
+      renderLoadMore(transcriptStart > 0);
+    } finally { liveBusy = false; }
+  };
+  const loadLatest = async (silent = false) => {
+    if (pageGen !== state.pageGen || liveBusy) return;
+    const box = document.getElementById('transcript');
+    if (!box) return;
+    liveBusy = true;
+    try {
+      const probe = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=0&limit=1`);
+      if (pageGen !== state.pageGen) return;
+      const total = Number(probe.total) || 0;
+      const start = Math.max(0, total - TRANSCRIPT_PAGE);
+      if (total === 0) {
+        if (silent) return;
+        lastMark = '';
+        transcriptStart = 0;
+        box.innerHTML = `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
+        renderLoadMore(false);
+        return;
+      }
+      const tr = await api(`/sessions/${encodeURIComponent(id)}/transcript?offset=${start}&limit=${TRANSCRIPT_PAGE}`);
+      if (pageGen !== state.pageGen) return;
+      const mark = messageMark(tr.messages);
+      // A background refresh must not re-render unchanged content or yank a
+      // reader away from older messages. It resumes when they scroll back down.
+      if (silent && (mark === lastMark || !isNearBottom())) return;
+      lastMark = mark;
+      transcriptStart = start;
+      renderTranscriptWarning(tr);
+      box.innerHTML = tr.messages.length
+        ? renderTranscriptMessages(tr.messages, s.agent)
+        : `<div class="empty"><strong>${t('No readable messages')}</strong>${t('The host could not parse this transcript.')}</div>`;
+      renderLoadMore(start > 0);
+      const scroller = scrollTarget();
+      scroller.scrollTop = scroller.scrollHeight;
+    } finally { liveBusy = false; }
+  };
+  // Native OpenCode/TUI writes do not go through a hub run, and a missed hub
+  // delta must not need F5 either. Poll the host transcript while the page is
+  // visible and refresh when its content or a message text actually changed.
+  let liveTimer = null;
+  const syncLatest = () => {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => { loadLatest(true).catch(() => {}); }, 600);
   };
   state.wsHandlers.add((msg) => {
-    if (msg.type !== 'sessions.changed' || msg.message !== s.host_id) return;
-    clearTimeout(liveTimer);
-    liveTimer = setTimeout(() => { refreshFromHost().catch(() => {}); }, 800);
+    if (msg.type === 'sessions.changed' && msg.message === s.host_id) syncLatest();
   });
+  const pollTimer = setInterval(() => {
+    if (!document.hidden) loadLatest(true).catch(() => {});
+  }, 5000);
+  state.pageCleanup = () => {
+    clearTimeout(liveTimer);
+    clearInterval(pollTimer);
+  };
   // The transcript is the only host round-trip on this page. A slow or
   // unreachable host must not tear down the session view: the metadata above
   // is already rendered and stays usable.
@@ -326,6 +344,17 @@ export async function startRun(session, fork, mode = 'terminal', extra = {}) {
     location.hash = `#/runs/${run.id}`;
     return run;
   } catch (err) {
+    if (err.status === 409 && err.reason === 'active_run' && err.runId && mode !== 'terminal') {
+      // The session already has a live chat. Join it instead of offering a
+      // read-only transcript; opening the chat always grants read and write.
+      location.hash = `#/runs/${err.runId}`;
+      return null;
+    }
+    if (err.status === 409 && err.reason === 'active_elsewhere' && session.agent === 'opencode' && !extra.force) {
+      // OpenCode's shared local service safely coordinates the native client
+      // and this hub. Resume without the read-only-or-normal prompt.
+      return startRun(session, fork, mode, { ...extra, force: true });
+    }
     if (err.status === 409 && (err.reason === 'active_run' || err.reason === 'active_elsewhere')) {
       conflictDialog(session, { fork, mode, err });
       return null;

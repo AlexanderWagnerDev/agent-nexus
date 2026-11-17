@@ -7,6 +7,19 @@ import { svgIcon } from '../icons.js';
 import { highlightCode, renderMarkdown } from '../markdown.js';
 import { agentMeta, countLabel, esc, fmtStamp } from '../ui-format.js';
 
+const DETAIL_KEY = 'nexus-transcript-detail';
+const DETAIL_LEVELS = ['chat', 'normal', 'full'];
+
+/** How much of a transcript is rendered: chat only, normal or full. */
+export function transcriptDetail() {
+  const level = storeGet(DETAIL_KEY, 'normal');
+  return DETAIL_LEVELS.includes(level) ? level : 'normal';
+}
+
+export function setTranscriptDetail(level) {
+  storeSet(DETAIL_KEY, DETAIL_LEVELS.includes(level) ? level : 'normal');
+}
+
 export function inlineAttachmentLabel(name, path) {
   const raw = String(name || '').trim();
   if (raw && !/^\[image #\d+\]$/i.test(raw)) return raw;
@@ -35,13 +48,16 @@ export function renderUserText(raw) {
 }
 
 export function renderTranscriptMessage(m, agent = 'agent') {
-  if (m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
+  const detail = transcriptDetail();
+  if (detail !== 'full' && m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
   if (m.kind === 'tool_call' || m.kind === 'tool_result') {
+    if (detail === 'chat') return '';
     const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '');
     return historyToolCard(described, m);
   }
   if (m.kind === 'reasoning' && m.text) {
-    return `<article class="turn turn-assistant turn-reasoning">${reasoningHtml(m.text)}</article>`;
+    if (detail === 'chat') return '';
+    return `<article class="turn turn-assistant turn-reasoning">${reasoningHtml(m.text, detail === 'full')}</article>`;
   }
   if (m.role === 'user') {
     const body = renderUserText(m.text);
@@ -131,9 +147,9 @@ export function toolCardHtml(described, status = 'done') {
   const output = described.kind !== 'edit' && described.output ? `<div class="tool-block"><div class="tool-label">${t('Output')}</div>${outputBlock(described.output)}</div>` : '';
   const hasStructured = commandBlock || pathBlock || diffBlock || output;
   const raw = described.inputText && described.inputText !== '{}' && described.inputText !== 'null'
-    ? `<details class="tool-raw"><summary>${t('Raw input')}</summary><pre>${esc(described.inputText)}</pre></details>`
+    ? `<details class="tool-raw" ${transcriptDetail() === 'full' ? 'open' : ''}><summary>${t('Raw input')}</summary><pre>${esc(described.inputText)}</pre></details>`
     : '';
-  return `<details class="tool-card ${status}" ${status === 'error' ? 'open' : ''}>
+  return `<details class="tool-card ${status}" ${status === 'error' || transcriptDetail() === 'full' ? 'open' : ''}>
     <summary>
       <span class="tool-icon">${svgIcon(toolIcon(described.kind), 15)}</span>
       <span class="tool-line"><strong>${esc(described.label)}</strong>${detail}</span>
@@ -149,8 +165,8 @@ export function historyToolCard(described, message) {
   return toolCardHtml(described, status);
 }
 
-export function reasoningHtml(text) {
-  return `<details class="reasoning-card"><summary>${svgIcon('brain', 14)}<span>${t('Thinking')}</span><span class="reasoning-toggle">${svgIcon('chevronDown', 13)}</span></summary><div class="reasoning-body md">${renderMarkdown(text)}</div></details>`;
+export function reasoningHtml(text, open = transcriptDetail() === 'full') {
+  return `<details class="reasoning-card" ${open ? 'open' : ''}><summary>${svgIcon('brain', 14)}<span>${t('Thinking')}</span><span class="reasoning-toggle">${svgIcon('chevronDown', 13)}</span></summary><div class="reasoning-body md">${renderMarkdown(text)}</div></details>`;
 }
 
 export function workingHtml() {

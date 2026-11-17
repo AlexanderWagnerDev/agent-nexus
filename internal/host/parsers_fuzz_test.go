@@ -10,7 +10,7 @@ func FuzzClaudeContent(f *testing.F) {
 	f.Add([]byte(`"plain"`))
 	f.Add([]byte(`{bad`))
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		texts, tools, results := claudeContent(json.RawMessage(raw))
+		texts, _, tools, results := claudeContent(json.RawMessage(raw))
 		_ = texts
 		_ = tools
 		_ = results

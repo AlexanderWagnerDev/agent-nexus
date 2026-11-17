@@ -159,7 +159,7 @@ func (a *ClaudeAdapter) scanMetadata(path, nativeID, _ string) (protocol.Session
 		case "user", "assistant":
 			s.MessageCount++
 			if s.Title == "" && e.Message.Role == "user" {
-				texts, _, _ := claudeContent(e.Message.Content)
+				texts, _, _, _ := claudeContent(e.Message.Content)
 				for _, text := range texts {
 					if t := usableTitle(text); t != "" {
 						s.Title = t
@@ -212,7 +212,7 @@ func (a *ClaudeAdapter) Transcript(ctx context.Context, nativeID string, offset,
 			continue
 		}
 		ts := parseTime(e.Timestamp)
-		texts, tools, results := claudeContent(e.Message.Content)
+		texts, thoughts, tools, results := claudeContent(e.Message.Content)
 		role := e.Message.Role
 		for _, text := range texts {
 			if strings.TrimSpace(text) == "" {
@@ -220,6 +220,7 @@ func (a *ClaudeAdapter) Transcript(ctx context.Context, nativeID string, offset,
 			}
 			all = append(all, protocol.Message{Role: role, Kind: "text", Text: text, Timestamp: ts})
 		}
+		all = append(all, thoughts...)
 		all = append(all, tools...)
 		all = append(all, results...)
 	}
@@ -272,36 +273,44 @@ func (a *ClaudeAdapter) Search(ctx context.Context, query string, limit int) ([]
 		if json.Unmarshal(line, &e) != nil || e.Message == nil {
 			return "", time.Time{}
 		}
-		texts, _, _ := claudeContent(e.Message.Content)
+		texts, thoughts, _, _ := claudeContent(e.Message.Content)
+		for _, thought := range thoughts {
+			texts = append(texts, thought.Text)
+		}
 		return strings.Join(texts, " "), parseTime(e.Timestamp)
 	})
 }
 
-func claudeContent(raw json.RawMessage) (texts []string, tools []protocol.Message, results []protocol.Message) {
+func claudeContent(raw json.RawMessage) (texts []string, thoughts []protocol.Message, tools []protocol.Message, results []protocol.Message) {
 	if len(raw) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	if raw[0] == '"' {
 		var s string
 		if json.Unmarshal(raw, &s) == nil {
-			return []string{s}, nil, nil
+			return []string{s}, nil, nil, nil
 		}
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	var blocks []struct {
-		Type    string          `json:"type"`
-		Text    string          `json:"text"`
-		Name    string          `json:"name"`
-		Input   json.RawMessage `json:"input"`
-		Content json.RawMessage `json:"content"`
+		Type     string          `json:"type"`
+		Text     string          `json:"text"`
+		Thinking string          `json:"thinking"`
+		Name     string          `json:"name"`
+		Input    json.RawMessage `json:"input"`
+		Content  json.RawMessage `json:"content"`
 	}
 	if json.Unmarshal(raw, &blocks) != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	for _, b := range blocks {
 		switch b.Type {
 		case "text":
 			texts = append(texts, b.Text)
+		case "thinking":
+			if strings.TrimSpace(b.Thinking) != "" {
+				thoughts = append(thoughts, protocol.Message{Role: "assistant", Kind: "reasoning", Text: b.Thinking})
+			}
 		case "tool_use":
 			tools = append(tools, protocol.Message{
 				Role: "assistant", Kind: "tool_call", ToolName: b.Name,
@@ -310,7 +319,7 @@ func claudeContent(raw json.RawMessage) (texts []string, tools []protocol.Messag
 		case "tool_result":
 			out := string(b.Content)
 			if len(b.Content) > 0 && b.Content[0] == '[' {
-				inner, _, _ := claudeContent(b.Content)
+				inner, _, _, _ := claudeContent(b.Content)
 				out = strings.Join(inner, "\n")
 			} else {
 				var s string

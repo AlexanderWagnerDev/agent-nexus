@@ -168,6 +168,22 @@ const de = {
     'Der Host konnte dieses Transkript nicht lesen.',
   'Load earlier messages': 'Frühere Nachrichten laden',
   'Transcript unavailable': 'Transkript nicht verfügbar',
+  'Transcript detail': 'Transkript-Detailgrad',
+  'Choose how much of the agent transcript is shown in chats and session transcripts. Stored on this device.':
+    'Wähle, wie viel vom Agenten-Transkript in Chats und Session-Transkripten angezeigt wird. Wird auf diesem Gerät gespeichert.',
+  'Detail level': 'Detailgrad',
+  'Chat only': 'Nur Chat',
+  'Only your prompts and the agent replies.':
+    'Nur deine Prompts und die Antworten des Agenten.',
+  'Normal': 'Normal',
+  'Reasoning and tool calls stay collapsed.':
+    'Denkprozess und Tool-Aufrufe bleiben eingeklappt.',
+  'Full': 'Alles',
+  'Reasoning, tool output and raw agent input are expanded.':
+    'Denkprozess, Tool-Ausgaben und Roh-Eingaben des Agenten sind ausgeklappt.',
+  'Transcript detail saved': 'Transkript-Detailgrad gespeichert',
+  'Write lease reclaimed. Send the message again.':
+    'Schreib-Lease zurückgeholt. Sende die Nachricht erneut.',
 
   // projects
   'Search projects…': 'Projekte durchsuchen…',
