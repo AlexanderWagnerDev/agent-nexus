@@ -4,6 +4,14 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Windows: the host task detaches from its console instead of only hiding the
+  window. The Task Scheduler logon trigger could create the console before the
+  desktop was ready, leaving a `nexusd` window visible at logon.
+
 ## [0.1.13] - 2026-11-17
 
 ### Added
