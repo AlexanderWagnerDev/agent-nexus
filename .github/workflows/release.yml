@@ -66,7 +66,7 @@ jobs:
             echo "Created and pushed the tag $TAG at $GITHUB_SHA."
           fi
           git checkout --detach "refs/tags/$TAG"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: go.mod
           cache: true
