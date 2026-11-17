@@ -20,12 +20,15 @@ var agentSpecs = []agentSpec{
 	{name: "opencode", binary: "opencode", capabilities: []string{"terminal", "discovery", "transcript"}},
 	{name: "commandcode", binary: "command-code", capabilities: []string{"terminal", "discovery", "transcript"}},
 	{name: "gemini", binary: "gemini", capabilities: []string{"terminal", "discovery"}},
+	{name: "cursor", binary: "cursor-agent", capabilities: []string{"terminal", "discovery", "transcript"}},
+	{name: "devin", binary: "devin", capabilities: []string{"terminal", "discovery", "transcript"}},
 }
 
 // DetectAdapters returns one adapter per installed agent. Unknown agents are
 // ignored instead of failing the daemon.
 func DetectAdapters(logger *slog.Logger) []Adapter {
 	var out []Adapter
+	detected := map[string]bool{}
 	for _, spec := range agentSpecs {
 		path, err := exec.LookPath(spec.binary)
 		if err != nil && spec.name == "commandcode" {
@@ -50,8 +53,28 @@ func DetectAdapters(logger *slog.Logger) []Adapter {
 			out = append(out, NewCommandCodeAdapter(path))
 		case "gemini":
 			out = append(out, NewGeminiAdapter(path))
+		case "cursor":
+			out = append(out, NewCursorAdapter(path))
+		case "devin":
+			out = append(out, NewDevinAdapter(path))
 		}
+		detected[spec.name] = true
 		logger.Info("agent detected", "agent", spec.name, "path", path)
+	}
+	// Cursor and Devin Desktop keep their transcript/session stores even when
+	// the CLI is not on PATH. Discovery and transcripts still work; the agents
+	// stay out of the new-session picker until their CLI is installed.
+	if !detected["cursor"] {
+		if adapter := NewCursorAdapter(""); adapter.storeExists() {
+			out = append(out, adapter)
+			logger.Info("agent store detected", "agent", "cursor", "path", adapter.root)
+		}
+	}
+	if !detected["devin"] {
+		if adapter := NewDevinAdapter(""); adapter.storeExists() {
+			out = append(out, adapter)
+			logger.Info("agent store detected", "agent", "devin", "path", adapter.db)
+		}
 	}
 	return out
 }

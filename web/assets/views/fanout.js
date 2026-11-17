@@ -6,7 +6,7 @@ import { badge, toast } from '../ui.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 
-const AGENTS = ['codex', 'opencode', 'claude', 'gemini'];
+const AGENTS = ['codex', 'opencode', 'claude', 'gemini', 'cursor', 'devin'];
 
 function targetRow(target, hosts) {
   return `<div class="fanout-target" data-target>

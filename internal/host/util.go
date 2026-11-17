@@ -3,6 +3,7 @@ package host
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -127,6 +128,32 @@ func sliceContains(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func sqliteTableExists(db *sql.DB, table string) bool {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+func sqliteTableColumns(db *sql.DB, table string) map[string]bool {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey) == nil {
+			columns[name] = true
+		}
+	}
+	return columns
 }
 
 // fileURI renders a local path as a standards-compliant file URL. Windows

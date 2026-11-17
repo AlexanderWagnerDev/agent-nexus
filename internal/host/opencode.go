@@ -158,11 +158,7 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 }
 
 func (a *OpenCodeAdapter) tableExists(db *sql.DB, table string) bool {
-	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
-		return false
-	}
-	return n > 0
+	return sqliteTableExists(db, table)
 }
 
 type opencodeMessage struct {

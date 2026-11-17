@@ -153,7 +153,7 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 	}
 	adapters := DetectAdapters(discardLogger())
 	if len(adapters) == 0 {
-		fmt.Fprintln(out, "agents:     none detected (claude, codex, opencode, commandcode, gemini)")
+		fmt.Fprintln(out, "agents:     none detected (claude, codex, opencode, commandcode, gemini, cursor, devin)")
 		issues++
 	}
 	for _, a := range adapters {
@@ -165,7 +165,11 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 		}
 		fmt.Fprintf(out, "agent %-11s %s (%s)\n", a.Name(), info.Version, info.Path)
 		if !info.Supported {
-			fmt.Fprintf(out, "             store not found; discovery disabled\n")
+			if sliceContains(info.Capabilities, "discovery") {
+				fmt.Fprintln(out, "             CLI not installed; session discovery only")
+			} else {
+				fmt.Fprintln(out, "             store not found; discovery disabled")
+			}
 		}
 		if tested, recognized := CheckAgentVersion(a.Name(), info.Version); recognized && !tested {
 			fmt.Fprintln(out, "             WARNING version is outside the tested range; structured mode is disabled unless allow_untested_agent_versions is set")

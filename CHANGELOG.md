@@ -4,6 +4,34 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Cursor adapter: discovers agent transcripts under
+  `~/.cursor/projects/*/agent-transcripts`, renders transcripts and search hits,
+  resumes with `cursor-agent --resume <id>` and uses ACP through
+  `cursor-agent acp` when the binary is on `PATH`. Cursor does not record a
+  reliable workspace path in every transcript, so the adapter recovers it from
+  terminal metadata and marks folder-name fallbacks. Cursor desktop stores are
+  discovered read-only even when the CLI is not on `PATH`.
+- Devin CLI and Devin Desktop adapter: reads the shared SQLite session store
+  (`%APPDATA%\devin\cli\sessions.db` on Windows,
+  `$XDG_DATA_HOME/devin/cli/sessions.db` elsewhere), follows the active
+  `message_nodes` chain, renders reasoning/tool calls/results, resumes with
+  `devin --resume <id>` and uses ACP through `devin acp`. Devin Desktop shares
+  the CLI session store and is discovered without the CLI as well.
+- Web: Cursor and Devin brand marks, labels and glyph colours in the agent
+  lists, session/usage filters and fan-out targets.
+- Web: a transcript detail setting (chat, normal, full); full mode shows
+  reasoning blocks for OpenCode legacy, Claude and Codex.
+- Web: session transcripts refresh from the host without a manual page reload.
+
+### Changed
+
+- Session detail joins an existing writable chat instead of offering a
+  read-only transcript, and reclaims the write lease before each prompt.
+
 ## [0.1.11] - 2026-11-17
 
 ### Changed

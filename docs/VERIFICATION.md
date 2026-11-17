@@ -36,6 +36,8 @@ request for the maintainer to perform tests personally.
 | CLI | Real local hub login, `sessions` and `logout`; build passed for Windows locally and all targets in CI |
 | OpenCode 2.2.7 protocol | Read-only SQLite schema and `/openapi.json` inspected on a local 2.2.7 install; native session create/interrupt and fork contract exercised without a paid model turn; daily driver tests use a fake HTTP server |
 | Command Code 1.89.1 adapter | Detected on Windows 11; 21 real local sessions discovered, a 125-part transcript parsed and search hits returned; the committed JSONL fixture covers user/assistant text, reasoning, tool calls and paired tool results. ACP (`command-code acp`) is wired but not exercised against a real account. |
+| Cursor adapter | 67 real local main transcripts discovered on Windows 11; working directories recovered from terminal transcripts, titles and message counts parsed, and transcript/search returned hits. Subagent transcripts are excluded. `cursor-agent` was not installed, so terminal resume and ACP are not real-tested. |
+| Devin CLI 3000.13.4 adapter | Official binary inspected in a temporary directory; the SQLite schema (`sessions` + `message_nodes`, `main_chain_id`, `hidden`), the ACP `initialize` handshake and the advertised `session/list` capability were verified. No authenticated Devin session was available, so the transcript reader is fixture-tested and terminal/structured runs are not real-tested. |
 | Live Windows host update | The new on-demand `AgentNexus Host Update` task replaced the installed `nexusd.exe` on a real per-user Task Scheduler, restarted it and verified `runtime.json` (0.1.4); the rollback path remains fixture-tested. |
 | Audit round 2026-11-13 | New regression tests for MCP bearer clients without the browser marker, search `not_searched` semantics, atomic first-run setup, bounded rate-limit maps, hidden approvals on finished runs, admin queue pause, activity grouping by `updated_at`, FTS pruning of deleted sessions, adapter native-ID validation, Codex JSON-RPC request/response separation, ACP failed-turn state, replay coalescing and updater token scoping pass locally |
 | Audit round 2026-11-14 | Hardening round with new regression tests: stale runs and their sessions are closed after a hub restart and re-adopted when a host reports them, finished run buffers are released, host broadcasts respect grants, viewers cannot write through a grant, run-scoped prompt text is not broadcast to other users, `terminal_input`/`approve` are enforced, queue attachments fit the body/WS limits, `X-Forwarded-For` is ignored from public peers, run-ID traversal is rejected before an attachment path is built, structured mode enforces the tested version band, Codex approvals resolve and time out, pty runs end on Unix, a healthy first start after an update is not counted as a failure, interrupted installs do not block a release, and rollbacks block the version. `go test ./...`, `go vet ./...`, `npm test`, the expanded i18n/module-import checks, the Playwright smoke test and the 10k-session virtual test pass locally; CI provides the Linux/macOS/race results |
@@ -57,7 +59,9 @@ request for the maintainer to perform tests personally.
 
 - Three real Windows hosts through Portainer, a real browser over the public
   internet, a real host disconnect and a real hub process restart.
-- Real Claude Code and Gemini CLI sessions. Neither CLI is installed.
+- Real Claude Code, Gemini CLI and Cursor Agent sessions. None of those CLIs is
+  installed; Cursor desktop transcripts were exercised read-only, and no
+  authenticated Devin session was available.
 - A real Command Code ACP session. The CLI and 21 local JSONL sessions were
   exercised read-only; starting an ACP turn would use the signed-in account.
 - A real OpenCode 1.x CLI. Its store layout is covered by the adapter's tolerant

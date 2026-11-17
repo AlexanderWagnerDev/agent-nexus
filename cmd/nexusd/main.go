@@ -281,7 +281,7 @@ func acpCmd(args []string) {
 		for name, cmd := range cfg.ACPCommands {
 			fmt.Printf("%-9s %s\n", name, cmd)
 		}
-		for _, name := range []string{"claude", "commandcode"} {
+		for _, name := range []string{"claude", "commandcode", "cursor", "devin"} {
 			if detected := cfg.ACPCommand(name); detected != "" && cfg.ACPCommands[name] == "" {
 				fmt.Printf("%-9s %s (auto-detected)\n", name, detected)
 			}

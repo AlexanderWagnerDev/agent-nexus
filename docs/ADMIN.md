@@ -107,6 +107,8 @@ allowed agent are indexed. The file contains transcript text, is created with
 | Command Code | JSONL projects | `command-code --resume <id>` | ACP via `command-code acp` |
 | Claude Code | JSONL projects | `claude --resume <id>` | ACP adapter (optional) |
 | Gemini CLI | best effort | `gemini --resume <id>` | ACP via `gemini --acp` (fake-tested, not real-tested) |
+| Cursor | agent transcripts | `cursor-agent --resume <id>` | ACP via `cursor-agent acp` |
+| Devin CLI / Desktop | SQLite sessions.db | `devin --resume <id>` | ACP via `devin acp` |
 | Other ACP agents | adapter-dependent | configured command | `nexusd acp` |
 
 Native resume uses the original session ID and the agent's own store/context.

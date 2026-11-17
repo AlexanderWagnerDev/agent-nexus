@@ -64,6 +64,32 @@ func TestACPCommandAutoDetectsCommandCode(t *testing.T) {
 	}
 }
 
+func TestACPCommandAutoDetectsCursorAndDevin(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"cursor-agent", "devin"} {
+		if runtime.GOOS == "windows" {
+			name += ".cmd"
+		}
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("@echo off\r\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, agent := range []string{"cursor", "devin"} {
+		got := (Config{}).ACPCommand(agent)
+		if !strings.Contains(got, "acp") {
+			t.Fatalf("%s ACP command = %q", agent, got)
+		}
+		if agent == "cursor" && !strings.Contains(got, "cursor-agent") {
+			t.Fatalf("cursor ACP command = %q", got)
+		}
+		if agent == "devin" && !strings.Contains(got, "devin") {
+			t.Fatalf("devin ACP command = %q", got)
+		}
+	}
+}
+
 func TestSplitCommandLine(t *testing.T) {
 	got := splitCommandLine(`"C:\Program Files\ACP\adapter.exe" --stdio`)
 	want := []string{`C:\Program Files\ACP\adapter.exe`, "--stdio"}

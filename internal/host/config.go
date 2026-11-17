@@ -233,6 +233,16 @@ func (c Config) ACPCommand(agent string) string {
 			}
 		}
 	}
+	if agent == "cursor" {
+		if path, err := exec.LookPath("cursor-agent"); err == nil {
+			return `"` + path + `" acp`
+		}
+	}
+	if agent == "devin" {
+		if path, err := exec.LookPath("devin"); err == nil {
+			return `"` + path + `" acp`
+		}
+	}
 	return ""
 }
 

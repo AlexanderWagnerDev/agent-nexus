@@ -57,7 +57,7 @@ export async function pageUsage() {
     [t('Reported cost (USD)'), money(summary.cost_usd, summary.cost_runs)],
     [t('Runs with usage'), `${summary.runs_with_usage || 0} / ${summary.runs || 0}`],
   ];
-  const agentOptions = ['', 'claude', 'codex', 'opencode', 'gemini'];
+  const agentOptions = ['', 'claude', 'codex', 'opencode', 'gemini', 'cursor', 'devin'];
   view.innerHTML = `
     <div class="filterbar">
       <label class="label-inline">${t('Period')}<select class="select" id="usage-period">

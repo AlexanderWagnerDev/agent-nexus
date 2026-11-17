@@ -37,6 +37,8 @@ Technical analysis of how AgentNexus discovers existing sessions of each coding 
 
 **Key insight:** All three first-release agents support resuming by native session ID from the command line. This makes **terminal mode** (ADR-003) a robust, vendor-neutral baseline for native continuation that does not depend on any experimental protocol. Structured mode adds a richer UI but relies on interfaces that are partly experimental — hence it is layered on top, not the foundation.
 
+Cursor and Devin CLI/Desktop are covered in [§8.1](#81-cursor) and [§8.2](#82-devin-cli-and-devin-desktop).
+
 ### 1.1 Implementation notes (0.2.0-dev)
 
 Observed against local stores on Windows (2026-11-10), in addition to the
@@ -351,6 +353,7 @@ The [Agent Client Protocol](https://agentclientprotocol.com) (ACP) standardizes 
 | GitHub Copilot CLI | `copilot --acp` |
 | goose | `goose acp` |
 | Cursor | `cursor-agent acp` |
+| Devin CLI | `devin acp` |
 | Qwen Code | `qwen --acp …` |
 | Kilo, Junie, Mistral Vibe, Kimi, Cline, … | various |
 
@@ -376,12 +379,28 @@ Generic adapter behavior:
 
 **Aider** (no ACP, no session IDs; chat history in `.aider.chat.history.md` per repository, `--restore-chat-history`): terminal mode only, through a custom command template; discovery of history files inside allowed roots is a *Could*.
 
+### 8.1 Cursor
+
+- Storage: `~/.cursor/projects/<encoded-workspace>/agent-transcripts/<session-id>/<session-id>.jsonl`. Each line is a `role` plus `message.content` blocks (`text`, `tool_use`, and occasionally `thinking`). Subagent transcripts live under `<session>/subagents/` and are deliberately not exposed as sessions.
+- Working directory: Cursor encodes the workspace path into the project folder name, replacing separators and hyphens with the same character. The adapter therefore reads the real `cwd` from a terminal transcript (`terminals/*.txt`) when one exists and falls back to decoding the folder name with a visible warning. Paths containing hyphens can be decoded incorrectly.
+- Resume/new: `cursor-agent --resume <id>` and `cursor-agent`. No documented terminal fork command.
+- Structured: `cursor-agent acp` through the generic ACP driver. It is auto-detected when `cursor-agent` is on `PATH`; the current Cursor documentation also calls the binary `agent`, so operators can configure that name explicitly with `nexusd acp --agent cursor --command "agent acp"`.
+- Implementation status: discovery, transcript and search were exercised against a real local Cursor desktop store on Windows 11. The store is discovered even when `cursor-agent` is not on `PATH`, but the agent then stays out of the new-session picker and terminal resume/ACP are unavailable. The `cursor-agent` binary was not installed, so those paths are documented but not real-tested.
+
+### 8.2 Devin CLI and Devin Desktop
+
+- Storage: SQLite `sessions.db`, by default `%APPDATA%\devin\cli\sessions.db` on Windows and `$XDG_DATA_HOME/devin/cli/sessions.db` (or `~/.local/share/devin/cli/sessions.db`) elsewhere. Air-gapped federal builds use `cli-federal`; the adapter checks both channels. Devin Desktop bundles the CLI and shares the same session store.
+- Schema: `sessions` holds `working_directory`, `created_at`, `last_activity_at`, `title`, `hidden` and `main_chain_id`; `message_nodes` stores a message forest as `chat_message` JSON. The adapter follows the active chain from `main_chain_id` and falls back to all nodes when the head is missing. Session titles come from `sessions.title`, then `prompt_history`, then the first user message.
+- Resume/new: `devin --resume <id>` and `devin`. No documented terminal fork command.
+- Structured: `devin acp`. The ACP `initialize` handshake (including `loadSession` and `session/list` capabilities) was verified against Devin CLI 3000.13.4.
+- Implementation status: the schema and ACP handshake were verified against the official binary, and the transcript reader is fixture-tested. A Devin Desktop session store is discovered without the CLI, but the agent then stays out of the new-session picker. No authenticated Devin session was available in the test environment, so terminal resume and structured runs are not real-tested.
+
 ## 9. Support tiers
 
 | Tier | Agents | Guarantees |
 | --- | --- | --- |
 | **Tier 1** | Claude Code, Codex CLI, OpenCode | Discovery, transcript, terminal resume/new/fork, structured mode, approvals, live state; contract tests on every PR and nightly; supported version ranges published. |
-| **Tier 2** | Gemini CLI, selected ACP agents (decided in Q-04) | Discovery where the agent allows it, terminal resume, ACP structured mode; nightly contract tests. |
+| **Tier 2** | Gemini CLI, Cursor, Devin CLI/Desktop, selected ACP agents (decided in Q-04) | Discovery where the agent allows it, terminal resume, ACP structured mode; adapter unit/fixture tests, nightly contract tests where available. |
 | **Tier 3** | Any ACP agent or custom command | Best effort, capability-driven, no contract tests by the project. |
 
 ## 10. Concurrency and "active elsewhere" detection
