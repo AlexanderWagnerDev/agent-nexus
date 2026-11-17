@@ -240,7 +240,8 @@ backup.
   published on 2026-11-15; v0.1.1 was published on 2026-11-15, v0.1.2 on
   2026-11-16, v0.1.3 on 2026-11-16, v0.1.4 on 2026-11-16, v0.1.5 on 2026-11-16,
   v0.1.6 on 2026-11-16, v0.1.7 was withdrawn, v0.1.8 on 2026-11-16, v0.1.9 on
-  2026-11-17, v0.1.10 on 2026-11-17, and v0.1.11 is the current release.
+  2026-11-17, v0.1.10 on 2026-11-17, v0.1.11 on 2026-11-17, and v0.1.12 is the
+  current release.
 
 ## Troubleshooting
 

@@ -4,7 +4,7 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.12] - 2026-11-17
 
 ### Added
 
@@ -239,6 +239,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.12]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.12
 [0.1.11]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.11
 [0.1.10]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10
 [0.1.9]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.9
