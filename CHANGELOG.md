@@ -6,6 +6,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- OpenCode API contract test and `Agent contracts` workflow: starts a real
+  `opencode serve` for 2.0.0, 2.1.0, 2.2.0 and 2.3.0, checks the session,
+  prompt, event, interrupt, permission and fork endpoints, and exercises the
+  OpenCode 2.0 fork-boundary fallback.
+- CI runs the Go test suite on Linux, Windows and macOS, adds a fuzz smoke job
+  for every fuzz target, and `scripts/test-all.ps1` runs the same quality gates
+  locally (core, `-Full` with race and fuzzing, `-E2E` with Playwright).
+
+### Changed
+
+- OpenCode structured mode now starts with the v2 API in 2.0.0 instead of
+  2.2.0; OpenCode 2.0 requires a `through` fork boundary, which the driver sends
+  as a fallback when the server rejects an empty body. OpenCode 1.x remains
+  terminal/discovery/transcript-only.
+
 ### Fixed
 
 - Windows host updates no longer fail when the scheduled task has already

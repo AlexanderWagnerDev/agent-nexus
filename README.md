@@ -109,7 +109,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | **Search** | Federated transcript search across online hosts with a host-local FTS5 index (BM25 ranking, snippets), adapter fallback while indexing and agent/host filters; offline hosts are reported, not silently skipped |
 | **Session browse** | Server-side sort (`updated`, `created`, `title`, `messages`), order, RFC 3339 `since`/`until`, 24 h/7 d/30 d/custom UI filters and a tag filter; filter state lives in the URL, and a windowed virtual list renders only visible rows with automatic page loading (tested with 10,000 sessions) |
 | **Terminal mode** | Resume an existing native session, start a new one, or fork where the agent supports it; PTY/ConPTY streamed to xterm.js; stopping a run terminates the whole process tree (Unix process group, Windows Job Object with a suspended-start handshake); a bounded 1 MiB per-run ring buffer replays output after a hub outage |
-| **Structured mode** | OpenCode 2.2.x (including native forks), Codex, and any ACP adapter (Command Code, Claude, Gemini, Cursor, Devin, or a custom command), with the same chat experience |
+| **Structured mode** | OpenCode 2.0+ (including native forks; 2.0 uses the fork-boundary fallback), Codex, and any ACP adapter (Command Code, Claude, Gemini, Cursor, Devin, or a custom command), with the same chat experience |
 | **Notifications** | In-app history with read state, host and agent filters, plus content-free Web Push for approvals, completion, failures and disconnects; push categories can be switched off per user and overridden per host without losing inbox events |
 | **Reconnects** | Jittered browser backoff, hub-epoch detection after restart, buffered events during history load and replay of missed run events; terminal output is replayed from a bounded host buffer. A hub restart drops in-memory approval cards and structured event history; the transcript is re-read from the native store and a pending approval default-denies after the adapter timeout |
 | **Git review** | Read-only branch, status, diff stat and rendered diff in a session's working tree, executed on the host; includes staged and unstaged tracked changes plus new/deleted files in the status, bounds large output with visible truncation, and opens a full-width changes page with unified and split layouts; the chat details panel refreshes the working tree every five seconds while a run is active and refreshes once more when it goes idle, without flicker or discarding a readable diff on a transient host error |
@@ -128,7 +128,7 @@ More views: [split workspace](docs/screenshots/workspace-dark.png),
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | ✅ JSONL store | ✅ | ✅ `claude --resume <id>` | ✅ via ACP adapter (`claude-agent-acp`) | ✅ | ✅ `--fork-session` |
 | Codex CLI | ✅ rollouts (`.jsonl`, `.jsonl.zst`) | ✅ | ✅ `codex resume <id>` | ✅ implemented (`app-server`) | ✅ | ✅ `codex fork <id>`; structured `thread/fork` |
-| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ 2.2+ (`serve`); earlier versions terminal/discovery/transcript only | ✅ | ✅ structured 2.2+ (`POST /api/session/{id}/fork`); no terminal fork |
+| OpenCode | ✅ SQLite store (v1 + v2) | ✅ | ✅ `opencode --session <id>` | ✅ 2.0+ (`serve`); 1.x terminal/discovery/transcript only | ✅ | ✅ structured 2.0+ (`POST /api/session/{id}/fork`); no terminal fork |
 | Command Code | ✅ JSONL projects (`~/.commandcode/projects`) | ✅ | ✅ `command-code --resume <id>` | ⚠️ ACP via `command-code acp` (implemented, not real-tested) | ✅ | ✅ `--resume <id> --fork-session` |
 | Gemini CLI | ⚠️ best effort | ⚠️ best effort | ✅ `gemini --resume <id>` | ⚠️ ACP via `gemini --acp` (fake-tested, not real-tested) | ✅ | ❌ |
 | Cursor | ✅ transcripts (`~/.cursor/projects/*/agent-transcripts`) | ✅ | ✅ `cursor-agent --resume <id>` | ⚠️ ACP via `cursor-agent acp` (implemented, not real-tested) | ✅ | ❌ |
@@ -142,7 +142,7 @@ mode keeps working; `allow_untested_agent_versions` overrides this and is
 audited. Unknown versions and agents without a band (Cursor, Devin) are warned
 about but not disabled.
 
-Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex CLI 0.156.1, OpenCode 2.2.7 and Command Code 1.89.1 were exercised against real local stores on Windows 11; the Command Code adapter also has a committed JSONL fixture test. OpenCode 1.x is supported for terminal, discovery and transcript; structured mode requires 2.2+. Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Cursor discovery, transcript and search were exercised against a real local `~/.cursor/projects` store on Windows 11; the Cursor desktop store is discovered even when the CLI is not on `PATH`, but the `cursor-agent` binary was not installed, so terminal resume and ACP are documented but not real-tested. Devin CLI 3000.13.4 was inspected in a temporary directory: the SQLite schema and ACP `initialize` handshake were verified, but no authenticated session was available, so its transcript reader is fixture-tested and terminal/structured runs are not real-tested. A Devin Desktop session store is discovered without the CLI; the agent then stays out of the new-session picker. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
+Claude Code discovery/transcript code is fixture-tested; the Claude CLI and adapter were **not installed** in the test environment, so the Claude ACP path is not proven against a real Claude session. Codex CLI 0.156.1, OpenCode 2.2.7 and Command Code 1.89.1 were exercised against real local stores on Windows 11; the Command Code adapter also has a committed JSONL fixture test. OpenCode 1.x is supported for terminal, discovery and transcript; structured mode requires the v2 API in 2.0+. OpenCode 2.0.0, 2.1.0 and 2.2.0 `serve` contracts were compared from their OpenAPI documents, and 2.0's required fork boundary is covered by a retry with `{"boundary":{"type":"through"}}`. Linux and macOS CI runs build and unit-test the code but no real agent session was run there. Gemini CLI is not installed in the test environment; its ACP path is the generic ACP driver with an explicit `nexusd acp --agent gemini --command "gemini --acp"` configuration and is not verified against a real Gemini version. Cursor discovery, transcript and search were exercised against a real local `~/.cursor/projects` store on Windows 11; the Cursor desktop store is discovered even when the CLI is not on `PATH`, but the `cursor-agent` binary was not installed, so terminal resume and ACP are documented but not real-tested. Devin CLI 3000.13.4 was inspected in a temporary directory: the SQLite schema and ACP `initialize` handshake were verified, but no authenticated session was available, so its transcript reader is fixture-tested and terminal/structured runs are not real-tested. A Devin Desktop session store is discovered without the CLI; the agent then stays out of the new-session picker. Agent formats change often — treat them as pinned-by-tests, not permanent contracts.
 
 ## Quick start
 
@@ -300,6 +300,12 @@ go vet ./...
 cd web && npm test          # Markdown and diff unit tests
 E2E_SPAWN_HUB=1 npm run e2e # disposable hub + browser smoke test
 
+# Windows: all local gates (core, -Full adds race/fuzz, -E2E adds Playwright)
+.\scripts\test-all.ps1
+
+# OpenCode API contract against a downloaded CLI
+OPENCODE_BIN=/path/to/opencode go test ./internal/host -run TestOpenCodeAPIContract -v
+
 # axe-core WCAG 2.2 A/AA scan against a running hub (desktop and mobile):
 BASE_URL=http://127.0.0.1:8788 npm run e2e:a11y
 
@@ -307,8 +313,10 @@ BASE_URL=http://127.0.0.1:8788 npm run e2e:a11y
 BASE_URL=http://127.0.0.1:8788 RUN_ID=<run-id> npm run e2e:live
 ```
 
-The live check requires a real OpenCode or Codex run and is intentionally not
-part of CI. Large-store benchmarks:
+CI runs the Go suite on Linux, Windows and macOS, plus race, staticcheck,
+govulncheck, actionlint, browser E2E, a fuzz smoke job and the OpenCode
+2.0/2.1/2.2/2.3 API contract. The live check requires a real OpenCode or Codex
+run and is intentionally not part of CI. Large-store benchmarks:
 
 ```bash
 go test ./internal/hub -run '^$' -bench 'Benchmark(Replace|List)Session' -benchtime=1x

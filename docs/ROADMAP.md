@@ -75,7 +75,7 @@ maintainer decision.
 | 1 | 🟡 core | Setup, WebAuthn passkeys, Argon2id + optional TOTP, sessions, device revocation, Ed25519 pairing with SAS confirmation, five-minute step-up confirmation for sensitive actions, outbound link, reconnect, agent detection, per-user services (systemd/launchd/Task Scheduler), `doctor` | Windows Server 2025 not available for testing; no NSSM option |
 | 2 | 🟡 core | Claude/Codex/OpenCode discovery, paged transcripts, federated search (including Gemini full-text) with a host-local FTS5 cache, index progress in the UI, `nexusd index rebuild`, best-effort native-process detection, fail-soft parsers | Adapter-driven 10k-session initial-index measurement, per-version fixture matrix |
 | 3 | ✅ MVP | PTY/ConPTY terminal resume, new session, per-agent command builders, controller lease, stop with process-tree termination, host policy, audit log, Docker/compose | Full test matrix per agent and OS, WSL test |
-| 4 | ✅ partial | OpenCode 2.2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
+| 4 | ✅ partial | OpenCode 2.x and Codex structured modes (text, reasoning, tool cards, interrupt, live model/reasoning/agent selection, bounded attachments), native OpenCode/Codex/ACP forks, session parent/fork tree, generic ACP adapters (Claude Code via `claude-agent-acp`), approval broker with timeout, Web Push and an in-app notification inbox with host/agent filters, transcript export (Markdown/JSON), projects with cross-host repository grouping, favorites, session tabs, command palette, control room, two-pane split workspace, review-grade unified/side-by-side diffs, searchable model picker, capability-negotiated session delta sync, buffered reconnect replay, read-only Git context panel, redesigned chat/composer, PWA manifest/service worker/icons, mobile layout review, automated axe-core WCAG scan | Claude ACP path not exercised against a real Claude session; ACP controls are fake-tested only; real OpenCode model turn not run |
 | 5 | 🟡 partial | Owner/admin/member/viewer roles, per-host grants, user management, hash-chained audit, rate limits, security headers, GoReleaser/cosign/SBOM pipeline, multi-arch GHCR image, Portainer stack; tasks with dependencies and delegation; host health/detail; diagnostics and redacted export; run limits; run error codes; opt-in device-signed commands with replay protection | PostgreSQL, actual signing credentials, host-side device command verification |
 | 6 | 🟡 partial | Best-effort Gemini discovery/resume; read-only git status/diff; generic ACP agent adapters | Native apps |
 
@@ -120,9 +120,11 @@ Codex CLI 0.156.1 and OpenCode 2.2.7 are installed. The Codex app-server schema
 was generated and `thread/fork`/`thread/resume` are present; the structured
 driver is fake-agent tested. OpenCode 2.2.7 was inspected against its live
 SQLite schema and `/openapi.json`: session create, prompt, SSE, permission,
-interrupt and native fork paths are implemented, and the tested structured band
-is now `>= 2.2.0 < 3.0.0`. No paid model turn was sent; the fork contract was
-exercised only up to OpenCode's documented "cannot fork empty session" response.
+interrupt and native fork paths are implemented. A later contract check started
+OpenCode 2.0.0, 2.1.0 and 2.2.0 `serve` and confirmed the same required paths;
+the structured band is `>= 2.0.0 < 3.0.0`, with a `through` fork-boundary
+fallback for 2.0. No paid model turn was sent; the fork contract was exercised
+only up to OpenCode's documented "cannot fork empty session" response.
 Claude Code and Gemini CLI are not installed.
 
 ### P0e: task orchestration (2026-11-12)

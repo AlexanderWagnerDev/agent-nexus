@@ -22,6 +22,10 @@ func TestStructuredVersionBandIsEnforcedOnRunStart(t *testing.T) {
 		t.Fatalf("explicit override was ignored: %v", err)
 	}
 	d.cfg.AllowUntestedAgentVersions = false
+	d.rememberAgentVersion("opencode", "2.0.0")
+	if err := d.checkStructuredVersion(context.Background(), "opencode"); err != nil {
+		t.Fatalf("OpenCode 2.0 rejected: %v", err)
+	}
 	d.rememberAgentVersion("opencode", "2.2.7")
 	if err := d.checkStructuredVersion(context.Background(), "opencode"); err != nil {
 		t.Fatalf("tested version rejected: %v", err)

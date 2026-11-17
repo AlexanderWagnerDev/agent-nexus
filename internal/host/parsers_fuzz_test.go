@@ -54,3 +54,23 @@ func FuzzCodexRequestID(f *testing.F) {
 		_, _ = parseRequestID(id)
 	})
 }
+
+func FuzzDevinText(f *testing.F) {
+	f.Add([]byte(`"plain"`))
+	f.Add([]byte(`[{"type":"text","text":"one"}]`))
+	f.Add([]byte(`{"content":"three"}`))
+	f.Add([]byte(`{bad`))
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		_ = devinText(json.RawMessage(raw))
+		_ = devinToolCalls(json.RawMessage(raw))
+	})
+}
+
+func FuzzCursorUserText(f *testing.F) {
+	f.Add("<timestamp>Monday</timestamp>\n<user_query>hello</user_query>")
+	f.Add("plain prompt")
+	f.Add("")
+	f.Fuzz(func(t *testing.T, text string) {
+		_ = cursorUserText(text)
+	})
+}

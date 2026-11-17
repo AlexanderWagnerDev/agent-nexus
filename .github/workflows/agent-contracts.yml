@@ -1,0 +1,56 @@
+name: Agent contracts
+
+# The OpenCode structured driver depends on the v2 HTTP API. Version bands are
+# only useful when the API contract is checked against real releases, so this
+# workflow starts `opencode serve` for every supported minor line and verifies
+# the endpoints AgentNexus uses. It also covers the 2.0 fork-boundary fallback.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 3 * * *"
+  pull_request:
+    paths:
+      - "internal/host/opencode_contract_test.go"
+      - "internal/host/opencode.go"
+      - "internal/host/opencode_service.go"
+      - "internal/host/structured.go"
+      - "internal/host/versions.go"
+      - ".github/workflows/agent-contracts.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  opencode-api:
+    name: OpenCode ${{ matrix.version }} API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["2.0.0", "2.1.0", "2.2.0", "2.3.0"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 26
+      - name: Install OpenCode ${{ matrix.version }}
+        env:
+          VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/opencode"
+          npm install --prefix "$prefix" --no-audit --no-fund "@opencode/cli@$VERSION"
+          test -x "$prefix/node_modules/.bin/opencode"
+      - name: Run API contract
+        env:
+          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+        run: go test ./internal/host -run TestOpenCodeAPIContract -count=1 -v

@@ -447,10 +447,21 @@ func (r *StructuredRun) forkSession(sourceID string) (string, error) {
 	if strings.TrimSpace(sourceID) == "" {
 		return "", errors.New("source session id is required")
 	}
-	raw, _, err := r.request(context.Background(), http.MethodPost,
+	raw, status, err := r.request(context.Background(), http.MethodPost,
 		"/api/session/"+url.PathEscape(sourceID)+"/fork", map[string]any{})
 	if err != nil {
-		return "", err
+		// OpenCode 2.0 requires a fork boundary; 2.1 and newer made it optional.
+		// "through" is an unbounded fork at the current head, which matches the
+		// driver's semantics for every other version.
+		if status != http.StatusBadRequest || !strings.Contains(string(raw), "boundary") {
+			return "", err
+		}
+		raw, _, err = r.request(context.Background(), http.MethodPost,
+			"/api/session/"+url.PathEscape(sourceID)+"/fork",
+			map[string]any{"boundary": map[string]any{"type": "through"}})
+		if err != nil {
+			return "", err
+		}
 	}
 	var out struct {
 		Data struct {

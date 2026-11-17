@@ -25,6 +25,8 @@ go run ./cmd/nexus-hub --addr 127.0.0.1:8080 --data-dir ./.nexus
   for contributors. Do not add version tags or releases.
 - Keep changes focused and add tests for parser, policy or protocol changes.
 - Run `gofmt`, `go vet ./...` and `go test ./...` before opening a PR.
+  On Windows, `scripts/test-all.ps1` runs the local gates; `-Full` adds race
+  (when a C compiler is available) and the fuzz smoke targets.
 - Update `docs/` when behavior or a design decision changes.
 - Do not add telemetry, cloud dependencies or agent credential handling.
 - Never weaken host policy checks to make a feature easier.

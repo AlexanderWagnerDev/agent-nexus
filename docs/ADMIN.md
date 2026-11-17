@@ -102,7 +102,7 @@ allowed agent are indexed. The file contains transcript text, is created with
 
 | Agent | Discovery | Native terminal resume | Structured mode |
 | --- | --- | --- | --- |
-| OpenCode | SQLite v1/v2 | `opencode --session <id>` | `opencode serve` (2.2+); earlier versions terminal/discovery/transcript only |
+| OpenCode | SQLite v1/v2 | `opencode --session <id>` | `opencode serve` (2.0+); 1.x terminal/discovery/transcript only |
 | Codex CLI | rollout JSONL/JSONL.ZST | `codex resume <id>` | `codex app-server` |
 | Command Code | JSONL projects | `command-code --resume <id>` | ACP via `command-code acp` |
 | Claude Code | JSONL projects | `claude --resume <id>` | ACP adapter (optional) |

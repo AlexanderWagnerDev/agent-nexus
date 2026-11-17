@@ -31,6 +31,43 @@ func newStructuredTestRun(t *testing.T, handler http.HandlerFunc) (*StructuredRu
 	return run, server
 }
 
+func TestOpenCodeForkBoundaryFallback(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	run, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/fork") {
+			http.NotFound(w, r)
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(raw))
+		attempt := len(bodies)
+		mu.Unlock()
+		if attempt == 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"_tag":"InvalidRequestError","message":"Missing key at [\"boundary\"]"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"id":"forked-session"}}`))
+	})
+	id, err := run.forkSession("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "forked-session" {
+		t.Fatalf("fork id: %q", id)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 2 {
+		t.Fatalf("fork attempts: %d (%v)", len(bodies), bodies)
+	}
+	if !strings.Contains(bodies[1], `"boundary":{"type":"through"}`) {
+		t.Fatalf("fallback body: %s", bodies[1])
+	}
+}
+
 func TestOpenCodeStructuredOptions(t *testing.T) {
 	run, _ := newStructuredTestRun(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" {

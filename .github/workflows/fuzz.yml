@@ -28,6 +28,8 @@ jobs:
           - { pkg: ./internal/host, target: FuzzGeminiText }
           - { pkg: ./internal/host, target: FuzzOpenCodeSnippet }
           - { pkg: ./internal/host, target: FuzzCodexRequestID }
+          - { pkg: ./internal/host, target: FuzzDevinText }
+          - { pkg: ./internal/host, target: FuzzCursorUserText }
           - { pkg: ./internal/protocol, target: FuzzEnvelopeDecode }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -26,12 +26,12 @@ type AgentVersionRange struct {
 var agentVersionMatrix = []AgentVersionRange{
 	{Agent: "claude", Min: "2.0.0", Max: "3.0.0", Structured: true},
 	{Agent: "codex", Min: "0.50.0", Max: "1.0.0", Structured: true},
-	// OpenCode before 2.2 is discovered, read and resumed in terminal mode.
-	// The structured HTTP driver targets the 2.2 API (session/prompt, SSE,
-	// permissions, fork); older server APIs are not exercised by it.
-	{Agent: "opencode", Min: "1.0.0", Max: "2.2.0", Structured: false,
-		Note: "OpenCode before 2.2 supports terminal, discovery and transcript; structured mode needs 2.2 or newer."},
-	{Agent: "opencode", Min: "2.2.0", Max: "3.0.0", Structured: true},
+	// OpenCode 1.x sessions are discovered, read and resumed in terminal mode.
+	// The v2 HTTP API starts with OpenCode 2.0; the structured driver supports it
+	// and falls back to the 2.0 fork-boundary payload when needed.
+	{Agent: "opencode", Min: "1.0.0", Max: "2.0.0", Structured: false,
+		Note: "OpenCode 1.x supports terminal, discovery and transcript; structured mode needs the v2 API in 2.0 or newer."},
+	{Agent: "opencode", Min: "2.0.0", Max: "3.0.0", Structured: true},
 	{Agent: "commandcode", Min: "1.0.0", Max: "2.0.0", Structured: true},
 	{Agent: "gemini", Min: "0.1.0", Max: "1.0.0", Structured: true},
 }
