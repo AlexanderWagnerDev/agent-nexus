@@ -153,6 +153,8 @@ code, pre, .mono { font-family: var(--font-mono); }
 .agent-glyph[data-agent="gemini"] { --glyph: #5fb5b5; }
 .agent-glyph[data-agent="copilot"] { --glyph: #9aa3af; }
 .agent-glyph[data-agent="goose"] { --glyph: #b08de0; }
+.agent-glyph[data-agent="devin"] { --glyph: #c9c2b6; }
+.agent-glyph[data-agent="cursor"] { --glyph: #b7bfcc; }
 .agent-glyph[data-agent="agent"] { --glyph: #9aa3af; }
 
 /* ---------- loading ---------- */

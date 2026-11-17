@@ -74,6 +74,8 @@ export const AGENTS = {
   gemini: { label: 'Gemini', short: 'GM' },
   copilot: { label: 'Copilot', short: 'CP' },
   goose: { label: 'Goose', short: 'GO' },
+  devin: { label: 'Devin', short: 'DV' },
+  cursor: { label: 'Cursor', short: 'CU' },
 };
 
 export function agentMeta(agent) {
