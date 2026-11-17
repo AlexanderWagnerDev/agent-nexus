@@ -6,6 +6,15 @@ name: Agent contracts
 # the endpoints AgentNexus uses. It also covers the 2.0 fork-boundary fallback.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "internal/host/opencode_contract_test.go"
+      - "internal/host/opencode.go"
+      - "internal/host/opencode_service.go"
+      - "internal/host/structured.go"
+      - "internal/host/versions.go"
+      - ".github/workflows/agent-contracts.yml"
   schedule:
     - cron: "15 3 * * *"
   pull_request:

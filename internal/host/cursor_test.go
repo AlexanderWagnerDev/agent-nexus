@@ -59,6 +59,15 @@ func cursorFixture(t *testing.T) *CursorAdapter {
 	return &CursorAdapter{bin: "cursor-agent", root: root}
 }
 
+func TestCursorAbsolutePath(t *testing.T) {
+	for _, value := range []string{`C:\Users\demo`, `C:/Users/demo`, `\\server\share\repo`, `/home/demo`, `relative\path`} {
+		want := !strings.HasPrefix(value, "relative")
+		if got := cursorAbsolutePath(value); got != want {
+			t.Errorf("cursorAbsolutePath(%q) = %v, want %v", value, got, want)
+		}
+	}
+}
+
 func TestCursorStoreOnlyDetect(t *testing.T) {
 	root := t.TempDir()
 	info, err := (&CursorAdapter{root: root}).Detect(context.Background())

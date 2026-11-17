@@ -258,10 +258,26 @@ func cursorTerminalCwd(path string) string {
 		return ""
 	}
 	value, err := strconv.Unquote(`"` + rest[:end] + `"`)
-	if err != nil || !filepath.IsAbs(value) {
+	if err != nil || !cursorAbsolutePath(value) {
 		return ""
 	}
 	return value
+}
+
+// cursorAbsolutePath accepts the host's native absolute paths and Windows
+// drive/UNC paths, so a transcript written on Windows can be parsed by a test
+// or tool running on another OS.
+func cursorAbsolutePath(value string) bool {
+	if filepath.IsAbs(value) {
+		return true
+	}
+	if strings.HasPrefix(value, "/") {
+		return true
+	}
+	if len(value) >= 3 && value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
+		return (value[0] >= 'a' && value[0] <= 'z') || (value[0] >= 'A' && value[0] <= 'Z')
+	}
+	return strings.HasPrefix(value, `\\`)
 }
 
 func cursorDecodeProject(name string) string {

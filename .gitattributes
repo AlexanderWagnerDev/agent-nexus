@@ -1,0 +1,11 @@
+# Keep source files LF on every checkout. The Windows CI job runs gofmt and
+# would otherwise see CRLF files as unformatted.
+* text=auto
+*.go text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.sum text eol=lf
