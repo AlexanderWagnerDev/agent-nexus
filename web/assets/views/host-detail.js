@@ -164,7 +164,7 @@ export async function pageHostDetail(id) {
         <div class="section-card">
           <div class="section-head"><h2>${t('Policy')}</h2></div>
           <div class="meta-list">
-            <div><span>${t('Allowed roots')}</span><strong class="wrap">${esc((policy.allowed_roots || []).join(', ') || t('not reported'))}</strong></div>
+            <div><span>${t('Allowed roots')}</span><strong class="wrap">${policy.allow_all_roots ? t('All paths') : esc((policy.allowed_roots || []).join(', ') || t('not reported'))}</strong></div>
             <div><span>${t('Allowed agents')}</span><strong>${esc((policy.allowed_agents || []).join(', ') || t('all detected'))}</strong></div>
             <div><span>${t('New / fork')}</span><strong>${policy.allow_new_sessions === false ? t('new blocked') : t('new allowed')} · ${policy.allow_fork === false ? t('fork blocked') : t('fork allowed')}</strong></div>
           </div>

@@ -244,6 +244,30 @@ export async function pageSession(id) {
     const scroller = scrollTarget();
     scroller.scrollTop = scroller.scrollHeight;
   };
+  // Native OpenCode/TUI writes do not go through a hub run, so the hub only
+  // reports them as a session metadata change. Compare this session and
+  // reload the newest page when it actually changed; F5 is no longer needed.
+  let liveTimer = null;
+  let liveBusy = false;
+  const refreshFromHost = async () => {
+    if (pageGen !== state.pageGen || liveBusy) return;
+    liveBusy = true;
+    try {
+      const fresh = await api(`/sessions/${encodeURIComponent(id)}`);
+      if (pageGen !== state.pageGen) return;
+      const changed = Number(fresh.message_count) !== Number(s.message_count)
+        || String(fresh.updated_at) !== String(s.updated_at);
+      s.message_count = fresh.message_count;
+      s.updated_at = fresh.updated_at;
+      if (changed) await loadLatest();
+    } catch { /* metadata refresh is best effort */ }
+    finally { liveBusy = false; }
+  };
+  state.wsHandlers.add((msg) => {
+    if (msg.type !== 'sessions.changed' || msg.message !== s.host_id) return;
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => { refreshFromHost().catch(() => {}); }, 800);
+  });
   // The transcript is the only host round-trip on this page. A slow or
   // unreachable host must not tear down the session view: the metadata above
   // is already rendered and stays usable.
@@ -312,17 +336,19 @@ export async function startRun(session, fork, mode = 'terminal', extra = {}) {
 }
 
 function conflictDialog(session, { fork, mode, err }) {
-  const canFork = session.agent === 'codex' || session.agent === 'claude';
+  const canFork = session.agent === 'codex' || session.agent === 'claude' || session.agent === 'opencode';
   const activeRun = err.reason === 'active_run';
   const description = activeRun
-    ? t('Another AgentNexus run already controls this native session. Attach to it instead of opening a second writer.')
-    : t('A native terminal appears to have this session open. Starting here could make two writers corrupt the same conversation.');
+    ? t('Another AgentNexus chat already has this session open. Join it to read and write from here too; one client holds the write lease at a time.')
+    : session.agent === 'opencode'
+      ? t('A native OpenCode client has this session open. The shared local service lets both sides read and write safely.')
+      : t('A native terminal appears to have this session open. Starting here could make two writers corrupt the same conversation.');
   modal(`
-    <h2>${activeRun ? t('Session is already active') : t('Open in native terminal')}</h2>
+    <h2>${activeRun ? t('Session is already open') : t('Open in native terminal')}</h2>
     <p class="hint">${esc(description)}</p>
     <div class="notice info small">${t('Native detection is best effort. The original CLI remains the source of truth.')}</div>
     <div class="modal-actions stack">
-      ${activeRun && err.runId ? `<button class="btn primary" type="button" id="conflict-attach">${t('Attach to the existing run')}</button>` : ''}
+      ${activeRun && err.runId ? `<button class="btn primary" type="button" id="conflict-attach">${t('Join the existing chat')}</button>` : ''}
       <a class="btn" href="#/sessions/${esc(session.id)}" id="conflict-readonly">${t('Open read-only transcript')}</a>
       ${!activeRun && !fork && canFork ? `<button class="btn" type="button" id="conflict-fork">${t('Fork the session instead')}</button>` : ''}
       ${!activeRun ? `<button class="btn danger" type="button" id="conflict-force">${t('Resume anyway (step-up required)')}</button>` : ''}

@@ -37,12 +37,13 @@ bound to the current browser session, so another browser must confirm again.
 ## Host policy
 
 Edit `<config-dir>/AgentNexus/nexusd.json` on the host and restart `nexusd`.
-The effective default is the current user's home directory, all detected agents,
-new sessions and fork enabled, with permission-bypass flags rejected.
+The effective default is all paths, all detected agents, new sessions and fork
+enabled, with permission-bypass flags rejected.
 
 ```json
 {
   "policy": {
+    "allow_all_roots": true,
     "allowed_roots": ["/home/me/code", "/home/me/work"],
     "allowed_agents": ["claude", "codex", "opencode"],
     "allow_new_sessions": true,
@@ -65,15 +66,19 @@ terminal. Setting it to `false` rejects every `force` run, even from a signed
 hub command and even after a browser confirmation; rejected attempts are
 audited on the host.
 
-`allowed_agents` applies to new and resumed sessions in terminal, OpenCode,
-Codex and ACP modes. Paths are canonicalized (symlinks resolved) before the
-root check. Only sessions inside `allowed_roots` are advertised to the hub, so
-a session from another drive or project tree does not appear and then fail on
-open. Each entry is a prefix: add the drive or project tree once
-(`D:\GitHub`, `Q:\work`) instead of listing every repository. `process_grace_seconds`
-(default 5, maximum 60) is how long a stopped run may take to exit before its
-whole process tree is killed. `nexusd doctor` prints the current policy
-summary.
+`allow_all_roots` is `true` for new configurations and for old configs that
+only list the user's home directory. To hide unrelated sessions, set it to
+`false` and list `allowed_roots`. With the filter enabled, paths are
+canonicalized (symlinks resolved) before the check, only sessions inside the
+roots are advertised, and each entry is a prefix: add the drive or project
+tree once (`D:\GitHub`, `Q:\work`) instead of every repository. A custom root
+list keeps the restriction after an upgrade unless `allow_all_roots` is set to
+`true`. The filter is an exposure control, not a sandbox; a running agent still
+has the user's normal filesystem permissions. `allowed_agents` applies to new
+and resumed sessions in terminal, OpenCode, Codex and ACP modes.
+`process_grace_seconds` (default 5, maximum 60) is how long a stopped run may
+take to exit before its whole process tree is killed. `nexusd doctor` prints
+the current policy summary.
 
 ### Agent versions
 
@@ -233,7 +238,7 @@ backup.
   published on 2026-11-15; v0.1.1 was published on 2026-11-15, v0.1.2 on
   2026-11-16, v0.1.3 on 2026-11-16, v0.1.4 on 2026-11-16, v0.1.5 on 2026-11-16,
   v0.1.6 on 2026-11-16, v0.1.7 was withdrawn, v0.1.8 on 2026-11-16, v0.1.9 on
-  2026-11-17, and v0.1.10 is the current release.
+  2026-11-17, v0.1.10 on 2026-11-17, and v0.1.11 is the current release.
 
 ## Troubleshooting
 

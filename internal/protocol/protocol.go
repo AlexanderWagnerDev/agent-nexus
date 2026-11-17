@@ -58,6 +58,7 @@ type AgentInfo struct {
 // display. Enforcement always stays on the host.
 type PolicySummary struct {
 	AllowedRoots  []string `json:"allowed_roots"`
+	AllowAllRoots bool     `json:"allow_all_roots,omitempty"`
 	AllowedAgents []string `json:"allowed_agents"`
 	AllowNew      bool     `json:"allow_new_sessions"`
 	AllowFork     bool     `json:"allow_fork"`

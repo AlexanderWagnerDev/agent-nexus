@@ -2,9 +2,9 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The v0.1.10 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The v0.1.11 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### v0.1.10 implementation notes
+### v0.1.11 implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
@@ -327,6 +327,7 @@ daemon start, and are audited locally.
 ```json
 {
   "policy": {
+    "allow_all_roots": true,
     "allowed_roots": ["/home/me/code", "/home/me/work"],
     "allowed_agents": ["claude", "codex", "opencode"],
     "allow_new_sessions": true,
@@ -341,18 +342,29 @@ daemon start, and are audited locally.
 }
 ```
 
-- `allowed_roots` is checked on the host after path canonicalization (symlinks
-  resolved) for terminal, structured, ACP and git actions.
+- `allow_all_roots` defaults to true for new configurations and for existing
+  configurations that only list the user's home directory. The host then
+  advertises every discovered session and accepts any non-empty working
+  directory. This is the frictionless default for a personal installation.
+- To restrict the host instead, set `"allow_all_roots": false` and list
+  `allowed_roots`. With the filter enabled, paths are checked on the host
+  after canonicalization (symlinks resolved) for terminal, structured, ACP,
+  git, transcript and search actions.
+- The directory filter is an **exposure filter, not a sandbox**. Once a run
+  starts, the agent has the host user's normal file and command permissions.
+  It limits which sessions the hub can see and where a run may start; it does
+  not stop a running agent from reading another directory.
 - For a resumed or forked session, the directory reported by the agent store
   wins over a directory supplied by the hub; the hub value is only a fallback
   for agents without a readable session store (a configured ACP command). The
-  chosen directory is always checked against `allowed_roots`.
-- An empty `allowed_roots` list allows nothing. Only `null`/missing falls back
-  to the user's home directory; an explicitly empty array is a deny-all policy
-  for runs, transcripts, search and git.
-- The host advertises only sessions whose working directory is inside
-  `allowed_roots`. Titles and working directories of other sessions never
-  reach the hub, and the hub cannot offer an action the host would reject.
+  chosen directory is always checked against the filter.
+- With the filter enabled, an empty `allowed_roots` list allows nothing. Only
+  `null`/missing falls back to the user's home directory; an explicitly empty
+  array is a deny-all policy for runs, transcripts, search and git.
+- With the filter enabled, the host advertises only sessions whose working
+  directory is inside `allowed_roots`. Titles and working directories of other
+  sessions never reach the hub, and the hub cannot offer an action the host
+  would reject.
 - `allowed_agents` is enforced for **new** and resumed sessions in every mode,
   including OpenCode, Codex and ACP structured runs.
 - `forbidden_args` rejects permission-bypass flags even if a future hub or

@@ -515,6 +515,7 @@ func (d *Daemon) sendInventory() error {
 	agents := d.inventoryAgents()
 	summary := &protocol.PolicySummary{
 		AllowedRoots:  d.policy.AllowedRoots,
+		AllowAllRoots: d.policy.AllowAllRootsEnabled(),
 		AllowedAgents: d.policy.AllowedAgents,
 		AllowNew:      d.policy.AllowNew,
 		AllowFork:     d.policy.AllowFork,

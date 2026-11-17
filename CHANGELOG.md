@@ -4,6 +4,22 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.11] - 2026-11-17
+
+### Changed
+
+- Host policy: `allow_all_roots` now defaults to true for new installations and
+  for existing configurations that still use the old home-directory-only
+  default. `allowed_roots` remains available as an opt-in exposure filter by
+  setting `allow_all_roots` to false. The host still enforces the flag locally;
+  it is not a sandbox and does not limit what a running agent may read.
+
+### Fixed
+
+- Web: the read-only session transcript reloads when the host reports a
+  session change, such as a message written in the native OpenCode client,
+  instead of waiting for a manual refresh.
+
 ## [0.1.10] - 2026-11-17
 
 ### Fixed
@@ -195,6 +211,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.11]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.11
 [0.1.10]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.10
 [0.1.9]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.9
 [0.1.8]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.8

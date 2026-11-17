@@ -24,6 +24,11 @@ type Policy struct {
 	AllowNew      bool     `json:"allow_new_sessions"`
 	AllowFork     bool     `json:"allow_fork"`
 	ForbiddenArgs []string `json:"forbidden_args"`
+	// AllowAllRoots removes the directory filter entirely: every discovered
+	// session is advertised and every non-empty path may be read or started.
+	// A missing field is resolved on load: new and legacy home-only configs
+	// default to true, a config with custom roots keeps them restricted.
+	AllowAllRoots *bool `json:"allow_all_roots,omitempty"`
 	// AllowForceResume permits the hub to ask for a resume even when a
 	// best-effort process scan reports the native session as open elsewhere.
 	// Omitted means enabled for backward compatibility.
@@ -31,6 +36,13 @@ type Policy struct {
 	// ProcessGraceSeconds is how long a stopped run may take to exit before
 	// its process tree is killed. Zero means the five-second default.
 	ProcessGraceSeconds int `json:"process_grace_seconds,omitempty"`
+}
+
+// AllowAllRootsEnabled reports whether the directory filter is disabled.
+// A nil pointer is restricted so tests and hand-built policies keep the
+// previous fail-closed behaviour; LoadConfig resolves the default.
+func (p Policy) AllowAllRootsEnabled() bool {
+	return p.AllowAllRoots != nil && *p.AllowAllRoots
 }
 
 // ForceResumeAllowed reports whether a force-resume request is acceptable.
@@ -265,6 +277,13 @@ func LoadConfig() (Config, error) {
 	if cfg.HubURL == "" || cfg.HostID == "" || cfg.PrivateKey == "" {
 		return Config{}, fmt.Errorf("incomplete config %s", path)
 	}
+	if cfg.Policy.AllowAllRoots == nil {
+		// New configs and the old home-only default become frictionless.
+		// A config with custom roots keeps its restriction unless the user
+		// opts in explicitly.
+		allowAll := cfg.Policy.AllowedRoots == nil || legacyHomeOnly(cfg.Policy.AllowedRoots)
+		cfg.Policy.AllowAllRoots = &allowAll
+	}
 	if cfg.Policy.AllowedRoots == nil {
 		cfg.Policy.AllowedRoots = []string{homeDir()}
 	}
@@ -345,8 +364,10 @@ func DefaultForbiddenArgs() []string {
 }
 
 func DefaultPolicy() Policy {
+	allowAll := true
 	return Policy{
 		AllowedRoots:  []string{homeDir()},
+		AllowAllRoots: &allowAll,
 		AllowedAgents: nil, // all detected agents
 		AllowNew:      true,
 		AllowFork:     true,
@@ -362,10 +383,20 @@ func homeDir() string {
 	return h
 }
 
+// legacyHomeOnly reports whether the root list is exactly the old default.
+// It lets existing installations drop the directory filter on upgrade without
+// touching a config the user has customised.
+func legacyHomeOnly(roots []string) bool {
+	return len(roots) == 1 && filepath.Clean(roots[0]) == filepath.Clean(homeDir())
+}
+
 // WithinRoots reports whether path is inside one of the allowed roots.
 func (p Policy) WithinRoots(path string) bool {
 	if path == "" {
 		return false
+	}
+	if p.AllowAllRootsEnabled() {
+		return true
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {

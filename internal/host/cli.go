@@ -136,10 +136,14 @@ func Doctor(cfg Config, cfgErr error, out io.Writer) int {
 				issues++
 			}
 		}
-		for _, root := range cfg.Policy.AllowedRoots {
-			if st, err := os.Stat(root); err != nil || !st.IsDir() {
-				fmt.Fprintf(out, "policy:     allowed root %q does not exist\n", root)
-				issues++
+		if cfg.Policy.AllowAllRootsEnabled() {
+			fmt.Fprintln(out, "policy:     all paths allowed (set allow_all_roots=false to restrict)")
+		} else {
+			for _, root := range cfg.Policy.AllowedRoots {
+				if st, err := os.Stat(root); err != nil || !st.IsDir() {
+					fmt.Fprintf(out, "policy:     allowed root %q does not exist\n", root)
+					issues++
+				}
 			}
 		}
 		if len(cfg.Policy.AllowedAgents) == 1 && cfg.Policy.AllowedAgents[0] == "" {

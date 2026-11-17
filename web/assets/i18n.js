@@ -358,6 +358,7 @@ Object.assign(de, {
   Daemon: 'Daemon',
   'Last seen': 'Zuletzt gesehen',
   'Allowed roots': 'Erlaubte Pfade',
+  'All paths': 'Alle Pfade',
   'not reported': 'nicht gemeldet',
   'all detected': 'alle erkannt',
   'new blocked': 'neu gesperrt',
@@ -868,14 +869,16 @@ Object.assign(de, {
     'Heuristische Erkennung: Ein Agent-Prozess scheint diese Session geöffnet zu haben. Prüfe das native Terminal, bevor du fortsetzt.',
   'An agent process appears to have this session open in a native terminal. Opening the chat can conflict with that writer; the hub asks before forcing a resume.':
     'Ein Agent-Prozess scheint diese Session in einem nativen Terminal geöffnet zu haben. Der Chat kann mit diesem Schreiber kollidieren; der Hub fragt vor einem erzwungenen Fortsetzen nach.',
-  'Session is already active': 'Session ist bereits aktiv',
-  'Another AgentNexus run already controls this native session. Attach to it instead of opening a second writer.':
-    'Ein anderer AgentNexus-Run steuert diese native Session bereits. Hänge dich an ihn an, statt einen zweiten Schreiber zu öffnen.',
+  'Session is already open': 'Session ist bereits geöffnet',
+  'Another AgentNexus chat already has this session open. Join it to read and write from here too; one client holds the write lease at a time.':
+    'Ein anderer AgentNexus-Chat hat diese Session bereits geöffnet. Tritt ihm bei, um auch von hier zu lesen und zu schreiben; jeweils ein Client hält die Schreib-Lease.',
+  'A native OpenCode client has this session open. The shared local service lets both sides read and write safely.':
+    'Ein nativer OpenCode-Client hat diese Session geöffnet. Der gemeinsame lokale Dienst erlaubt beiden Seiten sicheres Lesen und Schreiben.',
   'A native terminal appears to have this session open. Starting here could make two writers corrupt the same conversation.':
     'Ein natives Terminal scheint diese Session geöffnet zu haben. Ein Start von hier könnte zwei Schreiber auf dieselbe Unterhaltung bringen.',
   'Native detection is best effort. The original CLI remains the source of truth.':
     'Die native Erkennung ist heuristisch. Die ursprüngliche CLI bleibt die Quelle der Wahrheit.',
-  'Attach to the existing run': 'An bestehenden Run anhängen',
+  'Join the existing chat': 'Bestehendem Chat beitreten',
   'Open read-only transcript': 'Transkript schreibgeschützt öffnen',
   'Fork the session instead': 'Stattdessen Session forken',
   'Resume anyway (step-up required)': 'Trotzdem fortsetzen (Step-up erforderlich)',
