@@ -298,22 +298,28 @@ func (a *DevinAdapter) Transcript(ctx context.Context, nativeID string, offset, 
 	return pageMessages(messages, offset, limit)
 }
 
+// devinChainDepthLimit bounds the recursive parent walk. A corrupt or
+// malicious message_nodes table can contain a parent cycle; without a depth
+// bound the recursive CTE would generate rows until the host runs out of
+// memory. 10k nodes is far beyond a real conversation.
+const devinChainDepthLimit = 10000
+
 func (a *DevinAdapter) readChain(ctx context.Context, db *sql.DB, nativeID string) []protocol.Message {
 	var head sql.NullInt64
 	if err := db.QueryRowContext(ctx, `SELECT main_chain_id FROM sessions WHERE id = ?`, nativeID).Scan(&head); err != nil || !head.Valid {
 		return nil
 	}
 	rows, err := db.QueryContext(ctx, `
-		WITH RECURSIVE chain(node_id, parent_node_id, chat_message, created_at) AS (
-			SELECT node_id, parent_node_id, chat_message, created_at
+		WITH RECURSIVE chain(node_id, parent_node_id, chat_message, created_at, depth) AS (
+			SELECT node_id, parent_node_id, chat_message, created_at, 0
 			FROM message_nodes WHERE session_id = ? AND node_id = ?
 			UNION ALL
-			SELECT mn.node_id, mn.parent_node_id, mn.chat_message, mn.created_at
+			SELECT mn.node_id, mn.parent_node_id, mn.chat_message, mn.created_at, c.depth + 1
 			FROM message_nodes mn JOIN chain c ON mn.node_id = c.parent_node_id
-			WHERE mn.session_id = ?
+			WHERE mn.session_id = ? AND c.depth < ?
 		)
 		SELECT chat_message, created_at FROM chain ORDER BY node_id ASC`,
-		nativeID, head.Int64, nativeID)
+		nativeID, head.Int64, nativeID, devinChainDepthLimit)
 	if err != nil {
 		return nil
 	}
@@ -471,11 +477,6 @@ func devinText(raw json.RawMessage) string {
 	return string(b)
 }
 
-func devinLikePattern(query string) string {
-	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return "%" + replacer.Replace(query) + "%"
-}
-
 func (a *DevinAdapter) Search(ctx context.Context, query string, limit int) ([]protocol.SearchHit, error) {
 	if limit <= 0 {
 		limit = 50
@@ -508,7 +509,7 @@ func (a *DevinAdapter) Search(ctx context.Context, query string, limit int) ([]p
 		SELECT mn.session_id, `+titleExpr+`, mn.chat_message, mn.created_at
 		FROM message_nodes mn JOIN sessions s ON s.id = mn.session_id
 		WHERE mn.chat_message LIKE ? ESCAPE '\'`+hidden+`
-		LIMIT 500`, devinLikePattern(query))
+		LIMIT 500`, likePattern(query))
 	if err != nil {
 		return nil, err
 	}

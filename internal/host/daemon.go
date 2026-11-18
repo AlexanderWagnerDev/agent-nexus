@@ -514,11 +514,12 @@ func (d *Daemon) searchIndexStatus() *protocol.IndexStatus {
 func (d *Daemon) sendInventory() error {
 	agents := d.inventoryAgents()
 	summary := &protocol.PolicySummary{
-		AllowedRoots:  d.policy.AllowedRoots,
-		AllowAllRoots: d.policy.AllowAllRootsEnabled(),
-		AllowedAgents: d.policy.AllowedAgents,
-		AllowNew:      d.policy.AllowNew,
-		AllowFork:     d.policy.AllowFork,
+		AllowedRoots:             d.policy.AllowedRoots,
+		AllowAllRoots:            d.policy.AllowAllRootsEnabled(),
+		AllowedAgents:            d.policy.AllowedAgents,
+		AllowNew:                 d.policy.AllowNew,
+		AllowFork:                d.policy.AllowFork,
+		AllowPersistentApprovals: d.policy.AllowPersistentApprovals,
 	}
 	return d.send(protocol.Envelope{
 		Type: "inventory", Version: Version, Agents: agents, Policy: summary, Index: d.searchIndexStatus(),
@@ -859,25 +860,31 @@ func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
 			}
 		}
 	case "run.approval":
+		decision := d.approvalDecisionForHost(msg.Decision)
+		if decision != msg.Decision {
+			hostAudit("approval.persistent_downgraded", map[string]any{
+				"run_id": msg.RunID, "approval_id": msg.ApprovalID,
+			})
+		}
 		d.runMu.Lock()
 		sr := d.structured[msg.RunID]
 		cr := d.codexRuns[msg.RunID]
 		ar := d.acpRuns[msg.RunID]
 		d.runMu.Unlock()
 		if ar != nil {
-			if err := ar.ReplyApproval(msg.ApprovalID, msg.Decision); err != nil {
+			if err := ar.ReplyApproval(msg.ApprovalID, decision); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 			return
 		}
 		if cr != nil {
-			if err := cr.ReplyApproval(msg.ApprovalID, msg.Decision); err != nil {
+			if err := cr.ReplyApproval(msg.ApprovalID, decision); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 			return
 		}
 		if sr != nil {
-			if err := sr.ReplyApproval(msg.ApprovalID, msg.Decision); err != nil {
+			if err := sr.ReplyApproval(msg.ApprovalID, decision); err != nil {
 				_ = d.send(protocol.Envelope{Type: "run.event", RunID: msg.RunID, Event: &protocol.RunEvent{Type: "run.error", Error: err.Error()}})
 			}
 		}
@@ -1185,6 +1192,18 @@ func (d *Daemon) runActiveLocked(id string) bool {
 	}
 	_, ok := d.acpRuns[id]
 	return ok
+}
+
+// approvalDecisionForHost applies the local approval policy. A persistent
+// "always" decision removes every future prompt for that action, so it is
+// downgraded to a one-time approval unless the operator explicitly enabled
+// allow_persistent_approvals. The decision is made on the host because the hub
+// (or a stale client) must not be able to widen the policy.
+func (d *Daemon) approvalDecisionForHost(decision string) string {
+	if decision == "always" && !d.policy.AllowPersistentApprovals {
+		return "once"
+	}
+	return decision
 }
 
 // validateRunPolicy applies the local policy to every terminal action before

@@ -645,8 +645,7 @@ func (r *ACPRun) RequestPermission(ctx context.Context, params acp.RequestPermis
 	delete(r.approvals, id)
 	r.mu.Unlock()
 
-	allow := decision == "once" || decision == "always"
-	chosen := choosePermissionOption(params.Options, allow)
+	chosen := choosePermissionOption(params.Options, decision)
 	if chosen == nil {
 		return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 	}
@@ -655,10 +654,19 @@ func (r *ACPRun) RequestPermission(ctx context.Context, params acp.RequestPermis
 	}, nil
 }
 
-func choosePermissionOption(options []acp.PermissionOption, allow bool) *acp.PermissionOption {
-	want := []acp.PermissionOptionKind{acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways}
-	if allow {
+// choosePermissionOption maps a hub decision onto the options the adapter
+// advertised. A one-time decision prefers the once variant; a persistent
+// decision prefers the always variant so "Always allow" is actually persisted
+// when the host policy permits it.
+func choosePermissionOption(options []acp.PermissionOption, decision string) *acp.PermissionOption {
+	var want []acp.PermissionOptionKind
+	switch decision {
+	case "once":
 		want = []acp.PermissionOptionKind{acp.PermissionOptionKindAllowOnce, acp.PermissionOptionKindAllowAlways}
+	case "always":
+		want = []acp.PermissionOptionKind{acp.PermissionOptionKindAllowAlways, acp.PermissionOptionKindAllowOnce}
+	default:
+		want = []acp.PermissionOptionKind{acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways}
 	}
 	for _, kind := range want {
 		for i := range options {

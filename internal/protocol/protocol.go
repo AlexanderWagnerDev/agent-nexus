@@ -62,6 +62,9 @@ type PolicySummary struct {
 	AllowedAgents []string `json:"allowed_agents"`
 	AllowNew      bool     `json:"allow_new_sessions"`
 	AllowFork     bool     `json:"allow_fork"`
+	// AllowPersistentApprovals reports whether the agent's own "always"
+	// permission option may be granted. Off by default.
+	AllowPersistentApprovals bool `json:"allow_persistent_approvals,omitempty"`
 }
 
 // Session is the normalized metadata for one native agent session.

@@ -33,6 +33,10 @@ type Policy struct {
 	// best-effort process scan reports the native session as open elsewhere.
 	// Omitted means enabled for backward compatibility.
 	AllowForceResume *bool `json:"allow_force_resume,omitempty"`
+	// AllowPersistentApprovals permits the agent's own persistent permission
+	// option ("always"). Off by default: unlike a one-time approval, a
+	// persistent grant removes every future prompt for that action.
+	AllowPersistentApprovals bool `json:"allow_persistent_approvals,omitempty"`
 	// ProcessGraceSeconds is how long a stopped run may take to exit before
 	// its process tree is killed. Zero means the five-second default.
 	ProcessGraceSeconds int `json:"process_grace_seconds,omitempty"`

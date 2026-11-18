@@ -332,6 +332,7 @@ daemon start, and are audited locally.
     "allowed_agents": ["claude", "codex", "opencode"],
     "allow_new_sessions": true,
     "allow_fork": true,
+    "allow_persistent_approvals": false,
     "forbidden_args": [
       "--dangerously-skip-permissions",
       "--dangerously-bypass-approvals-and-sandbox",
@@ -369,6 +370,11 @@ daemon start, and are audited locally.
   including OpenCode, Codex and ACP structured runs.
 - `forbidden_args` rejects permission-bypass flags even if a future hub or
   adapter tries to add them.
+- `allow_persistent_approvals` (default `false`) permits the agent's own
+  "always" permission option. It is enforced on the host: an `always` decision
+  is downgraded to a one-time approval unless the option is enabled, and the
+  browser only shows the button when the host advertises it. A persistent
+  approval additionally requires a fresh step-up on the hub.
 - The host never trusts a policy summary sent by the hub. The hub cannot widen
   the local policy.
 
@@ -378,7 +384,7 @@ sessions and fork enabled, and the forbidden-argument list above.
 ## 11. Remote approvals
 
 - Approval requests show: agent, host, project, session, the exact command (with cwd) or file diff, the agent's stated reason, and a risk hint (e.g. network access, deletion, privilege escalation patterns such as `sudo`, `rm -rf`, `curl | sh`).
-- Options: **allow once**, **deny**, and — only if `allow_persistent_approvals = true` on the host and after step-up authentication — the agent's own persistent option.
+- Options: **allow once**, **deny**, and - only if `allow_persistent_approvals = true` on the host, after step-up authentication, and when the agent advertises a persistent option - the agent's own persistent choice. The browser hides the persistent button otherwise; the host downgrades an `always` decision it did not allow.
 - Unanswered requests are **denied** after a timeout (default 10 min, configurable per host).
 - Every request and decision is audited with user, device and timestamp.
 - Push notifications for approvals contain no command text by default ("Codex on build-server needs approval").
