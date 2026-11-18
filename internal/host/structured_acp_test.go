@@ -180,7 +180,7 @@ func newACPRunForTest(opts ...func(*ACPRun)) *ACPRun {
 
 func TestACPSessionUpdateEvents(t *testing.T) {
 	r := newACPRunForTest()
-	messageID := "m1"
+	messageID := acp.MessageId("m1")
 	chunk := acp.SessionUpdateAgentMessageChunk{Content: acp.TextBlock("hello"), MessageId: &messageID}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{AgentMessageChunk: &chunk}}); err != nil {
 		t.Fatal(err)

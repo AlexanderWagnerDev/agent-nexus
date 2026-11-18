@@ -229,7 +229,7 @@ func (a *fakeACPAgent) Prompt(ctx context.Context, params acp.PromptRequest) (ac
 	for _, block := range params.Prompt {
 		text += acpContentText(block)
 	}
-	messageID := "fake-message"
+	messageID := acp.MessageId("fake-message")
 	_ = a.conn.SessionUpdate(ctx, acp.SessionNotification{
 		SessionId: params.SessionId,
 		Update: acp.SessionUpdate{AgentMessageChunk: &acp.SessionUpdateAgentMessageChunk{

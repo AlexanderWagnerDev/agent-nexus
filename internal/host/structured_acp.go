@@ -583,6 +583,17 @@ func (r *ACPRun) WriteTextFile(context.Context, acp.WriteTextFileRequest) (acp.W
 	return acp.WriteTextFileResponse{}, errors.New("filesystem access is not supported by this client")
 }
 
+// The client does not advertise elicitation support. Reject requests using
+// the ACP method-not-found error, as required by the SDK.
+func (r *ACPRun) CreateElicitation(_ context.Context, _ acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+	return acp.CreateElicitationResponse{}, acp.NewMethodNotFound(acp.ClientMethodElicitationCreate)
+}
+
+// Completion notifications are harmless when elicitation is unsupported.
+func (r *ACPRun) CompleteElicitation(_ context.Context, _ acp.CompleteElicitationNotification) error {
+	return nil
+}
+
 func (r *ACPRun) CreateTerminal(context.Context, acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
 	return acp.CreateTerminalResponse{}, errors.New("terminal access is not supported by this client")
 }
@@ -708,7 +719,7 @@ func (r *ACPRun) SessionUpdate(_ context.Context, params acp.SessionNotification
 			messageID = string(r.sessionID) + "-assistant"
 		}
 		if update.AgentMessageChunk.MessageId != nil && *update.AgentMessageChunk.MessageId != "" {
-			messageID = *update.AgentMessageChunk.MessageId
+			messageID = string(*update.AgentMessageChunk.MessageId)
 		}
 		first := r.lastMessageID != messageID
 		r.lastMessageID = messageID
