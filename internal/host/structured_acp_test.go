@@ -30,6 +30,10 @@ func TestChoosePermissionOption(t *testing.T) {
 	if got := choosePermissionOption(options, "once"); got == nil || got.OptionId != "yes" {
 		t.Fatalf("once picked %+v", got)
 	}
+	onlyPersistent := []acp.PermissionOption{{OptionId: "always", Kind: acp.PermissionOptionKindAllowAlways}}
+	if got := choosePermissionOption(onlyPersistent, "once"); got != nil {
+		t.Fatalf("a one-time decision selected a persistent option: %+v", got)
+	}
 	if got := choosePermissionOption(options, "always"); got == nil || got.OptionId != "always" {
 		t.Fatalf("always picked %+v", got)
 	}

@@ -48,9 +48,11 @@ export function clearAccountArtifacts() {
 
 export function renderAuth(mode, error = '') {
   // A 401 can arrive while a modal is open; modal() makes #app inert, which
-  // would leave the new login form non-interactive.
+  // would leave the new login form non-interactive. Account data is cleared by
+  // the callers that observed a confirmed account boundary (401 hook, logout,
+  // successful re-pairing), not here: a transient /me failure must not delete
+  // the user's drafts.
   closeModal();
-  clearAccountArtifacts();
   state.me = null;
   disconnectWS();
   document.title = state.hubName || 'AgentNexus';
@@ -159,6 +161,9 @@ export function renderDevicePair(token) {
     const name = new FormData(event.target).get('name');
     try {
       await api('/auth/device-pair', { method: 'POST', body: { token, name }, allow401: true });
+      // The pairing token decides which account this browser now belongs to;
+      // do not carry the previous account's tabs or drafts across.
+      clearAccountArtifacts();
       state.me = await api('/me');
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();

@@ -655,14 +655,15 @@ func (r *ACPRun) RequestPermission(ctx context.Context, params acp.RequestPermis
 }
 
 // choosePermissionOption maps a hub decision onto the options the adapter
-// advertised. A one-time decision prefers the once variant; a persistent
-// decision prefers the always variant so "Always allow" is actually persisted
-// when the host policy permits it.
+// advertised. A one-time decision only ever selects the once variant: falling
+// back to a persistent option would turn "Allow once" into a lasting grant.
+// A persistent decision prefers the always variant and may fall back to the
+// once variant when the adapter offers no persistent option.
 func choosePermissionOption(options []acp.PermissionOption, decision string) *acp.PermissionOption {
 	var want []acp.PermissionOptionKind
 	switch decision {
 	case "once":
-		want = []acp.PermissionOptionKind{acp.PermissionOptionKindAllowOnce, acp.PermissionOptionKindAllowAlways}
+		want = []acp.PermissionOptionKind{acp.PermissionOptionKindAllowOnce}
 	case "always":
 		want = []acp.PermissionOptionKind{acp.PermissionOptionKindAllowAlways, acp.PermissionOptionKindAllowOnce}
 	default:

@@ -8,7 +8,7 @@ import { setUnauthorizedHook, setStepUpHook } from './api.js';
 import { parseRoute } from './routes.js';
 import { route, setPageHandler } from './router.js';
 import { installGlobalUi, loadUserTheme, renderShell } from './shell.js';
-import { renderAuth, renderDevicePair, ensureStepUp } from './auth.js';
+import { renderAuth, renderDevicePair, ensureStepUp, clearAccountArtifacts } from './auth.js';
 import { pageOverview } from './views/overview.js';
 import { pageHosts } from './views/hosts.js';
 import { pageHostDetail } from './views/host-detail.js';
@@ -29,7 +29,10 @@ import { pageWorkspace } from './views/workspace.js';
 import { pageRun } from './views/run.js';
 
 initLang();
-setUnauthorizedHook(() => renderAuth('login'));
+setUnauthorizedHook(() => {
+  clearAccountArtifacts();
+  renderAuth('login');
+});
 setStepUpHook(() => ensureStepUp());
 
 const pages = {
@@ -76,7 +79,11 @@ async function boot() {
       await loadUserTheme();
       renderShell('overview');
       await route();
-    } catch {
+    } catch (err) {
+      // /me is called with allow401 so the shared hook does not run; a real
+      // 401 still ends the session and must clear the previous account's data.
+      // A 5xx or network error keeps the drafts for the next successful load.
+      if (err?.status === 401) clearAccountArtifacts();
       renderAuth('login');
     }
   } catch (err) {
