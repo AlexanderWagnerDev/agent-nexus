@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to create or republish, for example v0.1.14'
+        description: 'Tag to create or republish, for example v0.1.15'
         required: true
         type: string
 
