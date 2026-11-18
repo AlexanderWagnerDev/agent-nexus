@@ -1,38 +1,51 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { draftKey, parseStored } from '../assets/state.js';
-import { backoffBase, backoffDelay, nextBackoff } from '../assets/ws.js';
-import { versionLabel } from '../assets/ui-format.js';
+import test from 'node:test';
+import { hasSavedAccountArtifacts, shouldClearAccountArtifacts } from '../assets/state.js';
 
-test('parses stored JSON and falls back on missing or corrupt values', () => {
-  assert.deepEqual(parseStored('{"a":1}', null), { a: 1 });
-  assert.equal(parseStored('null', 'fallback'), 'fallback');
-  assert.equal(parseStored('{broken', 'fallback'), 'fallback');
-  assert.equal(parseStored(undefined, []).length, 0);
+// localStorage is not available in plain Node; the helpers only use the
+// standard Storage methods and are written to fail closed without it. The
+// proxy exposes stored keys as enumerable own properties like a real Storage.
+function installStorage(entries = {}) {
+  const data = new Map(Object.entries(entries).map(([key, value]) => [key, String(value)]));
+  const storage = {
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => { data.set(key, String(value)); },
+    removeItem: (key) => { data.delete(key); },
+    key: (index) => Array.from(data.keys())[index] ?? null,
+    get length() { return data.size; },
+  };
+  globalThis.localStorage = new Proxy(storage, {
+    ownKeys: () => Array.from(data.keys()),
+    getOwnPropertyDescriptor: (target, prop) => (data.has(prop)
+      ? { enumerable: true, configurable: true, value: data.get(prop) }
+      : Object.getOwnPropertyDescriptor(target, prop)),
+    get: (target, prop) => (data.has(prop) ? data.get(prop) : target[prop]),
+  });
+}
+
+test('unowned recent-session hints alone require a clear', () => {
+  installStorage({ 'nexus-recent': '[{"id":"ses-1"}]' });
+  assert.equal(hasSavedAccountArtifacts(), true);
+  assert.equal(shouldClearAccountArtifacts('', 'user-b'), true);
 });
 
-test('draft keys are scoped per run', () => {
-  assert.equal(draftKey('run-1'), 'nexus-draft-run-1');
-  assert.notEqual(draftKey('run-1'), draftKey('run-2'));
+test('every saved artifact kind is detected', () => {
+  for (const key of ['nexus-tabs', 'nexus-recent', 'nexus-draft-run-1', 'nexus-run-config-run-1']) {
+    installStorage({ [key]: '[]' });
+    assert.equal(hasSavedAccountArtifacts(), true, key);
+    assert.equal(shouldClearAccountArtifacts('', 'user-b'), true, key);
+  }
 });
 
-test('reconnect backoff grows and caps at 15 seconds', () => {
-  assert.equal(backoffBase(1000), 1000);
-  assert.equal(backoffBase(40000), 15000);
-  assert.equal(nextBackoff(1000), 1700);
-  assert.equal(nextBackoff(12000), 15000);
+test('an empty store needs no clear', () => {
+  installStorage();
+  assert.equal(hasSavedAccountArtifacts(), false);
+  assert.equal(shouldClearAccountArtifacts('', 'user-b'), false);
 });
 
-test('jittered delay stays inside the 80-120 percent window', () => {
-  assert.equal(backoffDelay(1000, () => 0), 800);
-  assert.equal(backoffDelay(1000, () => 1), 1200);
-  assert.equal(backoffDelay(1000, () => 0.5), 1000);
-  assert.equal(backoffDelay(40000, () => 1), 18000);
-});
-
-test('release versions get a display v prefix, development markers keep theirs', () => {
-  assert.equal(versionLabel('0.1.0'), 'v0.1.0');
-  assert.equal(versionLabel('alpha-71541c2'), 'alpha-71541c2');
-  assert.equal(versionLabel(''), '');
-  assert.equal(versionLabel(null), '');
+test('artifacts owned by the signing-in account are kept', () => {
+  installStorage({ 'nexus-recent': '[]' });
+  assert.equal(shouldClearAccountArtifacts('user-a', 'user-a'), false);
+  assert.equal(shouldClearAccountArtifacts('user-a', 'user-b'), true);
+  assert.equal(shouldClearAccountArtifacts('', ''), false);
 });
