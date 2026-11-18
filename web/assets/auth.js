@@ -43,6 +43,7 @@ export function adoptAccountArtifacts(userId) {
   try {
     previous = localStorage.getItem('nexus-artifact-owner') || '';
     hasArtifacts = Boolean(localStorage.getItem('nexus-tabs')) ||
+      Boolean(localStorage.getItem('nexus-recent')) ||
       Object.keys(localStorage).some((key) => key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-'));
   } catch { /* storage unavailable */ }
   // Without an owner marker, saved artifacts cannot be attributed. Clear them
