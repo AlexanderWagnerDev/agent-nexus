@@ -194,7 +194,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 			return
 		}
 		forked, err := ar.conn.UnstableForkSession(ctx, acp.UnstableForkSessionRequest{
-			Cwd: cwd, McpServers: []acp.UnstableMcpServer{}, SessionId: acp.SessionId(spec.NativeID),
+			Cwd: cwd, McpServers: []acp.McpServer{}, SessionId: acp.SessionId(spec.NativeID),
 		})
 		if err != nil {
 			ar.Stop()
@@ -208,8 +208,8 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		}
 		ar.sessionID = forked.SessionId
 		reportedNativeID = string(forked.SessionId)
-		// The unstable fork response uses its own config-option type. Mode
-		// state is compatible; the normal option endpoints remain available.
+		// Fork responses share session option types with stable ACP methods.
+		// Mode state is compatible; the normal option endpoints remain available.
 		ar.applySessionState(init, forked.Modes, nil)
 	} else {
 		if !init.AgentCapabilities.LoadSession {
@@ -623,12 +623,12 @@ func (r *ACPRun) RequestPermission(ctx context.Context, params acp.RequestPermis
 	r.mu.Unlock()
 
 	action := string(params.ToolCall.ToolCallId)
-	if params.ToolCall.Title != nil && *params.ToolCall.Title != "" {
-		action = *params.ToolCall.Title
+	if title, ok := params.ToolCall.Title.Value(); ok && title != "" {
+		action = title
 	}
 	r.send(protocol.RunEvent{
 		Type: "approval.requested", ApprovalID: id,
-		Action: string(action), Text: truncate(jsonText(params.ToolCall.RawInput), 4000),
+		Action: string(action), Text: truncate(jsonText(params.ToolCall.RawInput.Ptr()), 4000),
 	})
 
 	var decision string
@@ -742,26 +742,26 @@ func (r *ACPRun) SessionUpdate(_ context.Context, params acp.SessionNotification
 			ToolName: update.ToolCall.Title, ToolInput: truncate(jsonText(update.ToolCall.RawInput), 8000),
 		})
 	case update.ToolCallUpdate != nil:
-		done := update.ToolCallUpdate.Status != nil &&
-			(*update.ToolCallUpdate.Status == acp.ToolCallStatusCompleted || *update.ToolCallUpdate.Status == acp.ToolCallStatusFailed)
+		status, hasStatus := update.ToolCallUpdate.Status.Value()
+		done := hasStatus && (status == acp.ToolCallStatusCompleted || status == acp.ToolCallStatusFailed)
 		if done {
 			ev := protocol.RunEvent{
 				Type: "tool.completed", CallID: string(update.ToolCallUpdate.ToolCallId),
-				ToolOutput: truncate(jsonText(update.ToolCallUpdate.RawOutput), 8000),
+				ToolOutput: truncate(jsonText(update.ToolCallUpdate.RawOutput.Ptr()), 8000),
 			}
-			if *update.ToolCallUpdate.Status == acp.ToolCallStatusFailed {
+			if status == acp.ToolCallStatusFailed {
 				ev.Error = "tool call failed"
 			}
 			if ev.ToolOutput == "" {
-				ev.ToolOutput = truncate(jsonText(update.ToolCallUpdate.Content), 8000)
+				ev.ToolOutput = truncate(jsonText(update.ToolCallUpdate.Content.Ptr()), 8000)
 			}
 			r.send(ev)
 			return nil
 		}
-		if update.ToolCallUpdate.RawInput != nil {
+		if rawInput, ok := update.ToolCallUpdate.RawInput.Value(); ok {
 			r.send(protocol.RunEvent{
 				Type: "tool.input", CallID: string(update.ToolCallUpdate.ToolCallId),
-				ToolInput: truncate(jsonText(update.ToolCallUpdate.RawInput), 8000),
+				ToolInput: truncate(jsonText(rawInput), 8000),
 			})
 		}
 	case update.UsageUpdate != nil:

@@ -200,21 +200,25 @@ func TestACPSessionUpdateEvents(t *testing.T) {
 		t.Fatalf("thought: %q", got)
 	}
 	title := "Run tests"
-	tool := acp.SessionUpdateToolCall{ToolCallId: "c1", Title: title, RawInput: map[string]any{"command": "go test"}}
+	tool := acp.SessionUpdateToolCall{ToolCallId: "c1", Title: title, RawInput: json.RawMessage(`{"command":"go test"}`)}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCall: &tool}}); err != nil {
 		t.Fatal(err)
 	}
-	completed := acp.ToolCallStatusCompleted
-	update := acp.SessionToolCallUpdate{ToolCallId: "c1", Status: &completed, RawOutput: "ok"}
+	update := acp.SessionToolCallUpdate{
+		ToolCallId: "c1", Status: acp.PatchSet(acp.ToolCallStatusCompleted),
+		RawOutput: acp.WithUpdateRawOutput("ok"),
+	}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
 	}
-	failed := acp.ToolCallStatusFailed
-	update = acp.SessionToolCallUpdate{ToolCallId: "c2", Status: &failed, Content: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock("boom"))}}
+	update = acp.SessionToolCallUpdate{
+		ToolCallId: "c2", Status: acp.PatchSet(acp.ToolCallStatusFailed),
+		Content: acp.PatchSet([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock("boom"))}),
+	}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
 	}
-	update = acp.SessionToolCallUpdate{ToolCallId: "c3", RawInput: map[string]any{"path": "x"}}
+	update = acp.SessionToolCallUpdate{ToolCallId: "c3", RawInput: acp.WithUpdateRawInput(map[string]any{"path": "x"})}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +232,10 @@ func TestACPRequestPermissionApprovedAndCancelled(t *testing.T) {
 	title := "Write file"
 	request := acp.RequestPermissionRequest{
 		SessionId: "session-1",
-		ToolCall:  acp.ToolCallUpdate{ToolCallId: "c1", Title: &title, RawInput: map[string]any{"path": "a.txt"}},
+		ToolCall: acp.ToolCallUpdate{
+			ToolCallId: "c1", Title: acp.PatchSet(title),
+			RawInput: acp.WithUpdateRawInput(map[string]any{"path": "a.txt"}),
+		},
 		Options: []acp.PermissionOption{
 			{OptionId: "yes", Kind: acp.PermissionOptionKindAllowOnce},
 			{OptionId: "no", Kind: acp.PermissionOptionKindRejectOnce},
