@@ -338,6 +338,15 @@ func (s *Server) handleHostUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
+	// The channel is part of the cache key, so it must be a closed set. An
+	// arbitrary string would create a new key and turn this read-only endpoint
+	// into an unbounded host-side release check (and outbound GitHub request).
+	switch channel {
+	case "", "stable", "prerelease", "development", "auto":
+	default:
+		writeError(w, http.StatusBadRequest, "channel must be stable, prerelease, development or auto")
+		return
+	}
 	// Reading host status must not become an expensive write command that a
 	// read-only grantee can loop. A short cache bounds host-side work to one
 	// real check per host and channel per 30 seconds.

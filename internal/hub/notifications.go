@@ -42,8 +42,28 @@ func notificationEndpoint(kind string, config map[string]string) (string, string
 }
 
 func blockedNotificationIP(ip net.IP) bool {
-	return ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	// Go's IsPrivate only covers RFC 1918 and fc00::/7. Shared address space
+	// (100.64.0.0/10, which hosts the Alibaba metadata service at
+	// 100.100.100.200), IETF protocol assignments, benchmarking ranges and the
+	// reserved 240/4 block are reachable from a cloud hub but are not "global"
+	// either, so a webhook must not be allowed to dial them.
+	if v4 := ip.To4(); v4 != nil {
+		switch {
+		case v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127:
+			return true
+		case v4[0] == 192 && v4[1] == 0 && v4[2] == 0:
+			return true
+		case v4[0] == 198 && (v4[1] == 18 || v4[1] == 19):
+			return true
+		case v4[0] >= 240:
+			return true
+		}
+	}
+	return false
 }
 
 func validateNotificationURL(raw string, allowPrivate bool) error {
