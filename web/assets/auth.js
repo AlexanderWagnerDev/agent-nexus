@@ -31,7 +31,26 @@ export function authFrame(inner, subtitle) {
   }));
 }
 
+// clearAccountArtifacts removes data that belongs to the signed-in account.
+// It runs on sign-out and whenever a request loses the session, so a shared
+// browser never shows the previous user's tabs, recent sessions or prompt
+// drafts to the next account.
+export function clearAccountArtifacts() {
+  state.openTabs = [];
+  storeSet('nexus-tabs', []);
+  try {
+    localStorage.removeItem('nexus-recent');
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-')) localStorage.removeItem(key);
+    }
+  } catch { /* storage unavailable */ }
+}
+
 export function renderAuth(mode, error = '') {
+  // A 401 can arrive while a modal is open; modal() makes #app inert, which
+  // would leave the new login form non-interactive.
+  closeModal();
+  clearAccountArtifacts();
   state.me = null;
   disconnectWS();
   document.title = state.hubName || 'AgentNexus';
@@ -118,15 +137,7 @@ export function renderAuth(mode, error = '') {
 export async function logout() {
   try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
   state.me = null;
-  state.openTabs = [];
-  storeSet('nexus-tabs', []);
-  // Composer drafts are per run and survive reloads by design, but they must
-  // not survive a sign-out on a shared browser.
-  try {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-')) localStorage.removeItem(key);
-    }
-  } catch { /* storage unavailable */ }
+  clearAccountArtifacts();
   if (state.notifTimer) {
     clearInterval(state.notifTimer);
     state.notifTimer = null;

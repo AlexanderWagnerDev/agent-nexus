@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { ensureStepUp } from '../auth.js';
 import { rememberRecent } from '../palette.js';
 import { loadSidebar, setPage } from '../shell.js';
 import { draftKey, state, storeGet, storeSet } from '../state.js';
@@ -21,11 +22,15 @@ export async function pageStructuredRun(id, run) {
   }
   const agent = agentMeta(run.agent || session?.agent);
   let versionWarning = '';
+  let persistentApprovalsAllowed = false;
   try {
     const { hosts } = await api('/hosts');
     const hostInfo = (hosts || []).find((h) => h.id === run.host_id);
     const info = (hostInfo?.agents || []).find((a) => a.name === (run.agent || session?.agent));
     versionWarning = info?.version_warning || '';
+    // The host enforces this too; the UI must not offer a button whose
+    // decision the host will downgrade.
+    persistentApprovalsAllowed = Boolean(hostInfo?.policy?.allow_persistent_approvals);
   } catch { /* the banner is optional */ }
   if (pageGen !== state.pageGen) return;
   const title = session?.title || run.session_title || t('Structured chat');
@@ -589,9 +594,18 @@ export async function pageStructuredRun(id, run) {
     card.innerHTML = `
       <div class="approval-head">${svgIcon('alert', 16)}<strong>${t('Approval required')}</strong><span class="badge waiting_for_input">${esc(event.action || 'permission')}</span></div>
       ${resources || event.text ? `<pre>${esc(resources || event.text)}</pre>` : ''}
-      <div class="approval-actions"><button class="btn small primary" data-approval="once">${t('Allow once')}</button><button class="btn small" data-approval="always">${t('Always allow')}</button><button class="btn small danger" data-approval="reject">${t('Deny')}</button></div>`;
-    card.querySelectorAll('[data-approval]').forEach((button) => button.addEventListener('click', () => {
-      if (!wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision: button.dataset.approval })) {
+      <div class="approval-actions"><button class="btn small primary" data-approval="once">${t('Allow once')}</button>${persistentApprovalsAllowed ? `<button class="btn small" data-approval="always">${t('Always allow')}</button>` : ''}<button class="btn small danger" data-approval="reject">${t('Deny')}</button></div>`;
+    card.querySelectorAll('[data-approval]').forEach((button) => button.addEventListener('click', async () => {
+      const decision = button.dataset.approval;
+      if (decision === 'always') {
+        // docs/SECURITY.md: a lasting grant needs a fresh confirmation.
+        try {
+          await ensureStepUp();
+        } catch {
+          return;
+        }
+      }
+      if (!wsSend({ type: 'approval', run_id: id, approval_id: event.approval_id, decision })) {
         toast(t('WebSocket is reconnecting; try again in a moment'), true);
         return;
       }

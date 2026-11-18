@@ -41,9 +41,20 @@ func TestInstallerPackagingContract(t *testing.T) {
 		"for name in nexusd nexus;",
 		`install -m 0755 "$tmp/nexus" "$cli"`,
 		`client_version_output=`,
+		"--require-signature cannot be combined with --development",
+		"--require-signature and --allow-checksum-only contradict each other",
 	} {
 		if !strings.Contains(sh, want) {
-			t.Errorf("install-host.sh no longer installs the terminal client: missing %q", want)
+			t.Errorf("install-host.sh no longer installs the terminal client or validates signature flags: missing %q", want)
+		}
+	}
+
+	for _, want := range []string{
+		"-RequireSignature cannot be combined with -Development",
+		"-RequireSignature and -AllowChecksumOnly contradict each other",
+	} {
+		if !strings.Contains(ps, want) {
+			t.Errorf("install-host.ps1 must reject contradictory signature flags: missing %q", want)
 		}
 	}
 }
