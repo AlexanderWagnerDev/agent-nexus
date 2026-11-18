@@ -268,6 +268,20 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "invalid approval decision"})
 			return
 		}
+		if msg.Decision == "always" {
+			// "Always" is a lasting permission grant, not a single answer.
+			// docs/SECURITY.md requires a fresh step-up for it. Read the
+			// session instead of a value captured at connect time so a
+			// step-up performed after the socket opened still counts.
+			si, err := s.store.SessionByToken(c.token)
+			if err != nil || !time.Now().Before(si.StepUpUntil) {
+				c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: "step-up required for a persistent approval"})
+				s.audit(c.user.Username, "approval.persistent_denied", map[string]string{
+					"run_id": msg.RunID, "approval_id": msg.ApprovalID, "reason": "step-up required",
+				})
+				return
+			}
+		}
 		if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.approval", RunID: msg.RunID, ApprovalID: msg.ApprovalID, Decision: msg.Decision}); err != nil {
 			c.push(protocol.ServerEnvelope{Type: "error", RunID: msg.RunID, Error: err.Error()})
 		}
