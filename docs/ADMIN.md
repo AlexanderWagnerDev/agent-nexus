@@ -49,6 +49,7 @@ enabled, with permission-bypass flags rejected.
     "allow_new_sessions": true,
     "allow_fork": true,
     "allow_force_resume": true,
+    "allow_persistent_approvals": false,
     "process_grace_seconds": 5,
     "forbidden_args": [
       "--dangerously-skip-permissions",
@@ -65,6 +66,13 @@ session that the host's best-effort process scan reports as open in another
 terminal. Setting it to `false` rejects every `force` run, even from a signed
 hub command and even after a browser confirmation; rejected attempts are
 audited on the host.
+
+`allow_persistent_approvals` (default `false`) controls whether an approval may
+use the agent's own "always" option. When it is off, an `always` decision is
+downgraded to a one-time approval on the host and audited as
+`approval.persistent_downgraded`; the browser only offers the button when the
+host reports the option. A persistent approval also requires a five-minute
+step-up confirmation on the hub.
 
 `allow_all_roots` is `true` for new configurations and for old configs that
 only list the user's home directory. To hide unrelated sessions, set it to

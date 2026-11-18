@@ -24,15 +24,19 @@ import (
 func TestChoosePermissionOption(t *testing.T) {
 	options := []acp.PermissionOption{
 		{OptionId: "yes", Kind: acp.PermissionOptionKindAllowOnce},
+		{OptionId: "always", Kind: acp.PermissionOptionKindAllowAlways},
 		{OptionId: "no", Kind: acp.PermissionOptionKindRejectOnce},
 	}
-	if got := choosePermissionOption(options, true); got == nil || got.OptionId != "yes" {
-		t.Fatalf("allow picked %+v", got)
+	if got := choosePermissionOption(options, "once"); got == nil || got.OptionId != "yes" {
+		t.Fatalf("once picked %+v", got)
 	}
-	if got := choosePermissionOption(options, false); got == nil || got.OptionId != "no" {
+	if got := choosePermissionOption(options, "always"); got == nil || got.OptionId != "always" {
+		t.Fatalf("always picked %+v", got)
+	}
+	if got := choosePermissionOption(options, "reject"); got == nil || got.OptionId != "no" {
 		t.Fatalf("reject picked %+v", got)
 	}
-	if got := choosePermissionOption(nil, true); got != nil {
+	if got := choosePermissionOption(nil, "once"); got != nil {
 		t.Fatalf("empty options picked %+v", got)
 	}
 }

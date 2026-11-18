@@ -77,6 +77,43 @@ func devinFixture(t *testing.T) *DevinAdapter {
 	return &DevinAdapter{bin: "devin", db: dbPath}
 }
 
+func TestDevinTranscriptCycleIsBounded(t *testing.T) {
+	adapter := devinFixture(t)
+	// Close the fixture chain into a cycle: node 1 now points at node 4, so the
+	// recursive parent walk would never reach a root. A corrupt store must not
+	// turn a transcript read into an unbounded query.
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(adapter.db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE message_nodes SET parent_node_id=4 WHERE session_id='dev-visible' AND node_id=1`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	var transcript protocol.Transcript
+	var readErr error
+	go func() {
+		transcript, readErr = adapter.Transcript(context.Background(), "dev-visible", 0, 100)
+		close(done)
+	}()
+	select {
+	case <-done:
+		if readErr != nil {
+			t.Fatalf("cyclic transcript: %v", readErr)
+		}
+		if transcript.Total == 0 || len(transcript.Messages) == 0 {
+			t.Fatalf("cyclic transcript returned no bounded messages: %+v", transcript)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("transcript walk did not terminate on a cyclic message graph")
+	}
+}
+
 func TestDevinStoreOnlyDetect(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sessions.db")
 	if err := os.WriteFile(dbPath, []byte{}, 0o600); err != nil {

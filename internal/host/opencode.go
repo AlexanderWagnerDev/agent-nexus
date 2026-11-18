@@ -102,6 +102,14 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 		byID[s.NativeID] = s
 	}
 
+	// A query that cannot run must not look like an empty store: the daemon
+	// replaces its last snapshot with whatever discovery returns, so an empty
+	// result would remove every OpenCode session from the hub and prune the
+	// search index. Track whether at least one existing table was read
+	// successfully and report a failure only when none was.
+	var queryErr error
+	queriedOK := false
+
 	if a.tableExists(db, "session_v2") {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
@@ -110,15 +118,31 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			FROM session_v2 s
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
-		if err == nil {
+		if err != nil {
+			queryErr = fmt.Errorf("opencode session_v2 query: %w", err)
+		} else {
+			rowsRead, scanFailed := 0, 0
 			for rows.Next() {
+				rowsRead++
 				var s protocol.Session
 				var created, updated int64
 				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID, &s.ForkedFromNativeID) == nil {
 					s.CreatedAt = time.UnixMilli(created).UTC()
 					s.UpdatedAt = time.UnixMilli(updated).UTC()
 					add(s)
+				} else {
+					scanFailed++
 				}
+			}
+			switch {
+			case rows.Err() != nil:
+				queryErr = fmt.Errorf("opencode session_v2 read: %w", rows.Err())
+			case rowsRead > 0 && scanFailed == rowsRead:
+				// A table that exists but no longer decodes is schema drift,
+				// not an empty store. Keep the previous snapshot.
+				queryErr = fmt.Errorf("opencode session_v2: none of the %d rows matched the expected schema", rowsRead)
+			default:
+				queriedOK = true
 			}
 			rows.Close()
 		}
@@ -132,8 +156,14 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			FROM session s
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
-		if err == nil {
+		if err != nil {
+			if queryErr == nil {
+				queryErr = fmt.Errorf("opencode session query: %w", err)
+			}
+		} else {
+			rowsRead, scanFailed := 0, 0
 			for rows.Next() {
+				rowsRead++
 				var s protocol.Session
 				var created, updated int64
 				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID) == nil {
@@ -143,10 +173,28 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 					if _, exists := byID[s.NativeID]; !exists {
 						add(s)
 					}
+				} else {
+					scanFailed++
 				}
+			}
+			switch {
+			case rows.Err() != nil:
+				if queryErr == nil {
+					queryErr = fmt.Errorf("opencode session read: %w", rows.Err())
+				}
+			case rowsRead > 0 && scanFailed == rowsRead:
+				if queryErr == nil {
+					queryErr = fmt.Errorf("opencode session: none of the %d rows matched the expected schema", rowsRead)
+				}
+			default:
+				queriedOK = true
 			}
 			rows.Close()
 		}
+	}
+
+	if !queriedOK && queryErr != nil {
+		return nil, queryErr
 	}
 
 	out := make([]protocol.Session, 0, len(order))
@@ -406,8 +454,8 @@ func (a *OpenCodeAdapter) Search(ctx context.Context, query string, limit int) (
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), m.data, m.time_created
 			FROM session_message m JOIN session_v2 s ON s.id = m.session_id
-			WHERE m.data LIKE ? AND s.time_archived IS NULL
-			ORDER BY m.time_created DESC LIMIT ?`, "%"+query+"%", limit)
+			WHERE m.data LIKE ? ESCAPE '\' AND s.time_archived IS NULL
+			ORDER BY m.time_created DESC LIMIT ?`, likePattern(query), limit)
 		if err == nil {
 			for rows.Next() {
 				var id, title, data string
@@ -427,8 +475,8 @@ func (a *OpenCodeAdapter) Search(ctx context.Context, query string, limit int) (
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), p.data, p.time_created
 			FROM part p JOIN session s ON s.id = p.session_id
-			WHERE p.data LIKE ? AND s.time_archived IS NULL
-			ORDER BY p.time_created DESC LIMIT ?`, "%"+query+"%", limit)
+			WHERE p.data LIKE ? ESCAPE '\' AND s.time_archived IS NULL
+			ORDER BY p.time_created DESC LIMIT ?`, likePattern(query), limit)
 		if err != nil {
 			return hits, nil
 		}

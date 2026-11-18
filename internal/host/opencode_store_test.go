@@ -11,6 +11,39 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestOpenCodeDiscoveryReportsUnreadableStore(t *testing.T) {
+	// A v2 store whose schema drifted (fork_session_id is missing) used to
+	// produce an empty, successful snapshot. The daemon would then replace the
+	// last good list with zero sessions and the search index would prune every
+	// OpenCode document. Discovery must fail instead so the previous snapshot
+	// is reused.
+	dbPath := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_broken','Broken','/tmp/project',1,2)`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENCODE_DB", dbPath)
+	sessions, err := NewOpenCodeAdapter("opencode").ListSessions(context.Background())
+	if err == nil {
+		t.Fatalf("unreadable v2 store reported a successful snapshot: %+v", sessions)
+	}
+}
+
 func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "opencode.db")
 	db, err := sql.Open("sqlite", dbPath)
@@ -68,6 +101,11 @@ func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 	hits, err := a.Search(context.Background(), "login", 10)
 	if err != nil || len(hits) != 1 || hits[0].NativeID != "ses_test" {
 		t.Fatalf("unexpected search: %+v %v", hits, err)
+	}
+	// LIKE metacharacters must be matched literally; a bare "%" used to select
+	// every row and return unrelated sessions.
+	if wildcard, err := a.Search(context.Background(), "%", 10); err != nil || len(wildcard) != 0 {
+		t.Fatalf("wildcard search matched unrelated rows: %+v %v", wildcard, err)
 	}
 	cmd, err := a.BuildCommand(Action{Kind: protocol.ActionResume, NativeID: "ses_test", Cwd: "/tmp/project"})
 	if err != nil {

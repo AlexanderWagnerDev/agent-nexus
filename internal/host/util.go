@@ -121,6 +121,14 @@ func sessionIDFromFilename(path string) string {
 	return name
 }
 
+// likePattern escapes LIKE metacharacters so a search for "%" or "_" matches
+// those characters instead of every row. Queries that use it must add
+// ESCAPE '\'.
+func likePattern(query string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + replacer.Replace(query) + "%"
+}
+
 func sliceContains(items []string, want string) bool {
 	for _, item := range items {
 		if item == want {
