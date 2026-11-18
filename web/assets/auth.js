@@ -31,9 +31,25 @@ export function authFrame(inner, subtitle) {
   }));
 }
 
+// adoptAccountArtifacts records which account owns the saved tabs and drafts.
+// If a different account signs in (for example after a transient /me failure
+// left the previous account's artifacts in place), they are cleared before the
+// new account's shell renders. A missing marker is set without clearing so an
+// upgrade does not delete a legitimate user's drafts.
+export function adoptAccountArtifacts(userId) {
+  if (!userId) return;
+  let previous = '';
+  try { previous = localStorage.getItem('nexus-artifact-owner') || ''; } catch { /* storage unavailable */ }
+  if (previous && previous !== userId) clearAccountArtifacts();
+  try { localStorage.setItem('nexus-artifact-owner', userId); } catch { /* storage unavailable */ }
+}
+
 // teardownPage stops page-owned work (timers, speech recognition, socket
 // handlers) before the view is replaced or account data is removed.
 function teardownPage() {
+  // Invalidate loaders started by the outgoing page so an awaited response
+  // cannot write into the next view.
+  state.pageGen += 1;
   if (state.pageCleanup) {
     try { state.pageCleanup(); } catch { /* ignore */ }
     state.pageCleanup = null;
@@ -120,6 +136,7 @@ export function renderAuth(mode, error = '') {
     try {
       await passkeyLogin(username);
       state.me = await api('/me');
+      adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
       renderShell('overview');
@@ -140,6 +157,7 @@ export function renderAuth(mode, error = '') {
         username: form.get('username'), password: form.get('password'), totp: form.get('totp') || '',
       }, allow401: true });
       state.me = await api('/me');
+      adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
       renderShell('overview');
@@ -179,6 +197,8 @@ export function renderDevicePair(token) {
       // do not carry the previous account's tabs or drafts across.
       clearAccountArtifacts();
       state.me = await api('/me');
+      adoptAccountArtifacts(state.me.id);
+      adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
       history.replaceState({}, '', '/');

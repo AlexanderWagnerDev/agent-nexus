@@ -79,14 +79,25 @@ func devinFixture(t *testing.T) *DevinAdapter {
 
 func TestDevinTranscriptCycleIsBounded(t *testing.T) {
 	adapter := devinFixture(t)
-	// Close the fixture chain into a cycle: node 1 now points at node 4, so the
-	// recursive parent walk would never reach a root. A corrupt store must not
-	// turn a transcript read into an unbounded query.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Capture the acyclic chain first. It walks 3 -> 2 -> 1.
+	baseline, err := adapter.Transcript(ctx, "dev-visible", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if baseline.Total == 0 {
+		t.Fatal("baseline transcript is empty")
+	}
+
+	// Close the same chain into a cycle: node 1 now points back at node 3, so
+	// the recursive parent walk would never reach a root. A corrupt store must
+	// not turn a transcript read into an unbounded query.
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(adapter.db))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE message_nodes SET parent_node_id=4 WHERE session_id='dev-visible' AND node_id=1`); err != nil {
+	if _, err := db.Exec(`UPDATE message_nodes SET parent_node_id=3 WHERE session_id='dev-visible' AND node_id=1`); err != nil {
 		db.Close()
 		t.Fatal(err)
 	}
@@ -94,8 +105,6 @@ func TestDevinTranscriptCycleIsBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	done := make(chan struct{})
 	var transcript protocol.Transcript
 	var readErr error
@@ -111,11 +120,11 @@ func TestDevinTranscriptCycleIsBounded(t *testing.T) {
 		if transcript.Total == 0 || len(transcript.Messages) == 0 {
 			t.Fatalf("cyclic transcript returned no bounded messages: %+v", transcript)
 		}
-		// The depth cap bounds the walk; the DISTINCT projection must also
-		// collapse repeated nodes so a four-node cycle yields four messages,
-		// not thousands of replayed ones.
-		if transcript.Total > 100 {
-			t.Fatalf("cyclic transcript repeated nodes: %d messages from a four-node chain", transcript.Total)
+		// The depth cap bounds the walk and the DISTINCT projection collapses
+		// repeated nodes, so the cyclic read must contain exactly the same
+		// distinct messages as the acyclic baseline.
+		if transcript.Total != baseline.Total {
+			t.Fatalf("cyclic transcript repeated nodes: %d messages, baseline %d", transcript.Total, baseline.Total)
 		}
 	case <-time.After(15 * time.Second):
 		cancel()
