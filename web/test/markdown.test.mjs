@@ -55,6 +55,14 @@ test('escapes attribute-breaking quotes', () => {
   assert.equal(escapeHtml('" onmouseover="x'), '&quot; onmouseover=&quot;x');
 });
 
+test('bounds blockquote recursion for hostile transcripts', () => {
+  // A long run of ">" used to recurse once per level and throw a stack
+  // overflow while rendering an otherwise harmless message.
+  const html = renderMarkdown(`${'>'.repeat(5000)} deep`);
+  assert.ok(html.includes('deep'));
+  assert.ok(html.includes('<blockquote>'));
+});
+
 test('renders footnotes with back references', () => {
   const html = renderMarkdown('A claim.[^1]\n\n[^1]: The source with **detail**.');
   assert.ok(html.includes('footnote-ref'));

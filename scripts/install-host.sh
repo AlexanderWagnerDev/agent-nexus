@@ -82,6 +82,14 @@ if [ "$DEVELOPMENT" -eq 1 ] && [ -n "$VERSION" ]; then
   echo "--version cannot be combined with --development or --channel development" >&2
   exit 2
 fi
+if [ "$REQUIRE_SIGNATURE" -eq 1 ] && [ "$ALLOW_CHECKSUM_ONLY" -eq 1 ]; then
+  echo "--require-signature and --allow-checksum-only contradict each other" >&2
+  exit 2
+fi
+if [ "$DEVELOPMENT" -eq 1 ] && [ "$REQUIRE_SIGNATURE" -eq 1 ]; then
+  echo "--require-signature cannot be combined with --development: development artifacts are not signed" >&2
+  exit 2
+fi
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in

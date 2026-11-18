@@ -125,6 +125,12 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
 if ($Development -and $Version) {
   Fail "-Version cannot be combined with -Development or -Channel development."
 }
+if ($RequireSignature -and $AllowChecksumOnly) {
+  Fail "-RequireSignature and -AllowChecksumOnly contradict each other."
+}
+if ($Development -and $RequireSignature) {
+  Fail "-RequireSignature cannot be combined with -Development or -Channel development: development artifacts are not signed."
+}
 
 function Get-Headers {
   $headers = @{ "Accept" = "application/vnd.github+json"; "User-Agent" = "AgentNexus-Installer" }

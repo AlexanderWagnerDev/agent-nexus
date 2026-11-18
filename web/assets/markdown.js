@@ -164,7 +164,12 @@ function renderList(lines, ordered, defs = null) {
   return ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`;
 }
 
-function renderBlocks(source, defs = null) {
+// markdownMaxBlockquoteDepth bounds blockquote recursion. A transcript can
+// contain a very long run of ">" characters, and unbounded recursion would
+// throw a stack overflow while rendering an otherwise harmless message.
+const markdownMaxBlockquoteDepth = 32;
+
+function renderBlocks(source, defs = null, depth = 0) {
   const lines = String(source ?? '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let paragraph = [];
@@ -204,7 +209,10 @@ function renderBlocks(source, defs = null) {
         i += 1;
       }
       i -= 1;
-      out.push(`<blockquote>${renderBlocks(quote.join('\n'), defs)}</blockquote>`);
+      const quoted = quote.join('\n');
+      out.push(depth >= markdownMaxBlockquoteDepth
+        ? `<blockquote><p>${inline(quoted, defs)}</p></blockquote>`
+        : `<blockquote>${renderBlocks(quoted, defs, depth + 1)}</blockquote>`);
       continue;
     }
     if (/^\s*[-*+]\s+/.test(line)) {
