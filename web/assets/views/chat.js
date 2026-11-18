@@ -897,49 +897,51 @@ export async function pageStructuredRun(id, run) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let voiceBase = '';
-  let voiceActive = false;
+  let voiceDisposed = false;
   if (SpeechRecognition) {
     voiceButton.hidden = false;
+    const setVoiceIdle = () => {
+      voiceButton.classList.remove('active');
+      voiceButton.title = t('Start voice input');
+      voiceButton.setAttribute('aria-label', t('Start voice input'));
+    };
     voiceButton.addEventListener('click', () => {
       if (recognition) {
-        voiceActive = false;
+        // Stop but keep the recognizer current until onend: the browser can
+        // still deliver the final result after stop(), and it must be kept.
         recognition.stop();
-        recognition = null;
-        voiceButton.classList.remove('active');
-        voiceButton.title = t('Start voice input');
-        voiceButton.setAttribute('aria-label', t('Start voice input'));
+        setVoiceIdle();
         return;
       }
-      recognition = new SpeechRecognition();
-      recognition.lang = getLang() === 'de' ? 'de-DE' : 'en-US';
-      recognition.interimResults = true;
-      recognition.continuous = false;
+      const current = new SpeechRecognition();
+      recognition = current;
+      current.lang = getLang() === 'de' ? 'de-DE' : 'en-US';
+      current.interimResults = true;
+      current.continuous = false;
       voiceBase = textarea.value;
-      voiceActive = true;
       voiceButton.classList.add('active');
       voiceButton.title = t('Stop voice input');
       voiceButton.setAttribute('aria-label', t('Stop voice input'));
-      recognition.onresult = (event) => {
-        // stop() can still deliver a final result after page teardown; it
-        // must not write a draft into the next account's storage.
-        if (!voiceActive) return;
+      current.onresult = (event) => {
+        // A disposed page (or a replaced recognizer) must not write a draft.
+        if (voiceDisposed || recognition !== current) return;
         let text = '';
         for (let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
         textarea.value = `${voiceBase}${voiceBase && !voiceBase.endsWith(' ') ? ' ' : ''}${text}`;
         autosize();
         storeSet(draftKey(id), textarea.value);
       };
-      recognition.onerror = (event) => {
+      current.onerror = (event) => {
+        if (voiceDisposed || recognition !== current) return;
         if (event.error !== 'aborted' && event.error !== 'no-speech') toast(t('Voice input failed: {error}', { error: event.error }), true);
       };
-      recognition.onend = () => {
-        voiceActive = false;
+      current.onend = () => {
+        // A stale end event must not clear the recognizer that replaced it.
+        if (recognition !== current) return;
         recognition = null;
-        voiceButton.classList.remove('active');
-        voiceButton.title = t('Start voice input');
-        voiceButton.setAttribute('aria-label', t('Start voice input'));
+        setVoiceIdle();
       };
-      recognition.start();
+      current.start();
     });
   }
   const draft = storeGet(draftKey(id), '');
@@ -1304,7 +1306,7 @@ export async function pageStructuredRun(id, run) {
     gitRefreshHook = null;
     document.removeEventListener('keydown', shortcutHandler);
     state.wsHandlers.delete(handler);
-    voiceActive = false;
+    voiceDisposed = true;
     try { recognition?.stop(); } catch { /* not running */ }
     recognition = null;
   };

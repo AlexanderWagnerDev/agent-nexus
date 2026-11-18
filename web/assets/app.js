@@ -8,7 +8,7 @@ import { setUnauthorizedHook, setStepUpHook } from './api.js';
 import { parseRoute } from './routes.js';
 import { route, setPageHandler } from './router.js';
 import { installGlobalUi, loadUserTheme, renderShell } from './shell.js';
-import { renderAuth, renderDevicePair, ensureStepUp, clearAccountArtifacts } from './auth.js';
+import { renderAuth, renderDevicePair, ensureStepUp, clearAccountArtifacts, adoptAccountArtifacts } from './auth.js';
 import { pageOverview } from './views/overview.js';
 import { pageHosts } from './views/hosts.js';
 import { pageHostDetail } from './views/host-detail.js';
@@ -76,6 +76,7 @@ async function boot() {
     if (status.setup_required) return renderAuth('setup');
     try {
       state.me = await api('/me', { allow401: true });
+      adoptAccountArtifacts(state.me.id);
       await loadUserTheme();
       renderShell('overview');
       await route();
