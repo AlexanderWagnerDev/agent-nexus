@@ -94,11 +94,13 @@ func TestDevinTranscriptCycleIsBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan struct{})
 	var transcript protocol.Transcript
 	var readErr error
 	go func() {
-		transcript, readErr = adapter.Transcript(context.Background(), "dev-visible", 0, 100)
+		transcript, readErr = adapter.Transcript(ctx, "dev-visible", 0, 100)
 		close(done)
 	}()
 	select {
@@ -109,7 +111,18 @@ func TestDevinTranscriptCycleIsBounded(t *testing.T) {
 		if transcript.Total == 0 || len(transcript.Messages) == 0 {
 			t.Fatalf("cyclic transcript returned no bounded messages: %+v", transcript)
 		}
+		// The depth cap bounds the walk; the DISTINCT projection must also
+		// collapse repeated nodes so a four-node cycle yields four messages,
+		// not thousands of replayed ones.
+		if transcript.Total > 100 {
+			t.Fatalf("cyclic transcript repeated nodes: %d messages from a four-node chain", transcript.Total)
+		}
 	case <-time.After(15 * time.Second):
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+		}
 		t.Fatal("transcript walk did not terminate on a cyclic message graph")
 	}
 }

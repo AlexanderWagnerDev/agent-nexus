@@ -102,15 +102,21 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 		byID[s.NativeID] = s
 	}
 
-	// A query that cannot run must not look like an empty store: the daemon
-	// replaces its last snapshot with whatever discovery returns, so an empty
-	// result would remove every OpenCode session from the hub and prune the
-	// search index. Track whether at least one existing table was read
-	// successfully and report a failure only when none was.
-	var queryErr error
-	queriedOK := false
+	// Discovery replaces the daemon's last snapshot, so an unreadable store
+	// must be reported instead of looking like an empty one: otherwise every
+	// OpenCode session disappears from the hub and the index prunes them.
+	// session_v2 is authoritative; a legacy-table failure is only fatal when
+	// there is no complete v2 snapshot.
+	v2Exists, err := sqliteTableExistsErr(db, "session_v2")
+	if err != nil {
+		return nil, fmt.Errorf("opencode schema lookup: %w", err)
+	}
+	legacyExists, err := sqliteTableExistsErr(db, "session")
+	if err != nil {
+		return nil, fmt.Errorf("opencode schema lookup: %w", err)
+	}
 
-	if a.tableExists(db, "session_v2") {
+	readV2 := func() error {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
 			(SELECT COUNT(*) FROM session_message m WHERE m.session_id = s.id),
@@ -119,36 +125,33 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
 		if err != nil {
-			queryErr = fmt.Errorf("opencode session_v2 query: %w", err)
-		} else {
-			rowsRead, scanFailed := 0, 0
-			for rows.Next() {
-				rowsRead++
-				var s protocol.Session
-				var created, updated int64
-				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID, &s.ForkedFromNativeID) == nil {
-					s.CreatedAt = time.UnixMilli(created).UTC()
-					s.UpdatedAt = time.UnixMilli(updated).UTC()
-					add(s)
-				} else {
-					scanFailed++
-				}
-			}
-			switch {
-			case rows.Err() != nil:
-				queryErr = fmt.Errorf("opencode session_v2 read: %w", rows.Err())
-			case rowsRead > 0 && scanFailed == rowsRead:
-				// A table that exists but no longer decodes is schema drift,
-				// not an empty store. Keep the previous snapshot.
-				queryErr = fmt.Errorf("opencode session_v2: none of the %d rows matched the expected schema", rowsRead)
-			default:
-				queriedOK = true
-			}
-			rows.Close()
+			return fmt.Errorf("opencode session_v2 query: %w", err)
 		}
+		defer rows.Close()
+		var scanErr error
+		for rows.Next() {
+			var s protocol.Session
+			var created, updated int64
+			if err := rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID, &s.ForkedFromNativeID); err != nil {
+				if scanErr == nil {
+					scanErr = err
+				}
+				continue
+			}
+			s.CreatedAt = time.UnixMilli(created).UTC()
+			s.UpdatedAt = time.UnixMilli(updated).UTC()
+			add(s)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("opencode session_v2 read: %w", err)
+		}
+		if scanErr != nil {
+			return fmt.Errorf("opencode session_v2 row: %w", scanErr)
+		}
+		return nil
 	}
 
-	if a.tableExists(db, "session") {
+	readLegacy := func() error {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
 			(SELECT COUNT(*) FROM message m WHERE m.session_id = s.id),
@@ -157,44 +160,48 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
 		if err != nil {
-			if queryErr == nil {
-				queryErr = fmt.Errorf("opencode session query: %w", err)
-			}
-		} else {
-			rowsRead, scanFailed := 0, 0
-			for rows.Next() {
-				rowsRead++
-				var s protocol.Session
-				var created, updated int64
-				if rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID) == nil {
-					s.CreatedAt = time.UnixMilli(created).UTC()
-					s.UpdatedAt = time.UnixMilli(updated).UTC()
-					// v2 is authoritative when the same native ID exists there.
-					if _, exists := byID[s.NativeID]; !exists {
-						add(s)
-					}
-				} else {
-					scanFailed++
-				}
-			}
-			switch {
-			case rows.Err() != nil:
-				if queryErr == nil {
-					queryErr = fmt.Errorf("opencode session read: %w", rows.Err())
-				}
-			case rowsRead > 0 && scanFailed == rowsRead:
-				if queryErr == nil {
-					queryErr = fmt.Errorf("opencode session: none of the %d rows matched the expected schema", rowsRead)
-				}
-			default:
-				queriedOK = true
-			}
-			rows.Close()
+			return fmt.Errorf("opencode session query: %w", err)
 		}
+		defer rows.Close()
+		var scanErr error
+		for rows.Next() {
+			var s protocol.Session
+			var created, updated int64
+			if err := rows.Scan(&s.NativeID, &s.Title, &s.Cwd, &created, &updated, &s.MessageCount, &s.ParentNativeID); err != nil {
+				if scanErr == nil {
+					scanErr = err
+				}
+				continue
+			}
+			s.CreatedAt = time.UnixMilli(created).UTC()
+			s.UpdatedAt = time.UnixMilli(updated).UTC()
+			// v2 is authoritative when the same native ID exists there.
+			if _, exists := byID[s.NativeID]; !exists {
+				add(s)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("opencode session read: %w", err)
+		}
+		if scanErr != nil {
+			return fmt.Errorf("opencode session row: %w", scanErr)
+		}
+		return nil
 	}
 
-	if !queriedOK && queryErr != nil {
-		return nil, queryErr
+	var v2Err, legacyErr error
+	if v2Exists {
+		v2Err = readV2()
+	}
+	if legacyExists {
+		legacyErr = readLegacy()
+	}
+	if v2Exists {
+		if v2Err != nil {
+			return nil, v2Err
+		}
+	} else if legacyErr != nil {
+		return nil, legacyErr
 	}
 
 	out := make([]protocol.Session, 0, len(order))

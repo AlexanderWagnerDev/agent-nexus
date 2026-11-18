@@ -599,6 +599,7 @@ Object.assign(de, {
   'WebSocket is reconnecting; try again in a moment': 'WebSocket verbindet sich neu; versuche es gleich noch einmal',
   'Approval sent': 'Genehmigung gesendet',
   'Approval resolved': 'Genehmigung beantwortet',
+  'Waiting for approval confirmation': 'Warte auf Bestätigung der Genehmigung',
   'Agent status: {state}': 'Agent-Status: {state}',
   'Allow once': 'Einmal erlauben',
   'Choose a model': 'Modell wählen',
