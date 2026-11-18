@@ -206,7 +206,7 @@ func TestACPSessionUpdateEvents(t *testing.T) {
 	}
 	update := acp.SessionToolCallUpdate{
 		ToolCallId: "c1", Status: acp.PatchSet(acp.ToolCallStatusCompleted),
-		RawOutput: acp.WithUpdateRawOutput("ok"),
+		RawOutput: acp.PatchSet(json.RawMessage(`"ok"`)),
 	}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestACPSessionUpdateEvents(t *testing.T) {
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
 	}
-	update = acp.SessionToolCallUpdate{ToolCallId: "c3", RawInput: acp.WithUpdateRawInput(map[string]any{"path": "x"})}
+	update = acp.SessionToolCallUpdate{ToolCallId: "c3", RawInput: acp.PatchSet(json.RawMessage(`{"path":"x"}`))}
 	if err := r.SessionUpdate(context.Background(), acp.SessionNotification{Update: acp.SessionUpdate{ToolCallUpdate: &update}}); err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestACPRequestPermissionApprovedAndCancelled(t *testing.T) {
 		SessionId: "session-1",
 		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: "c1", Title: acp.PatchSet(title),
-			RawInput: acp.WithUpdateRawInput(map[string]any{"path": "a.txt"}),
+			RawInput: acp.PatchSet(json.RawMessage(`{"path":"a.txt"}`)),
 		},
 		Options: []acp.PermissionOption{
 			{OptionId: "yes", Kind: acp.PermissionOptionKindAllowOnce},
