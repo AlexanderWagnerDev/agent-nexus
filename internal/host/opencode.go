@@ -151,7 +151,7 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 		return nil
 	}
 
-	readLegacy := func() error {
+	readLegacy := func() ([]protocol.Session, error) {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), s.directory, s.time_created, s.time_updated,
 			(SELECT COUNT(*) FROM message m WHERE m.session_id = s.id),
@@ -160,9 +160,10 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			WHERE s.time_archived IS NULL
 			ORDER BY s.time_updated DESC`)
 		if err != nil {
-			return fmt.Errorf("opencode session query: %w", err)
+			return nil, fmt.Errorf("opencode session query: %w", err)
 		}
 		defer rows.Close()
+		var found []protocol.Session
 		var scanErr error
 		for rows.Next() {
 			var s protocol.Session
@@ -175,26 +176,25 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 			}
 			s.CreatedAt = time.UnixMilli(created).UTC()
 			s.UpdatedAt = time.UnixMilli(updated).UTC()
-			// v2 is authoritative when the same native ID exists there.
-			if _, exists := byID[s.NativeID]; !exists {
-				add(s)
-			}
+			found = append(found, s)
 		}
 		if err := rows.Err(); err != nil {
-			return fmt.Errorf("opencode session read: %w", err)
+			return nil, fmt.Errorf("opencode session read: %w", err)
 		}
 		if scanErr != nil {
-			return fmt.Errorf("opencode session row: %w", scanErr)
+			return nil, fmt.Errorf("opencode session row: %w", scanErr)
 		}
-		return nil
+		return found, nil
 	}
 
-	var v2Err, legacyErr error
+	var v2Err error
 	if v2Exists {
 		v2Err = readV2()
 	}
+	var legacyRows []protocol.Session
+	var legacyErr error
 	if legacyExists {
-		legacyErr = readLegacy()
+		legacyRows, legacyErr = readLegacy()
 	}
 	if v2Exists {
 		if v2Err != nil {
@@ -202,6 +202,16 @@ func (a *OpenCodeAdapter) ListSessions(ctx context.Context) ([]protocol.Session,
 		}
 	} else if legacyErr != nil {
 		return nil, legacyErr
+	}
+	// Merge the legacy rows only after a complete read. A partial legacy
+	// result would publish some legacy-only sessions and drop the others,
+	// while a complete v2 snapshot must remain usable without it.
+	if legacyErr == nil {
+		for _, s := range legacyRows {
+			if _, exists := byID[s.NativeID]; !exists {
+				add(s)
+			}
+		}
 	}
 
 	out := make([]protocol.Session, 0, len(order))

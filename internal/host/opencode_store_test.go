@@ -48,6 +48,28 @@ func TestOpenCodeDiscoveryDoesNotMaskV2FailureWithLegacySuccess(t *testing.T) {
 	}
 }
 
+func TestOpenCodeDiscoveryKeepsV2WhenLegacyScanIsPartial(t *testing.T) {
+	// v2 is complete. The legacy table has one valid and one undecodable row;
+	// merging the valid one would publish a partial legacy result, so no
+	// legacy row may be merged. The v2 session must still be discovered.
+	newOpenCodeStore(t,
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, fork_session_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`,
+		`CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT)`,
+		`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_v2','Fix auth','/tmp/project',1000,2000)`,
+		`INSERT INTO session(id,title,directory,time_created,time_updated) VALUES('ses_legacy_ok','Legacy','/tmp/legacy',1000,2000)`,
+		`INSERT INTO session(id,title,directory,time_created,time_updated) VALUES('ses_legacy_bad','Bad','/tmp/legacy','not-a-number',2000)`,
+	)
+	sessions, err := NewOpenCodeAdapter("opencode").ListSessions(context.Background())
+	if err != nil {
+		t.Fatalf("a complete v2 snapshot must survive a partial legacy read: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].NativeID != "ses_v2" {
+		t.Fatalf("partial legacy rows were merged: %+v", sessions)
+	}
+}
+
 func TestOpenCodeDiscoveryKeepsCompleteV2WhenLegacyFails(t *testing.T) {
 	// OpenCode 2.x stores can keep an empty legacy session table without the
 	// legacy message table. v2 is authoritative and complete, so its sessions

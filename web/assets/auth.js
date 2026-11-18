@@ -39,8 +39,16 @@ export function authFrame(inner, subtitle) {
 export function adoptAccountArtifacts(userId) {
   if (!userId) return;
   let previous = '';
-  try { previous = localStorage.getItem('nexus-artifact-owner') || ''; } catch { /* storage unavailable */ }
-  if (previous && previous !== userId) clearAccountArtifacts();
+  let hasArtifacts = false;
+  try {
+    previous = localStorage.getItem('nexus-artifact-owner') || '';
+    hasArtifacts = Boolean(localStorage.getItem('nexus-tabs')) ||
+      Object.keys(localStorage).some((key) => key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-'));
+  } catch { /* storage unavailable */ }
+  // Without an owner marker, saved artifacts cannot be attributed. Clear them
+  // before the first signed-in shell after an upgrade instead of handing them
+  // to whichever account signs in next.
+  if (previous ? previous !== userId : hasArtifacts) clearAccountArtifacts();
   try { localStorage.setItem('nexus-artifact-owner', userId); } catch { /* storage unavailable */ }
 }
 
