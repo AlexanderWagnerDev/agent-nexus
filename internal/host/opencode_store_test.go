@@ -11,6 +11,78 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func newOpenCodeStore(t *testing.T, statements ...string) string {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENCODE_DB", dbPath)
+	return dbPath
+}
+
+func TestOpenCodeDiscoveryDoesNotMaskV2FailureWithLegacySuccess(t *testing.T) {
+	// session_v2 lost a column, but the empty legacy tables are still
+	// readable. A legacy success must not turn the v2 failure into an empty
+	// snapshot that removes every session from the hub.
+	newOpenCodeStore(t,
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`,
+		`CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT)`,
+		`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_broken','Broken','/tmp/project',1,2)`,
+	)
+	sessions, err := NewOpenCodeAdapter("opencode").ListSessions(context.Background())
+	if err == nil {
+		t.Fatalf("legacy success masked a v2 schema failure: %+v", sessions)
+	}
+}
+
+func TestOpenCodeDiscoveryKeepsCompleteV2WhenLegacyFails(t *testing.T) {
+	// OpenCode 2.x stores can keep an empty legacy session table without the
+	// legacy message table. v2 is authoritative and complete, so its sessions
+	// must still be discovered.
+	newOpenCodeStore(t,
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, fork_session_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`,
+		`CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_v2','Fix auth','/tmp/project',1000,2000)`,
+	)
+	sessions, err := NewOpenCodeAdapter("opencode").ListSessions(context.Background())
+	if err != nil {
+		t.Fatalf("a complete v2 snapshot must not fail on the legacy table: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].NativeID != "ses_v2" {
+		t.Fatalf("unexpected sessions: %+v", sessions)
+	}
+}
+
+func TestOpenCodeDiscoveryReportsPartialScanFailure(t *testing.T) {
+	// SQLite stores a non-numeric time_created as text; scanning it into
+	// int64 fails. A partial snapshot would drop the unreadable session from
+	// the hub, so the whole read must fail instead.
+	newOpenCodeStore(t,
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY, title TEXT, directory TEXT, parent_id TEXT, fork_session_id TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER)`,
+		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`,
+		`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_ok','Good','/tmp/project',1000,2000)`,
+		`INSERT INTO session_v2(id,title,directory,time_created,time_updated) VALUES('ses_bad','Bad','/tmp/project','not-a-number',2000)`,
+	)
+	sessions, err := NewOpenCodeAdapter("opencode").ListSessions(context.Background())
+	if err == nil {
+		t.Fatalf("partial scan failure was reported as a successful snapshot: %+v", sessions)
+	}
+}
+
 func TestOpenCodeDiscoveryReportsUnreadableStore(t *testing.T) {
 	// A v2 store whose schema drifted (fork_session_id is missing) used to
 	// produce an empty, successful snapshot. The daemon would then replace the

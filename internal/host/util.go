@@ -139,11 +139,19 @@ func sliceContains(items []string, want string) bool {
 }
 
 func sqliteTableExists(db *sql.DB, table string) bool {
+	exists, err := sqliteTableExistsErr(db, table)
+	return err == nil && exists
+}
+
+// sqliteTableExistsErr distinguishes a missing table from a failed schema
+// lookup. Discovery paths use it so a broken sqlite_master query is not
+// mistaken for an empty store.
+func sqliteTableExistsErr(db *sql.DB, table string) (bool, error) {
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
-		return false
+		return false, err
 	}
-	return n > 0
+	return n > 0, nil
 }
 
 func sqliteTableColumns(db *sql.DB, table string) map[string]bool {

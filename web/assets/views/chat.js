@@ -609,8 +609,11 @@ export async function pageStructuredRun(id, run) {
         toast(t('WebSocket is reconnecting; try again in a moment'), true);
         return;
       }
-      card.remove();
-      noteText(t('Approval sent'), true);
+      // Keep the controls until approval.resolved. The hub can still reject
+      // the decision (for example when the step-up expires first), and the
+      // host would then wait with no way to answer from this card.
+      card.querySelectorAll('[data-approval]').forEach((item) => { item.disabled = true; });
+      noteText(t('Waiting for approval confirmation'));
     }));
     approval.appendChild(card);
     autoScroll = true;
@@ -717,6 +720,13 @@ export async function pageStructuredRun(id, run) {
     if (msg.type === 'queue.changed') loadQueue().catch(() => {});
     if (msg.type === 'run.prompt.sent' && msg.message) appendUser(msg.message);
     if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
+    if (msg.type === 'error' && msg.error) {
+      // A rejected approval (for example a missing or expired step-up) must
+      // restore the controls instead of leaving a disabled card behind.
+      approval.querySelectorAll('.approval-actions button').forEach((button) => { button.disabled = false; });
+      noteText(msg.error, true);
+      toast(msg.error, true);
+    }
     if (msg.type === 'run.state') {
       const epochChanged = Boolean(msg.epoch && runEpoch && msg.epoch !== runEpoch);
       if (msg.epoch) runEpoch = msg.epoch;
@@ -887,10 +897,12 @@ export async function pageStructuredRun(id, run) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let voiceBase = '';
+  let voiceActive = false;
   if (SpeechRecognition) {
     voiceButton.hidden = false;
     voiceButton.addEventListener('click', () => {
       if (recognition) {
+        voiceActive = false;
         recognition.stop();
         recognition = null;
         voiceButton.classList.remove('active');
@@ -903,10 +915,14 @@ export async function pageStructuredRun(id, run) {
       recognition.interimResults = true;
       recognition.continuous = false;
       voiceBase = textarea.value;
+      voiceActive = true;
       voiceButton.classList.add('active');
       voiceButton.title = t('Stop voice input');
       voiceButton.setAttribute('aria-label', t('Stop voice input'));
       recognition.onresult = (event) => {
+        // stop() can still deliver a final result after page teardown; it
+        // must not write a draft into the next account's storage.
+        if (!voiceActive) return;
         let text = '';
         for (let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
         textarea.value = `${voiceBase}${voiceBase && !voiceBase.endsWith(' ') ? ' ' : ''}${text}`;
@@ -917,6 +933,7 @@ export async function pageStructuredRun(id, run) {
         if (event.error !== 'aborted' && event.error !== 'no-speech') toast(t('Voice input failed: {error}', { error: event.error }), true);
       };
       recognition.onend = () => {
+        voiceActive = false;
         recognition = null;
         voiceButton.classList.remove('active');
         voiceButton.title = t('Start voice input');
@@ -1287,7 +1304,9 @@ export async function pageStructuredRun(id, run) {
     gitRefreshHook = null;
     document.removeEventListener('keydown', shortcutHandler);
     state.wsHandlers.delete(handler);
+    voiceActive = false;
     try { recognition?.stop(); } catch { /* not running */ }
+    recognition = null;
   };
   if (!state.embed && window.innerWidth > 900) textarea.focus();
 }

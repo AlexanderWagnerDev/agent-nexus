@@ -31,11 +31,24 @@ export function authFrame(inner, subtitle) {
   }));
 }
 
+// teardownPage stops page-owned work (timers, speech recognition, socket
+// handlers) before the view is replaced or account data is removed.
+function teardownPage() {
+  if (state.pageCleanup) {
+    try { state.pageCleanup(); } catch { /* ignore */ }
+    state.pageCleanup = null;
+  }
+  state.wsHandlers.clear();
+  state.run = null;
+}
+
 // clearAccountArtifacts removes data that belongs to the signed-in account.
 // It runs on sign-out and whenever a request loses the session, so a shared
 // browser never shows the previous user's tabs, recent sessions or prompt
-// drafts to the next account.
+// drafts to the next account. Page teardown runs first: voice recognition can
+// deliver a late result that would write a draft after the storage clear.
 export function clearAccountArtifacts() {
+  teardownPage();
   state.openTabs = [];
   storeSet('nexus-tabs', []);
   try {
@@ -52,6 +65,7 @@ export function renderAuth(mode, error = '') {
   // the callers that observed a confirmed account boundary (401 hook, logout,
   // successful re-pairing), not here: a transient /me failure must not delete
   // the user's drafts.
+  teardownPage();
   closeModal();
   state.me = null;
   disconnectWS();

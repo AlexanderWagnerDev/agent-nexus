@@ -318,7 +318,9 @@ func (a *DevinAdapter) readChain(ctx context.Context, db *sql.DB, nativeID strin
 			FROM message_nodes mn JOIN chain c ON mn.node_id = c.parent_node_id
 			WHERE mn.session_id = ? AND c.depth < ?
 		)
-		SELECT chat_message, created_at FROM chain ORDER BY node_id ASC`,
+		SELECT chat_message, created_at FROM (
+			SELECT DISTINCT node_id, chat_message, created_at FROM chain
+		) ORDER BY node_id ASC`,
 		nativeID, head.Int64, nativeID, devinChainDepthLimit)
 	if err != nil {
 		return nil
