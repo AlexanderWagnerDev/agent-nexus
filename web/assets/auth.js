@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { loadUserTheme, renderShell } from './shell.js';
-import { state, storeSet } from './state.js';
+import { state, storeSet, shouldClearAccountArtifacts } from './state.js';
 import { app, closeModal, modal, toast } from './ui.js';
 import { disconnectWS } from './ws.js';
 import { route } from './router.js';
@@ -39,17 +39,11 @@ export function authFrame(inner, subtitle) {
 export function adoptAccountArtifacts(userId) {
   if (!userId) return;
   let previous = '';
-  let hasArtifacts = false;
-  try {
-    previous = localStorage.getItem('nexus-artifact-owner') || '';
-    hasArtifacts = Boolean(localStorage.getItem('nexus-tabs')) ||
-      Boolean(localStorage.getItem('nexus-recent')) ||
-      Object.keys(localStorage).some((key) => key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-'));
-  } catch { /* storage unavailable */ }
+  try { previous = localStorage.getItem('nexus-artifact-owner') || ''; } catch { /* storage unavailable */ }
   // Without an owner marker, saved artifacts cannot be attributed. Clear them
   // before the first signed-in shell after an upgrade instead of handing them
   // to whichever account signs in next.
-  if (previous ? previous !== userId : hasArtifacts) clearAccountArtifacts();
+  if (shouldClearAccountArtifacts(previous, userId)) clearAccountArtifacts();
   try { localStorage.setItem('nexus-artifact-owner', userId); } catch { /* storage unavailable */ }
 }
 

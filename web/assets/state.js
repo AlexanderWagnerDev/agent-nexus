@@ -38,3 +38,22 @@ export function storeSet(key, value) {
 export function draftKey(runID) {
   return `nexus-draft-${runID}`;
 }
+
+// hasSavedAccountArtifacts reports whether this browser holds tabs, recent
+// command-palette entries, prompt drafts or run configuration.
+export function hasSavedAccountArtifacts() {
+  try {
+    if (localStorage.getItem('nexus-tabs') || localStorage.getItem('nexus-recent')) return true;
+    return Object.keys(localStorage).some((key) => key.startsWith('nexus-draft-') || key.startsWith('nexus-run-config-'));
+  } catch {
+    return false;
+  }
+}
+
+// shouldClearAccountArtifacts decides whether stored artifacts belong to the
+// account that is signing in. With no recorded owner, any saved artifact is
+// unowned and must be cleared instead of being shown to the next account.
+export function shouldClearAccountArtifacts(owner, userID) {
+  if (!userID) return false;
+  return owner ? owner !== userID : hasSavedAccountArtifacts();
+}
