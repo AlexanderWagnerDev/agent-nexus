@@ -4,10 +4,50 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.15] - 2026-11-18
+
+### Added
+
+- Host policy `allow_persistent_approvals` (default `false`). It permits the
+  agent's own persistent permission option; without it an `always` decision is
+  downgraded to a one-time approval on the host and audited.
+
+### Changed
+
+- Persistent approvals require a five-minute step-up confirmation on the hub,
+  and the browser only offers "Always allow" when the host permits it. ACP now
+  selects the adapter's persistent option for an `always` decision and never
+  selects it for `once`.
+- `GET /api/v1/hosts/{id}/update` accepts only the documented `channel` values.
+  Arbitrary strings previously created a new cache key and one real host-side
+  release check each.
+- Browser tabs, recent-session hints and prompt drafts are bound to the account
+  that created them and cleared when another account signs in. A 401 clears
+  them on the account boundary and closes an open modal so the login form stays
+  usable.
+- The Devin transcript walk is depth-bounded and deduplicated by node, so a
+  corrupt parent cycle cannot replay messages or run forever.
 
 ### Fixed
 
+- OpenCode discovery reports schema, query and row-decode failures instead of
+  returning an empty snapshot. A failed read no longer removes every OpenCode
+  session from the hub and prunes its search-index documents; a complete v2
+  snapshot still wins over a broken legacy table.
+- OpenCode search escapes `LIKE` wildcards, so a query containing `%` or `_` no
+  longer selects every row.
+- The notification and Web Push destination filter blocks shared address space
+  (100.64.0.0/10, including the Alibaba metadata service), 192.0.0.0/24,
+  198.18.0.0/15 and 240/4 in addition to loopback, private and link-local
+  addresses.
+- A long run of `>` in a transcript message no longer overflows the Markdown
+  renderer's stack; blockquote recursion is capped.
+- Approval cards stay visible with disabled controls until the hub reports
+  `approval.resolved`, and are re-enabled if the decision is rejected. Voice
+  input stops on page teardown and ignores late results.
+- The installers reject `--require-signature` together with `--development`
+  (development artifacts are unsigned) and with `--allow-checksum-only`
+  (contradictory flags).
 - CI fuzz smoke uses an execution-count budget instead of wall-clock time.
   Go 1.26 can report "context deadline exceeded" from a timed run without a
   crashing input (golang/go#82362).
@@ -280,6 +320,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.15]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.15
 [0.1.14]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.14
 [0.1.13]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.13
 [0.1.12]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.12
