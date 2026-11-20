@@ -67,7 +67,7 @@ maintainer decision.
 - **Still unproven:** physical three-host operation, real Linux/macOS agent
   sessions, Docker/Portainer runtime deployment, update/rollback against a real
   release feed, a real Claude ACP session, host-side device-signature verification,
-  PostgreSQL. Visual baselines exist only for Windows 11.
+  PostgreSQL. Visual baselines exist for Linux and Windows 11.
 
 | Phase | Status | Implemented | Notable gaps |
 | --- | --- | --- | --- |
