@@ -1,10 +1,16 @@
 name: Visual regression (manual and nightly)
 
-# Baselines are captured from the synthetic demo with a pinned clock. They were
-# produced on Windows 11; Linux font rasterisation differs, hence the wider
-# tolerance in this job. Linux reference baselines do not exist yet.
+# Baselines are captured from the synthetic demo with a pinned clock and are
+# committed per platform because font rasterisation differs. To refresh them,
+# dispatch this workflow with update_baselines enabled, download the
+# visual-baseline-<os> artifact and commit its files.
 on:
   workflow_dispatch:
+    inputs:
+      update_baselines:
+        description: Regenerate this runner's baselines and upload them instead of comparing
+        type: boolean
+        default: false
   schedule:
     - cron: "30 3 * * *"
 
@@ -41,15 +47,30 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Compare demo views with baselines
+      - name: Regenerate baselines
+        if: ${{ inputs.update_baselines }}
         working-directory: web
         env:
           E2E_SPAWN_DEMO: "1"
           DEMO_PORT: "8791"
-          VISUAL_MAX_RATIO: "0.05"
+        run: npm run e2e:visual:update
+      - name: Compare demo views with baselines
+        if: ${{ !inputs.update_baselines }}
+        working-directory: web
+        env:
+          E2E_SPAWN_DEMO: "1"
+          DEMO_PORT: "8791"
+          VISUAL_MAX_RATIO: "0.01"
         run: npm run e2e:visual
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: failure()
+        if: ${{ inputs.update_baselines }}
+        with:
+          name: visual-baseline-${{ runner.os }}
+          path: web/e2e/demo/visual-baseline/${{ runner.os }}
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: ${{ failure() && !inputs.update_baselines }}
         with:
           name: visual-report
           path: visual-report

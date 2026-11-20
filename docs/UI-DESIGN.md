@@ -163,12 +163,14 @@ in `web/e2e/virtual.mjs`.
 ## Visual regression
 
 `cd web && npm run e2e:visual` compares four stable views against
-`web/e2e/demo/visual-baseline/` with a pinned clock (`DEMO_NOW`) and the
-synthetic demo. Differences are written to `visual-report/`. After an intended
-UI change, regenerate the baselines with `npm run e2e:visual:update` and review
-the PNG diff. The scheduled/manual GitHub workflow runs the same comparison on
-a Windows runner; it is not a pull-request gate because font rasterisation
-differs between the reference machine and CI.
+`web/e2e/demo/visual-baseline/<platform>/` with a pinned clock (`DEMO_NOW`)
+and the synthetic demo. Differences are written to `visual-report/`. After an
+intended UI change, regenerate the baselines with `npm run e2e:visual:update`
+on the affected platform and review the PNG diff. Font rasterisation differs
+between operating systems, so each platform keeps its own baselines; the
+nightly GitHub workflow compares against the Linux set. To refresh the Linux
+set, dispatch the workflow with `update_baselines` enabled, download the
+`visual-baseline-Linux` artifact and commit it.
 
 ## Known gaps
 
@@ -187,6 +189,5 @@ differs between the reference machine and CI.
   stable desktop views (login, sessions, hosts, settings); the activity views
   are excluded because they render live elapsed times for the scripted demo
   runs.
-  Baselines currently come from Windows 11; the manual/nightly CI job uses a
-  wider tolerance on the Windows runner, and no Linux/macOS reference baselines
-  exist yet.
+  Baselines are stored per platform; Linux and Windows 11 have reference sets,
+  macOS does not yet.

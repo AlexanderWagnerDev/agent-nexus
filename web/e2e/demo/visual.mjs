@@ -1,9 +1,10 @@
 // Visual regression for the synthetic demo. Compares the stable desktop views
-// against committed baselines captured at a pinned clock.
+// against committed baselines captured at a pinned clock. Text rasterisation
+// differs per OS, so each platform has its own baseline directory.
 //
 //   E2E_SPAWN_DEMO=1 npm run e2e:visual   # CI: starts hub + demo
 //   DEMO_BASE=http://127.0.0.1:8790 npm run e2e:visual
-//   npm run e2e:visual -- --update        # refresh baselines
+//   npm run e2e:visual -- --update        # refresh this platform's baselines
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +15,8 @@ import { chromiumLaunchOptions } from '../launch.mjs';
 
 const here = import.meta.dirname;
 const repoRoot = path.resolve(here, '..', '..', '..');
-const baselineDir = path.join(here, 'visual-baseline');
+const baselinePlatform = { win32: 'Windows', darwin: 'macOS' }[process.platform] || 'Linux';
+const baselineDir = path.join(here, 'visual-baseline', baselinePlatform);
 const reportDir = path.join(repoRoot, 'visual-report');
 const update = process.argv.includes('--update');
 const fixedNow = process.env.DEMO_NOW || '2026-11-11T12:00:00Z';
@@ -30,8 +32,6 @@ const views = [
   ['#/hosts', 'hosts-dark.png', 'Hosts'],
   ['#/settings', 'settings-dark.png', 'Settings'],
 ];
-
-fs.mkdirSync(baselineDir, { recursive: true });
 
 let demo = null;
 async function startDemo() {
@@ -146,9 +146,8 @@ async function capture() {
 function compare(name, current) {
   const baselinePath = path.join(baselineDir, name);
   if (!fs.existsSync(baselinePath)) {
-    fs.writeFileSync(baselinePath, current);
-    console.log(`baseline created: ${name}`);
-    return true;
+    console.error(`no ${baselinePlatform} baseline for ${name}; run npm run e2e:visual -- --update on this platform`);
+    return false;
   }
   const before = PNG.sync.read(fs.readFileSync(baselinePath));
   const after = PNG.sync.read(current);
