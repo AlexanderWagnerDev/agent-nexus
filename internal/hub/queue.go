@@ -89,7 +89,10 @@ func terminalQueueState(state string) bool {
 const queueStartupGrace = 30 * time.Second
 
 func (s *Server) dispatchDuePrompts() {
-	if grace := s.queueGraceUntil.Load(); grace != 0 && time.Now().UnixNano() < grace {
+	s.queueGraceMu.Lock()
+	grace := s.queueGraceUntil
+	s.queueGraceMu.Unlock()
+	if !grace.IsZero() && time.Now().Before(grace) {
 		return
 	}
 	items, err := s.store.DuePromptQueue(time.Now())

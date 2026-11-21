@@ -9,6 +9,10 @@ import (
 	"testing"
 )
 
+func shellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
 func TestNormalizeRepoURL(t *testing.T) {
 	cases := map[string]string{
 		"git@github.com:owner/repo.git":         "https://github.com/owner/repo",
@@ -52,7 +56,7 @@ func TestGitViewDoesNotRunRepositoryExternalDiff(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := "echo ran > " + strings.ReplaceAll(marker, `\`, "/")
+	script := "echo ran > " + shellSingleQuote(strings.ReplaceAll(marker, `\`, "/"))
 	git("config", "diff.external", "sh -c '"+script+"'")
 
 	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
@@ -90,7 +94,7 @@ func TestGitViewDoesNotRunRepositoryCleanFilter(t *testing.T) {
 	}
 	git("add", "a.txt", ".gitattributes")
 	git("commit", "-qm", "initial")
-	script := "echo ran > " + strings.ReplaceAll(marker, `\`, "/") + "; cat"
+	script := "echo ran > " + shellSingleQuote(strings.ReplaceAll(marker, `\`, "/")) + "; cat"
 	git("config", "filter.evil.clean", "sh -c '"+script+"'")
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
 		t.Fatal(err)

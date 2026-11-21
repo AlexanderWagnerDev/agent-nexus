@@ -45,7 +45,9 @@ func TestPausedQueueOnEndedRunIsResolvedAfterGrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := NewServer(Config{}, store, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	srv.queueGraceUntil.Store(time.Now().Add(-time.Second).UnixNano())
+	srv.queueGraceMu.Lock()
+	srv.queueGraceUntil = time.Now().Add(-time.Second)
+	srv.queueGraceMu.Unlock()
 	srv.dispatchDuePrompts()
 	got, err := store.PromptQueueItem(item.ID)
 	if err != nil {
@@ -100,7 +102,9 @@ func TestDuePromptSurvivesStartupRecoveryGrace(t *testing.T) {
 
 	// After the grace period a run that the host never re-adopted is failed,
 	// and its item is failed instead of being sent to a dead run.
-	srv.queueGraceUntil.Store(time.Now().Add(-time.Second).UnixNano())
+	srv.queueGraceMu.Lock()
+	srv.queueGraceUntil = time.Now().Add(-time.Second)
+	srv.queueGraceMu.Unlock()
 	srv.dispatchDuePrompts()
 	got, err = store.PromptQueueItem(item.ID)
 	if err != nil {

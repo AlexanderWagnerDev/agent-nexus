@@ -189,7 +189,10 @@ func (s *Store) PromptQueuePaused(runID string) (bool, error) {
 // can accept them now. Filtering in SQL keeps the worker from loading large
 // attachment payloads for every busy or paused run on every two-second pass.
 func (s *Store) DuePromptQueue(now time.Time) ([]protocol.PromptQueueItem, error) {
-	rows, err := s.db.Query(`SELECT q.id,q.run_id,q.user_id,q.device_id,q.position,q.text,q.options,q.scheduled_at,q.state,q.attempts,q.last_error,q.created_at,q.updated_at
+	rows, err := s.db.Query(`SELECT q.id,q.run_id,q.user_id,q.device_id,q.position,
+		  CASE WHEN r.ended_at IS NOT NULL THEN '' ELSE q.text END,
+		  CASE WHEN r.ended_at IS NOT NULL THEN '' ELSE q.options END,
+		  q.scheduled_at,q.state,q.attempts,q.last_error,q.created_at,q.updated_at
 		FROM prompt_queue q JOIN runs r ON r.id=q.run_id
 		WHERE q.state='queued' AND (q.scheduled_at IS NULL OR q.scheduled_at<=?)
 		  AND ((r.queue_paused=0 AND r.state='idle') OR r.ended_at IS NOT NULL)

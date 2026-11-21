@@ -43,6 +43,10 @@ func TestSearchIndexHitsRespectLivePolicy(t *testing.T) {
 		lastByAgent: map[string][]protocol.Session{
 			"claude": {
 				{NativeID: "hidden-a", Agent: "claude", Cwd: "/outside"},
+				{NativeID: "hidden-b", Agent: "claude", Cwd: "/outside"},
+				{NativeID: "hidden-c", Agent: "claude", Cwd: "/outside"},
+				{NativeID: "hidden-d", Agent: "claude", Cwd: "/outside"},
+				{NativeID: "hidden-e", Agent: "claude", Cwd: "/outside"},
 				{NativeID: "allowed-session", Agent: "claude", Cwd: root},
 			},
 		},

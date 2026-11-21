@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -69,7 +68,8 @@ type Server struct {
 	queueKick       chan struct{}
 	queueMu         sync.Mutex
 	queueArmed      map[string]bool
-	queueGraceUntil atomic.Int64 // Unix nanoseconds; written once at startup and in tests
+	queueGraceMu    sync.Mutex
+	queueGraceUntil time.Time
 
 	notificationAllowPrivate bool
 	mcpLimiter               *rateLimiter
@@ -135,7 +135,9 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 		logger.Info("closed runs left active by the previous hub process", "runs", n)
 		// Give reconnecting hosts time to re-adopt their runs before the queue
 		// worker judges due prompts against the synthetic restart failure.
-		s.queueGraceUntil.Store(time.Now().Add(queueStartupGrace).UnixNano())
+		s.queueGraceMu.Lock()
+		s.queueGraceUntil = time.Now().Add(queueStartupGrace)
+		s.queueGraceMu.Unlock()
 	}
 	store.ReconcileTasks()
 	store.PurgeExpiredSessions()
