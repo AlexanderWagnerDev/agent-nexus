@@ -82,11 +82,12 @@ func gitFilterOverrides(ctx context.Context, cwd string) []string {
 // helpers such as core.fsmonitor, diff.external or clean filters, which Git
 // would otherwise execute as the host user; a read-only transcript grant must
 // not become code execution. --no-ext-diff/--no-textconv cover external diff
-// and textconv, core.fsmonitor=false covers status, and the filter overrides
-// neutralise clean/process commands.
-func gitCommand(ctx context.Context, cwd string, args ...string) *exec.Cmd {
+// and textconv, core.fsmonitor=false covers status, and filters neutralise
+// clean/process commands. Callers that run several commands pass filters once
+// instead of probing the config for every invocation.
+func gitCommand(ctx context.Context, cwd string, filters []string, args ...string) *exec.Cmd {
 	base := []string{"-c", "core.fsmonitor=false"}
-	base = append(base, gitFilterOverrides(ctx, cwd)...)
+	base = append(base, filters...)
 	base = append(base, "-C", cwd)
 	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
 	cmd.Dir = cwd
@@ -140,7 +141,8 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 	var repo gitRepoCache
 	if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		cmd := gitCommand(cctx, cwd, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
+		// rev-parse does not read worktree content, so it needs no filters.
+		cmd := gitCommand(cctx, cwd, nil, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
 		out, err := cmd.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -153,7 +155,7 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 			}
 		}
 		cctx, cancel = context.WithTimeout(ctx, 3*time.Second)
-		remote := gitCommand(cctx, cwd, "remote", "get-url", "origin")
+		remote := gitCommand(cctx, cwd, nil, "remote", "get-url", "origin")
 		out, err = remote.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -229,11 +231,12 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	filters := gitFilterOverrides(ctx, cwd)
 	run := func(limit int, args ...string) (string, bool) {
 		if len(args) > 0 && args[0] == "diff" {
 			args = append([]string{"diff", "--no-ext-diff", "--no-textconv"}, args[1:]...)
 		}
-		cmd := gitCommand(ctx, cwd, args...)
+		cmd := gitCommand(ctx, cwd, filters, args...)
 		// Bound the allocation while git runs. A multi-hundred-megabyte diff
 		// used to be fully buffered before the truncation check.
 		buf := &cappedBuffer{limit: limit}
