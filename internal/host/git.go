@@ -63,6 +63,11 @@ func gitFilterOverrides(ctx context.Context, cwd string) []string {
 		if len(parts) < 3 || parts[0] != "filter" {
 			continue
 		}
+		// Only clean/process can run during diff/status. Smudge and required
+		// keys must not create a fake clean command of their own.
+		if key := parts[len(parts)-1]; key != "clean" && key != "process" {
+			continue
+		}
 		name := strings.Join(parts[1:len(parts)-1], ".")
 		if name == "" || seen[name] {
 			continue
