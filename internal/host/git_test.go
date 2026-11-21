@@ -198,12 +198,15 @@ func TestGitFilterOverridesIgnoreSmudgeOnlyDriver(t *testing.T) {
 	git("init", "-q")
 	git("config", "filter.smudgeonly.smudge", "cat")
 	git("config", "filter.team/format+v2.smudge", "cat")
+	// An ambiguous name must be ignored here: smudge-only drivers are skipped
+	// before validation because they never run during status/diff.
+	git("config", "filter.smudge=only.smudge", "cat")
 	overrides, err := gitFilterOverrides(context.Background(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, arg := range overrides {
-		if strings.HasPrefix(arg, "filter.smudgeonly.") || strings.HasPrefix(arg, "filter.team/") {
+		if strings.HasPrefix(arg, "filter.smudgeonly.") || strings.HasPrefix(arg, "filter.team/") || strings.HasPrefix(arg, "filter.smudge=only.") {
 			t.Fatalf("smudge-only driver got a clean override: %s", arg)
 		}
 	}
