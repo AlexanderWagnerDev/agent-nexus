@@ -197,10 +197,99 @@ func TestGitFilterOverridesIgnoreSmudgeOnlyDriver(t *testing.T) {
 	}
 	git("init", "-q")
 	git("config", "filter.smudgeonly.smudge", "cat")
-	for _, arg := range gitFilterOverrides(context.Background(), dir) {
+	overrides, err := gitFilterOverrides(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arg := range overrides {
 		if strings.HasPrefix(arg, "filter.smudgeonly.") {
 			t.Fatalf("smudge-only driver got a clean override: %s", arg)
 		}
+	}
+}
+
+func TestGitViewRejectsUnsafeFilterName(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=foo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+	marker := filepath.Join(dir, "injected")
+	config := "[filter \"foo.clean=touch " + filepath.ToSlash(marker) + " #\"]\n\tclean = cat\n"
+	f, err := os.OpenFile(filepath.Join(dir, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(config); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	if _, err := d.gitView(context.Background(), dir); err == nil {
+		t.Fatal("Git review accepted an ambiguous filter name")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("filter-name injection executed during Git review")
+	}
+}
+
+func TestGitViewReadsFileWithRequiredSmudgeOnlyFilter(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=preview\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+	git("config", "filter.preview.smudge", "cat")
+	git("config", "filter.preview.required", "true")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	view, err := d.gitView(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(view.Diff, "+two") {
+		t.Fatalf("required smudge-only filter hid the patch:\n%s", view.Diff)
 	}
 }
 

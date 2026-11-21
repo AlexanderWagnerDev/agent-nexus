@@ -35,12 +35,27 @@ func gitEnv() []string {
 	)
 }
 
+// safeFilterName keeps the name unambiguous inside a -c key=value argument.
+// Names with '=' or control characters could otherwise rewrite another key.
+func safeFilterName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // gitFilterOverrides disables repository-configured clean/process filters.
 // A diff converts working-tree content through the clean filter, so a hostile
 // .gitattributes/.git/config pair can execute a command even with external
 // diff and textconv disabled. Reading the config does not run any filter.
 // One --list call covers system-free local, included and worktree config.
-func gitFilterOverrides(ctx context.Context, cwd string) []string {
+func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--list", "--name-only", "--show-origin", "--includes")
@@ -49,10 +64,11 @@ func gitFilterOverrides(ctx context.Context, cwd string) []string {
 	hideProcessWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
-		return nil
+		return nil, errors.New("could not read the Git filter configuration")
 	}
-	seen := map[string]bool{}
-	var overrides []string
+	withCommands := map[string]bool{}
+	required := map[string]bool{}
+	var commandOrder, requiredOrder []string
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		// --show-origin prefixes each key with "<origin>\t".
@@ -63,23 +79,43 @@ func gitFilterOverrides(ctx context.Context, cwd string) []string {
 		if len(parts) < 3 || parts[0] != "filter" {
 			continue
 		}
-		// Only clean/process can run during diff/status. Smudge and required
-		// keys must not create a fake clean command of their own.
-		if key := parts[len(parts)-1]; key != "clean" && key != "process" {
-			continue
-		}
 		name := strings.Join(parts[1:len(parts)-1], ".")
-		if name == "" || seen[name] {
+		if name == "" {
 			continue
 		}
-		seen[name] = true
+		if !safeFilterName(name) {
+			return nil, errors.New("Git filter configuration uses an unsupported filter name")
+		}
+		switch parts[len(parts)-1] {
+		case "clean", "process":
+			if !withCommands[name] {
+				withCommands[name] = true
+				commandOrder = append(commandOrder, name)
+			}
+		case "required":
+			if !required[name] {
+				required[name] = true
+				requiredOrder = append(requiredOrder, name)
+			}
+		}
+	}
+	var overrides []string
+	for _, name := range commandOrder {
 		overrides = append(overrides,
 			"-c", "filter."+name+".clean=cat",
 			"-c", "filter."+name+".process=",
 			"-c", "filter."+name+".required=false",
 		)
 	}
-	return overrides
+	// A required driver without clean/process would make Git abort the clean
+	// conversion. Clearing only the flag keeps the patch readable and does not
+	// invent a clean command.
+	for _, name := range requiredOrder {
+		if !withCommands[name] {
+			overrides = append(overrides, "-c", "filter."+name+".required=false")
+		}
+	}
+	return overrides, nil
 }
 
 // gitCommand builds a read-only Git invocation. The repository can configure
@@ -235,7 +271,11 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	var filterErr error
 	run := func(filtered bool, limit int, args ...string) (string, bool) {
+		if filterErr != nil {
+			return "", false
+		}
 		if len(args) > 0 && args[0] == "diff" {
 			args = append([]string{"diff", "--no-ext-diff", "--no-textconv"}, args[1:]...)
 		}
@@ -243,7 +283,12 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 		if filtered {
 			// Refresh immediately before each command that can run a filter:
 			// a config change during the review must not outlive discovery.
-			filters = gitFilterOverrides(ctx, cwd)
+			var err error
+			filters, err = gitFilterOverrides(ctx, cwd)
+			if err != nil {
+				filterErr = err
+				return "", false
+			}
 		}
 		cmd := gitCommand(ctx, cwd, filters, args...)
 		// Bound the allocation while git runs. A multi-hundred-megabyte diff
@@ -274,6 +319,9 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 		if !statOnly {
 			diff, diffTruncated = run(true, 200_000, "diff", "--no-color")
 		}
+	}
+	if filterErr != nil {
+		return gitView{}, filterErr
 	}
 	fileCount := 0
 	for _, line := range strings.Split(status, "\n") {
