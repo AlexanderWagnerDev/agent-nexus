@@ -64,6 +64,51 @@ func TestGitViewDoesNotRunRepositoryExternalDiff(t *testing.T) {
 	}
 }
 
+func TestGitViewDoesNotRunRepositoryCleanFilter(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not available for the helper script")
+	}
+	dir := t.TempDir()
+	marker := filepath.Clean(filepath.Join(dir, "clean-filter-ran"))
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=evil\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "a.txt", ".gitattributes")
+	git("commit", "-qm", "initial")
+	script := "echo ran > " + strings.ReplaceAll(marker, `\`, "/") + "; cat"
+	git("config", "filter.evil.clean", "sh -c '"+script+"'")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	view, err := d.gitView(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("repository-configured clean filter ran during read-only Git review")
+	}
+	if !strings.Contains(view.Diff, "+two") {
+		t.Fatalf("ordinary diff output changed:\n%s", view.Diff)
+	}
+}
+
 func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")

@@ -88,16 +88,18 @@ accurately without turning optional testing into release blockers.
    run. The workflow refuses a dispatch from `main` or from any other ref,
    because the cosign certificate identity must be
    `.../.github/workflows/release.yml@refs/tags/<tag>`. Re-running it from the
-   same tag republishes that tag as-is.
+   same tag targets that tag; existing release assets may have to be removed
+   first because GitHub does not guarantee in-place replacement.
 3. Review the published release's assets, checksums, SBOMs and the cosign
    bundle. The archive names are
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
-   release, delete the release and the tag before dispatching it again.
+   release, delete the release before re-dispatching; if you also delete the
+   tag, recreate and push it first so the next dispatch can start from it.
 4. Releases produced before this procedure (including v0.1.15) carry a
    `refs/heads/main` certificate identity and fail the tag-bound cosign check.
-   Republish them from their tag, or users with cosign installed must use the
-   checksum-only path until they are republished.
+   Republish them from a recreated tag, or users with cosign installed must use
+   the checksum-only path until they are republished.
 5. Then run **Container** with `release_tag=v0.1.15` and `publish_latest=true`
    for a stable release. The dispatch publishes `v0.1.15`, `0.1.15`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
