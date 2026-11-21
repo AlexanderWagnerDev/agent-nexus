@@ -182,6 +182,28 @@ func TestGitViewDoesNotRunIncludedOrWorktreeCleanFilters(t *testing.T) {
 	}
 }
 
+func TestGitFilterOverridesIgnoreSmudgeOnlyDriver(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "filter.smudgeonly.smudge", "cat")
+	for _, arg := range gitFilterOverrides(context.Background(), dir) {
+		if strings.HasPrefix(arg, "filter.smudgeonly.") {
+			t.Fatalf("smudge-only driver got a clean override: %s", arg)
+		}
+	}
+}
+
 func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
