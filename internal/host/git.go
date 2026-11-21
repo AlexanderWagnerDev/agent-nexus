@@ -80,16 +80,13 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 			continue
 		}
 		name := strings.Join(parts[1:len(parts)-1], ".")
-		if name == "" {
-			continue
-		}
 		key := parts[len(parts)-1]
 		// smudge cannot run during status/diff, so an unusual name there must
 		// not block the review.
 		if key != "clean" && key != "process" && key != "required" {
 			continue
 		}
-		if !safeFilterName(name) {
+		if name == "" || !safeFilterName(name) {
 			return nil, errors.New("git filter configuration uses an unsupported filter name")
 		}
 		switch key {
@@ -132,7 +129,9 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 // clean/process commands. Callers that run several commands pass filters once
 // instead of probing the config for every invocation.
 func gitCommand(ctx context.Context, cwd string, filters []string, args ...string) *exec.Cmd {
-	base := []string{"-c", "core.fsmonitor=false"}
+	// diff.submodule=short keeps submodule output to a gitlink line. A
+	// submodule's own filters are outside this config and must not run.
+	base := []string{"-c", "core.fsmonitor=false", "-c", "diff.submodule=short"}
 	base = append(base, filters...)
 	base = append(base, "-C", cwd)
 	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
@@ -283,7 +282,7 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 			return "", false
 		}
 		if len(args) > 0 && args[0] == "diff" {
-			args = append([]string{"diff", "--no-ext-diff", "--no-textconv"}, args[1:]...)
+			args = append([]string{"diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all"}, args[1:]...)
 		}
 		var filters []string
 		if filtered {
@@ -313,7 +312,9 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	branch, _ := run(false, 4096, "rev-parse", "--abbrev-ref", "HEAD")
 	root, _ := run(false, 4096, "rev-parse", "--show-toplevel")
-	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1")
+	// Do not recurse into submodules: the parent config cannot neutralize
+	// filters defined inside a submodule.
+	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1", "--ignore-submodules=all")
 	stat, statTruncated := run(true, 100_000, "diff", "HEAD", "--stat", "--no-color")
 	diff, diffTruncated := "", false
 	if !statOnly {

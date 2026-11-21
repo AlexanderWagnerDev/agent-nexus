@@ -287,6 +287,147 @@ func TestGitViewRejectsUnsafeFilterName(t *testing.T) {
 	}
 }
 
+func TestGitViewRejectsEmptyFilterName(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not available for the helper script")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "empty-filter-ran")
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+	helper := filepath.Join(dir, "helper.sh")
+	if err := os.WriteFile(helper, []byte("echo ran > \"$1\"\ncat\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config := "[filter \"\"]\n\tclean = sh " + shellSingleQuote(filepath.ToSlash(helper)) + " " + shellSingleQuote(filepath.ToSlash(marker)) + "\n"
+	f, err := os.OpenFile(filepath.Join(dir, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(config); err != nil {
+		f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Prove Git itself would execute this driver, then require the review to
+	// reject the configuration instead.
+	probe := exec.Command("git", "-C", dir, "diff", "--no-ext-diff", "--no-textconv")
+	if out, err := probe.CombinedOutput(); err != nil {
+		t.Fatalf("probe diff: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("test setup did not execute the empty-name filter")
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	if _, err := d.gitView(context.Background(), dir); err == nil {
+		t.Fatal("Git review accepted an empty filter name")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("empty-name filter executed during Git review")
+	}
+}
+
+func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not available for the helper script")
+	}
+	sub := t.TempDir()
+	subGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", sub, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("submodule git %v: %v\n%s", args, err, out)
+		}
+	}
+	subGit("init", "-q")
+	if err := os.WriteFile(filepath.Join(sub, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, ".gitattributes"), []byte("*.txt filter=evil\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	subGit("add", ".")
+	subGit("commit", "-qm", "initial")
+
+	parent := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", parent, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("parent git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(parent, "p.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("init", "-q")
+	git("-c", "protocol.file.allow=always", "submodule", "add", filepath.ToSlash(sub), "sub")
+	git("add", "p.txt")
+	git("commit", "-qm", "initial")
+	subWork := filepath.Join(parent, "sub")
+	marker := filepath.Join(parent, "submodule-filter-ran")
+	helper := filepath.Join(parent, "filter-helper.sh")
+	if err := os.WriteFile(helper, []byte("echo ran > \"$1\"\ncat\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	clean := "sh " + shellSingleQuote(filepath.ToSlash(helper)) + " " + shellSingleQuote(filepath.ToSlash(marker))
+	cmd := exec.Command("git", "-C", subWork, "config", "filter.evil.clean", clean)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("configure submodule filter: %v\n%s", err, out)
+	}
+	git("config", "diff.submodule", "diff")
+	if err := os.WriteFile(filepath.Join(subWork, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "p.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Daemon{policy: Policy{AllowedRoots: []string{parent}}}
+	view, err := d.gitView(context.Background(), parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("submodule clean filter ran during Git review")
+	}
+	if !strings.Contains(view.Diff, "+two") {
+		t.Fatalf("ordinary parent diff output missing:\n%s", view.Diff)
+	}
+}
+
 func TestGitViewReadsFileWithRequiredSmudgeOnlyFilter(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")

@@ -388,13 +388,17 @@ can bind clean/process filters to tracked files, and Git would execute those
 commands as the host user. The host therefore disables external diff and
 textconv, clears `core.fsmonitor`, and replaces every clean/process filter
 command with `cat`/empty while clearing `required` for drivers that have no
-command. The filter set is re-read immediately before each command so a
-configuration change during the review cannot leave stale overrides. Filter
-names containing `=` or other characters that cannot be expressed
-unambiguously in a Git `-c` key are refused instead of reviewed. If the host
-cannot read the repository's Git configuration, the Git view fails closed and
-returns an error without status or diff data; check the local, included and
-worktree Git configuration for an unreadable or ambiguous filter name.
+command. The filter set is re-read immediately before each filtered command;
+a configuration change made after that read and before Git opens its
+configuration is not covered, but it requires write access to the host's Git
+configuration, which already permits code execution. Recursive submodule
+inspection is disabled (`--ignore-submodules=all`), so changes inside
+submodules are not shown and submodule-local filters cannot run. Filter names that are empty or contain
+characters that cannot be expressed unambiguously in a Git `-c` key are
+refused instead of reviewed. If the host cannot read the repository's Git
+configuration, the Git view fails closed and returns an error without status
+or diff data; check the local, included and worktree Git configuration for an
+unreadable or ambiguous filter name.
 
 ## 11. Remote approvals
 
