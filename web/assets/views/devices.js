@@ -113,7 +113,9 @@ export async function pageDevices() {
           // Refresh account state even if the user left the page, but never
           // apply the result to a different signed-in account.
           const me = await api('/me');
-          if (!accountID || me.id !== accountID) return;
+          // Also verify the account is still the one shown now: the response
+          // may have been requested before an account switch.
+          if (!accountID || me.id !== accountID || state.me?.id !== accountID) return;
           state.me = me;
           if (gen !== state.pageGen) return;
           closeModal();

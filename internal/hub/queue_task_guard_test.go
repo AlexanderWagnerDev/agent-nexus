@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -125,16 +126,22 @@ func TestPromptQueueByteBudgetIsAtomic(t *testing.T) {
 	}
 	const limit = 4
 	var wg sync.WaitGroup
+	var succeeded atomic.Int32
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = hub.store.EnqueuePrompt(runID, owner.ID, "device", "abc", nil, nil, limit)
+			if _, err := hub.store.EnqueuePrompt(runID, owner.ID, "device", "abc", nil, nil, limit); err == nil {
+				succeeded.Add(1)
+			}
 		}()
 	}
 	wg.Wait()
-	if got := hub.store.PromptQueueBytes(runID); got > limit {
-		t.Fatalf("concurrent enqueues exceeded the byte budget: %d > %d", got, limit)
+	if got := succeeded.Load(); got != 1 {
+		t.Fatalf("expected exactly one enqueue to fit the budget, got %d successes", got)
+	}
+	if got := hub.store.PromptQueueBytes(runID); got != 3 {
+		t.Fatalf("expected the stored queue to be 3 bytes, got %d", got)
 	}
 }
 
