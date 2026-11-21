@@ -183,11 +183,6 @@ export async function logout() {
     // showing the account, but the server-side session may still be valid.
     revoked = false;
   }
-  try {
-    const registration = await navigator.serviceWorker?.getRegistration();
-    const subscription = await registration?.pushManager?.getSubscription();
-    await subscription?.unsubscribe();
-  } catch { /* push is optional */ }
   state.me = null;
   clearAccountArtifacts();
   if (state.notifTimer) {
@@ -196,6 +191,11 @@ export async function logout() {
   }
   disconnectWS();
   renderAuth('login');
+  // Push cleanup is best-effort and must not delay the local sign-out.
+  navigator.serviceWorker?.getRegistration()
+    .then((registration) => registration?.pushManager?.getSubscription())
+    .then((subscription) => subscription?.unsubscribe())
+    .catch(() => {});
   if (!revoked) toast(t('The hub could not be reached to revoke this session; it may still be active on the server.'), true);
 }
 

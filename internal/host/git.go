@@ -12,20 +12,79 @@ import (
 	"time"
 )
 
-// gitCommand builds a read-only Git invocation. The repository can configure
-// helpers such as core.fsmonitor or diff.external, which Git would otherwise
-// execute as the host user; a read-only transcript grant must not become code
-// execution. --no-ext-diff/--no-textconv cover diff, and core.fsmonitor=false
-// covers status. The environment is scrubbed of interactive and system config.
-func gitCommand(ctx context.Context, cwd string, args ...string) *exec.Cmd {
-	base := []string{"-c", "core.fsmonitor=false", "-C", cwd}
-	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
-	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(),
+// gitEnv removes repository-location and config-injection variables from the
+// daemon environment, then adds non-interactive defaults. AgentNexus only ever
+// reviews the explicitly selected working tree.
+func gitEnv() []string {
+	out := make([]string, 0, len(os.Environ())+5)
+	for _, entry := range os.Environ() {
+		key := entry
+		if i := strings.IndexByte(entry, '='); i >= 0 {
+			key = entry[:i]
+		}
+		if strings.HasPrefix(strings.ToUpper(key), "GIT_") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return append(out,
 		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_ATTR_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
 		"GIT_PAGER=cat",
 	)
+}
+
+// gitFilterOverrides disables repository-configured clean/process filters.
+// A diff converts working-tree content through the clean filter, so a hostile
+// .gitattributes/.git/config pair can execute a command even with external
+// diff and textconv disabled. Reading the config does not run any filter.
+func gitFilterOverrides(ctx context.Context, cwd string) []string {
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--local", "--name-only", "--get-regexp", `^filter\..*\.(clean|process)$`)
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
+	hideProcessWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var overrides []string
+	for _, key := range strings.Split(string(out), "\n") {
+		key = strings.TrimSpace(key)
+		parts := strings.Split(key, ".")
+		if len(parts) < 3 || parts[0] != "filter" {
+			continue
+		}
+		name := strings.Join(parts[1:len(parts)-1], ".")
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		overrides = append(overrides,
+			"-c", "filter."+name+".clean=cat",
+			"-c", "filter."+name+".process=",
+			"-c", "filter."+name+".required=false",
+		)
+	}
+	return overrides
+}
+
+// gitCommand builds a read-only Git invocation. The repository can configure
+// helpers such as core.fsmonitor, diff.external or clean filters, which Git
+// would otherwise execute as the host user; a read-only transcript grant must
+// not become code execution. --no-ext-diff/--no-textconv cover external diff
+// and textconv, core.fsmonitor=false covers status, and the filter overrides
+// neutralise clean/process commands.
+func gitCommand(ctx context.Context, cwd string, args ...string) *exec.Cmd {
+	base := []string{"-c", "core.fsmonitor=false"}
+	base = append(base, gitFilterOverrides(ctx, cwd)...)
+	base = append(base, "-C", cwd)
+	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
 	hideProcessWindow(cmd)
 	return cmd
 }

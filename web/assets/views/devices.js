@@ -110,8 +110,10 @@ export async function pageDevices() {
         try {
           await api('/auth/totp/enable', { method: 'POST', body: { secret: data.secret, code: new FormData(e.target).get('code') } });
           if (gen !== state.pageGen || !state.me) return;
+          const me = await api('/me');
+          if (gen !== state.pageGen || !state.me) return;
           closeModal();
-          state.me = await api('/me');
+          state.me = me;
           toast(t('TOTP enabled'));
           pageDevices();
         } catch (err) { toast(err.message, true); }
