@@ -155,7 +155,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 	// Set the password ourselves: OpenCode 2.x only prints a generated
 	// password when the variable is absent, so waiting for the line would hang
 	// when the daemon environment already defines it.
-	cmd.Env = withEnv(append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1"), "OPENCODE_SERVER_PASSWORD", password)
+	cmd.Env = withEnv(append(childEnv(), "TERM=xterm-256color", "NO_COLOR=1"), "OPENCODE_SERVER_PASSWORD", password)
 	stdout, stderr, closeWrite, err := stdioPipes(cmd)
 	if err != nil {
 		cancel()

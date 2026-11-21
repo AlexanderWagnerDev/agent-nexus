@@ -4,12 +4,142 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// gitEnv removes repository-location and config-injection variables from the
+// daemon environment, then adds non-interactive defaults. AgentNexus only ever
+// reviews the explicitly selected working tree.
+func gitEnv() []string {
+	out := make([]string, 0, len(os.Environ())+5)
+	for _, entry := range os.Environ() {
+		key := entry
+		if i := strings.IndexByte(entry, '='); i >= 0 {
+			key = entry[:i]
+		}
+		if strings.HasPrefix(strings.ToUpper(key), "GIT_") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return append(out,
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_ATTR_NOSYSTEM=1",
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_PAGER=cat",
+	)
+}
+
+// safeFilterName keeps the name unambiguous inside a -c key=value argument.
+// Names with '=' or control characters could otherwise rewrite another key.
+func safeFilterName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' || r == '/' || r == '+' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// gitFilterOverrides disables repository-configured clean/process filters.
+// A diff converts working-tree content through the clean filter, so a hostile
+// .gitattributes/.git/config pair can execute a command even with external
+// diff and textconv disabled. Reading the config does not run any filter.
+// One --list call covers system-free local, included and worktree config.
+func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--list", "--name-only", "--show-origin", "--includes")
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
+	hideProcessWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, errors.New("could not read the git filter configuration")
+	}
+	withCommands := map[string]bool{}
+	required := map[string]bool{}
+	var commandOrder, requiredOrder []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		// --show-origin prefixes each key with "<origin>\t".
+		if i := strings.LastIndexByte(line, '\t'); i >= 0 {
+			line = strings.TrimSpace(line[i+1:])
+		}
+		parts := strings.Split(line, ".")
+		if len(parts) < 3 || parts[0] != "filter" {
+			continue
+		}
+		name := strings.Join(parts[1:len(parts)-1], ".")
+		key := parts[len(parts)-1]
+		// smudge cannot run during status/diff, so an unusual name there must
+		// not block the review.
+		if key != "clean" && key != "process" && key != "required" {
+			continue
+		}
+		if name == "" || !safeFilterName(name) {
+			return nil, errors.New("git filter configuration uses an unsupported filter name")
+		}
+		switch key {
+		case "clean", "process":
+			if !withCommands[name] {
+				withCommands[name] = true
+				commandOrder = append(commandOrder, name)
+			}
+		case "required":
+			if !required[name] {
+				required[name] = true
+				requiredOrder = append(requiredOrder, name)
+			}
+		}
+	}
+	var overrides []string
+	for _, name := range commandOrder {
+		overrides = append(overrides,
+			"-c", "filter."+name+".clean=cat",
+			"-c", "filter."+name+".process=",
+			"-c", "filter."+name+".required=false",
+		)
+	}
+	// A required driver without clean/process would make Git abort the clean
+	// conversion. Clearing only the flag keeps the patch readable and does not
+	// invent a clean command.
+	for _, name := range requiredOrder {
+		if !withCommands[name] {
+			overrides = append(overrides, "-c", "filter."+name+".required=false")
+		}
+	}
+	return overrides, nil
+}
+
+// gitCommand builds a read-only Git invocation. The repository can configure
+// helpers such as core.fsmonitor, diff.external or clean filters, which Git
+// would otherwise execute as the host user; a read-only transcript grant must
+// not become code execution. --no-ext-diff/--no-textconv cover external diff
+// and textconv, core.fsmonitor=false covers status, and filters neutralise
+// clean/process commands. Callers that run several commands pass filters once
+// instead of probing the config for every invocation.
+func gitCommand(ctx context.Context, cwd string, filters []string, args ...string) *exec.Cmd {
+	// diff.submodule=short keeps submodule output to a gitlink line. A
+	// submodule's own filters are outside this config and must not run.
+	base := []string{"-c", "core.fsmonitor=false", "-c", "diff.submodule=short"}
+	base = append(base, filters...)
+	base = append(base, "-C", cwd)
+	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
+	hideProcessWindow(cmd)
+	return cmd
+}
 
 // cappedBuffer keeps at most limit bytes and remembers that it dropped data.
 // It always reports a full write so the child is not killed by a write error.
@@ -56,9 +186,8 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 	var repo gitRepoCache
 	if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		cmd := exec.CommandContext(cctx, "git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
-		cmd.Dir = cwd
-		hideProcessWindow(cmd)
+		// rev-parse does not read worktree content, so it needs no filters.
+		cmd := gitCommand(cctx, cwd, nil, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
 		out, err := cmd.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -71,9 +200,7 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 			}
 		}
 		cctx, cancel = context.WithTimeout(ctx, 3*time.Second)
-		remote := exec.CommandContext(cctx, "git", "-C", cwd, "remote", "get-url", "origin")
-		remote.Dir = cwd
-		hideProcessWindow(remote)
+		remote := gitCommand(cctx, cwd, nil, "remote", "get-url", "origin")
 		out, err = remote.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -108,6 +235,15 @@ func normalizeRepoURL(raw string) string {
 		}
 		value = "https://" + value
 	}
+	// A remote may embed a username or access token. The grouped project key
+	// only needs host and path; never send credentials to the hub or store them
+	// in its database.
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		parsed.User = nil
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		value = parsed.String()
+	}
 	value = strings.TrimSuffix(strings.TrimRight(value, "/"), ".git")
 	return value
 }
@@ -140,10 +276,26 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	run := func(limit int, args ...string) (string, bool) {
-		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
-		cmd.Dir = cwd
-		hideProcessWindow(cmd)
+	var filterErr error
+	run := func(filtered bool, limit int, args ...string) (string, bool) {
+		if filterErr != nil {
+			return "", false
+		}
+		if len(args) > 0 && args[0] == "diff" {
+			args = append([]string{"diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all"}, args[1:]...)
+		}
+		var filters []string
+		if filtered {
+			// Refresh immediately before each command that can run a filter:
+			// a config change during the review must not outlive discovery.
+			var err error
+			filters, err = gitFilterOverrides(ctx, cwd)
+			if err != nil {
+				filterErr = err
+				return "", false
+			}
+		}
+		cmd := gitCommand(ctx, cwd, filters, args...)
 		// Bound the allocation while git runs. A multi-hundred-megabyte diff
 		// used to be fully buffered before the truncation check.
 		buf := &cappedBuffer{limit: limit}
@@ -158,20 +310,25 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 		}
 		return text, false
 	}
-	branch, _ := run(4096, "rev-parse", "--abbrev-ref", "HEAD")
-	root, _ := run(4096, "rev-parse", "--show-toplevel")
-	status, statusTruncated := run(100_000, "status", "--porcelain=v1")
-	stat, statTruncated := run(100_000, "diff", "HEAD", "--stat", "--no-color")
+	branch, _ := run(false, 4096, "rev-parse", "--abbrev-ref", "HEAD")
+	root, _ := run(false, 4096, "rev-parse", "--show-toplevel")
+	// Do not recurse into submodules: the parent config cannot neutralize
+	// filters defined inside a submodule.
+	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1", "--ignore-submodules=all")
+	stat, statTruncated := run(true, 100_000, "diff", "HEAD", "--stat", "--no-color")
 	diff, diffTruncated := "", false
 	if !statOnly {
-		diff, diffTruncated = run(200_000, "diff", "HEAD", "--no-color")
+		diff, diffTruncated = run(true, 200_000, "diff", "HEAD", "--no-color")
 	}
 	if strings.Contains(stat, "fatal: ambiguous argument 'HEAD'") || strings.Contains(diff, "fatal: ambiguous argument 'HEAD'") {
 		// A repository without a first commit has no HEAD.
-		stat, statTruncated = run(100_000, "diff", "--stat", "--no-color")
+		stat, statTruncated = run(true, 100_000, "diff", "--stat", "--no-color")
 		if !statOnly {
-			diff, diffTruncated = run(200_000, "diff", "--no-color")
+			diff, diffTruncated = run(true, 200_000, "diff", "--no-color")
 		}
+	}
+	if filterErr != nil {
+		return gitView{}, filterErr
 	}
 	fileCount := 0
 	for _, line := range strings.Split(status, "\n") {

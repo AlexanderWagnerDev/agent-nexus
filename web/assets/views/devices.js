@@ -59,8 +59,10 @@ export async function pageDevices() {
     });
   });
   document.getElementById('pair-device')?.addEventListener('click', async () => {
+    const gen = state.pageGen;
     try {
       const data = await api('/devices/pairing', { method: 'POST' });
+      if (gen !== state.pageGen || !state.me) return;
       modal(`
         <h2>${t('Pair a device')}</h2>
         <p class="hint">${t('Scan this code on a new device. It is single-use and expires in two minutes. The new device gets its own revocable session.')}</p>
@@ -90,8 +92,10 @@ export async function pageDevices() {
     }
   });
   document.getElementById('totp-begin')?.addEventListener('click', async () => {
+    const gen = state.pageGen;
     try {
       const data = await api('/auth/totp/begin', { method: 'POST' });
+      if (gen !== state.pageGen || !state.me) return;
       modal(`
         <h2>${t('Set up authenticator')}</h2>
         <p class="hint">${t('Add this secret to your authenticator app, then enter the current six-digit code to confirm.')}</p>
@@ -103,10 +107,18 @@ export async function pageDevices() {
         </form>`);
       document.getElementById('totp-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const accountID = state.me?.id;
         try {
           await api('/auth/totp/enable', { method: 'POST', body: { secret: data.secret, code: new FormData(e.target).get('code') } });
+          // Refresh account state even if the user left the page, but never
+          // apply the result to a different signed-in account.
+          const me = await api('/me');
+          // Also verify the account is still the one shown now: the response
+          // may have been requested before an account switch.
+          if (!accountID || me.id !== accountID || state.me?.id !== accountID) return;
+          state.me = me;
+          if (gen !== state.pageGen) return;
           closeModal();
-          state.me = await api('/me');
           toast(t('TOTP enabled'));
           pageDevices();
         } catch (err) { toast(err.message, true); }

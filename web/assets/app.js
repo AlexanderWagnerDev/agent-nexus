@@ -66,7 +66,10 @@ async function boot() {
   if (state.embed) document.documentElement.dataset.embed = '1';
   installGlobalUi();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  const pairToken = new URLSearchParams(location.search).get('pair');
+  let pairToken = new URLSearchParams(location.search).get('pair');
+  if (!pairToken) {
+    try { pairToken = sessionStorage.getItem('nexus-pair-token'); } catch { /* storage unavailable */ }
+  }
   if (pairToken) return renderDevicePair(pairToken);
   try {
     const status = await api('/setup/status', { allow401: true });

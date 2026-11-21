@@ -230,6 +230,12 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if task.RunID != "" {
+		// A delegated new run has a run id before the host reports its native
+		// session, so checking only task.SessionID misses exactly that window.
+		if run, _, err := s.store.RunByID(task.RunID); err == nil && run.EndedAt == nil {
+			writeError(w, http.StatusConflict, "stop the active run before deleting the task")
+			return
+		}
 		if _, active := s.store.ActiveRunForSession(task.SessionID); active {
 			writeError(w, http.StatusConflict, "stop the active run before deleting the task")
 			return
@@ -404,7 +410,7 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	if options.Model == "" && options.AgentMode == "" {
 		options = nil
 	}
-	if _, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, prompt, options, nil); err != nil {
+	if _, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, prompt, options, nil, maxQueuedRunBytes); err != nil {
 		s.store.SetTaskStatus(task.ID, protocol.TaskFailed, "", "cannot queue the delegated prompt: "+err.Error())
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

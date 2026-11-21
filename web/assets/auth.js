@@ -69,6 +69,9 @@ function teardownPage() {
 export function clearAccountArtifacts() {
   teardownPage();
   state.openTabs = [];
+  state.favorites = new Set();
+  state.notifications = [];
+  state.unread = 0;
   storeSet('nexus-tabs', []);
   try {
     localStorage.removeItem('nexus-recent');
@@ -172,7 +175,14 @@ export function renderAuth(mode, error = '') {
 }
 
 export async function logout() {
-  try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  let revoked = true;
+  try {
+    await api('/auth/logout', { method: 'POST' });
+  } catch {
+    // The local session is cleared below so a shared browser does not keep
+    // showing the account, but the server-side session may still be valid.
+    revoked = false;
+  }
   state.me = null;
   clearAccountArtifacts();
   if (state.notifTimer) {
@@ -181,9 +191,20 @@ export async function logout() {
   }
   disconnectWS();
   renderAuth('login');
+  // Push cleanup is best-effort and must not delay the local sign-out.
+  navigator.serviceWorker?.getRegistration()
+    .then((registration) => registration?.pushManager?.getSubscription())
+    .then((subscription) => subscription?.unsubscribe())
+    .catch(() => {});
+  if (!revoked) toast(t('The hub could not be reached to revoke this session; it may still be active on the server.'), true);
 }
 
 export function renderDevicePair(token) {
+  // Keep the single-use token out of the address bar, history and same-origin
+  // Referer, but in sessionStorage so a language-switch reload can restore the
+  // pairing form. It is cleared on success and disappears with the tab.
+  try { sessionStorage.setItem('nexus-pair-token', token); } catch { /* storage unavailable */ }
+  try { history.replaceState(null, '', '/'); } catch { /* ignore */ }
   authFrame(`
     <h2 class="mt-0">${t('Pair this device')}</h2>
     <p class="hint mb-2">${t('A signed-in device requested this pairing. Give this browser a name and confirm; the link is single-use.')}</p>
@@ -194,13 +215,20 @@ export function renderDevicePair(token) {
   document.getElementById('pair-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const name = new FormData(event.target).get('name');
+    let paired = false;
+    let sessionLoaded = false;
     try {
       await api('/auth/device-pair', { method: 'POST', body: { token, name }, allow401: true });
+      // The single-use token is consumed; never restore it if a later step
+      // fails, or a reload would show the pairing form again instead of the
+      // valid session.
+      paired = true;
+      try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
       // The pairing token decides which account this browser now belongs to;
       // do not carry the previous account's tabs or drafts across.
       clearAccountArtifacts();
       state.me = await api('/me');
-      adoptAccountArtifacts(state.me.id);
+      sessionLoaded = true;
       adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
@@ -208,6 +236,26 @@ export function renderDevicePair(token) {
       renderShell('overview');
       await route();
     } catch (err) {
+      if (err.status === 401) {
+        // The token is expired or already used; stop restoring it on reload.
+        try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
+        history.replaceState({}, '', '/');
+        renderAuth('login', err.message);
+        return;
+      }
+      if (sessionLoaded) {
+        // Pairing and session initialization succeeded; only a later UI step
+        // failed. Keep the session instead of returning to the login screen.
+        renderShell('overview');
+        toast(err.message, true);
+        return;
+      }
+      if (paired) {
+        // The token is consumed but /me failed. Reload retries the session.
+        history.replaceState({}, '', '/');
+        renderAuth('login', err.message);
+        return;
+      }
       renderDevicePair(token);
       toast(err.message, true);
     }

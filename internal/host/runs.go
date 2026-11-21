@@ -116,9 +116,19 @@ func (r *Run) Resize(cols, rows int) error {
 
 func (r *Run) Stop() {
 	r.stopped.Store(true)
-	// Ctrl-C first: it lets the agent persist the session cleanly.
-	_, _ = r.Write([]byte{3})
-	time.Sleep(1500 * time.Millisecond)
+	// Ctrl-C first: it lets the agent persist the session cleanly. A PTY whose
+	// reader stopped consuming input can block Write forever, so never let that
+	// block the stop path; terminate() closes the PTY and releases the write.
+	courtesy := make(chan struct{})
+	go func() {
+		_, _ = r.Write([]byte{3})
+		close(courtesy)
+	}()
+	select {
+	case <-courtesy:
+		time.Sleep(1500 * time.Millisecond)
+	case <-time.After(500 * time.Millisecond):
+	}
 	r.terminate()
 }
 
@@ -254,7 +264,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 	suspendForJob(c)
 	env := cmd.Env
 	if env == nil {
-		env = os.Environ()
+		env = childEnv()
 	}
 	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "AGENTNEXUS_RUN="+spec.RunID)
 	c.Env = env

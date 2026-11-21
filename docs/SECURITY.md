@@ -381,6 +381,25 @@ daemon start, and are audited locally.
 Defaults on first start: the user's home directory, all detected agents, new
 sessions and fork enabled, and the forbidden-argument list above.
 
+### Read-only Git review
+
+Git review runs `status` and `diff` in the selected working tree. A repository
+can bind clean/process filters to tracked files, and Git would execute those
+commands as the host user. The host therefore disables external diff and
+textconv, clears `core.fsmonitor`, and replaces every clean/process filter
+command with `cat`/empty while clearing `required` for drivers that have no
+command. The filter set is re-read immediately before each filtered command;
+a configuration change made after that read and before Git opens its
+configuration is not covered, but it requires write access to the host's Git
+configuration, which already permits code execution. Recursive submodule
+inspection is disabled (`--ignore-submodules=all`), so changes inside
+submodules are not shown and submodule-local filters cannot run. Filter names that are empty or contain
+characters that cannot be expressed unambiguously in a Git `-c` key are
+refused instead of reviewed. If the host cannot read the repository's Git
+configuration, the Git view fails closed and returns an error without status
+or diff data; check the local, included and worktree Git configuration for an
+unreadable or ambiguous filter name.
+
 ## 11. Remote approvals
 
 - Approval requests show: agent, host, project, session, the exact command (with cwd) or file diff, the agent's stated reason, and a risk hint (e.g. network access, deletion, privilege escalation patterns such as `sudo`, `rm -rf`, `curl | sh`).

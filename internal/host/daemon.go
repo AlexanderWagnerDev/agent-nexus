@@ -1004,10 +1004,35 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			p.Limit = 100
 		}
 		if d.index != nil && d.index.Status().State == "ready" {
-			if hits, err := d.index.Search(context.Background(), p.Query, p.Limit); err == nil {
-				return hits, nil
-			} else {
-				d.log.Warn("search index query failed; falling back to adapters", "error", err)
+			// The index can contain documents from before a policy change or
+			// from an adapter whose store was temporarily unreadable. Apply the
+			// live policy at query time, exactly like the adapter fallback. Fetch
+			// progressively larger candidate pages so denied hits cannot crowd
+			// allowed matches out of the requested limit.
+			wanted := p.Limit
+			for fetch := wanted; ; {
+				hits, err := d.index.Search(context.Background(), p.Query, fetch)
+				if err != nil {
+					d.log.Warn("search index query failed; falling back to adapters", "error", err)
+					break
+				}
+				filtered := hits[:0]
+				for _, hit := range hits {
+					if !d.policy.AgentAllowed(hit.Agent) || !d.sessionWithinRoots(hit.Agent, hit.NativeID) {
+						continue
+					}
+					filtered = append(filtered, hit)
+				}
+				if len(filtered) >= wanted || len(hits) < fetch || fetch >= 1000 {
+					if len(filtered) > wanted {
+						filtered = filtered[:wanted]
+					}
+					return filtered, nil
+				}
+				fetch *= 4
+				if fetch > 1000 {
+					fetch = 1000
+				}
 			}
 		}
 		var hits []protocol.SearchHit

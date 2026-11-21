@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -9,6 +10,11 @@ import (
 )
 
 const maxQueuedAttachments = 24 << 20
+
+// maxQueuedRunBytes bounds one run's queued text and attachment payloads. The
+// 100-item cap alone would allow 2.4 GiB of base64 attachments to be loaded by
+// the queue worker and by GET /queue.
+var maxQueuedRunBytes = int64(64 << 20)
 
 type queueAddRequest struct {
 	Text        string                  `json:"text"`
@@ -69,7 +75,7 @@ func parseQueueSchedule(value string) (*time.Time, string) {
 
 // queueAccess loads the run, session and user and enforces ownership,
 // structured mode, resume permission and (for mutations) the controller lease.
-func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease bool) (User, protocol.RunView, protocol.SessionView, bool) {
+func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease, allowEnded bool) (User, protocol.RunView, protocol.SessionView, bool) {
 	u := userFrom(r)
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
 	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
@@ -78,6 +84,10 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 	}
 	if run.Mode != protocol.ModeStructured {
 		writeError(w, http.StatusBadRequest, "prompt queues are only available in structured mode")
+		return u, run, protocol.SessionView{}, false
+	}
+	if needLease && !allowEnded && (run.EndedAt != nil || terminalRunState(run.State)) {
+		writeError(w, http.StatusConflict, "run has ended; queued prompts are read-only")
 		return u, run, protocol.SessionView{}, false
 	}
 	sess, err := s.store.SessionByID(u.ID, run.SessionID, isAdminRole(u.Role))
@@ -89,7 +99,7 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 		writeError(w, http.StatusForbidden, "resume permission required")
 		return u, run, sess, false
 	}
-	if needLease {
+	if needLease && run.EndedAt == nil && !terminalRunState(run.State) {
 		if !s.hostPermission(u, sess.HostID, "terminal_input") {
 			writeError(w, http.StatusForbidden, "terminal_input permission required")
 			return u, run, sess, false
@@ -106,7 +116,7 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 }
 
 func (s *Server) handleGetPromptQueue(w http.ResponseWriter, r *http.Request) {
-	_, run, _, ok := s.queueAccess(w, r, false)
+	_, run, _, ok := s.queueAccess(w, r, false, false)
 	if !ok {
 		return
 	}
@@ -120,7 +130,7 @@ func (s *Server) handleGetPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -141,8 +151,12 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	item, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, strings.TrimSpace(req.Text), req.Options, scheduled)
+	item, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, strings.TrimSpace(req.Text), req.Options, scheduled, maxQueuedRunBytes)
 	if err != nil {
+		if errors.Is(err, errQueueByteBudget) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error(), "reason": "queue_bytes"})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -154,7 +168,7 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -172,7 +186,16 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	itemID := r.PathValue("itemID")
-	if err := s.store.UpdatePromptQueueItem(run.ID, itemID, strings.TrimSpace(req.Text), scheduled); err != nil {
+	old, err := s.store.PromptQueueItem(itemID)
+	if err != nil || old.RunID != run.ID {
+		writeError(w, http.StatusNotFound, "queue item not found")
+		return
+	}
+	if err := s.store.UpdatePromptQueueItem(run.ID, itemID, strings.TrimSpace(req.Text), scheduled, maxQueuedRunBytes); err != nil {
+		if errors.Is(err, errQueueByteBudget) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error(), "reason": "queue_bytes"})
+			return
+		}
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -185,12 +208,14 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	// Cleanup stays possible after a run ends and does not depend on the stale
+	// controller lease; adding, editing and reordering remain blocked.
+	u, run, _, ok := s.queueAccess(w, r, true, true)
 	if !ok {
 		return
 	}
 	itemID := r.PathValue("itemID")
-	if err := s.store.DeletePromptQueueItem(run.ID, itemID); err != nil {
+	if err := s.store.DeletePromptQueueItem(run.ID, itemID, deviceFrom(r).ID); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -200,7 +225,7 @@ func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleReorderPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -222,7 +247,7 @@ func (s *Server) handleReorderPromptQueue(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handlePausePromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}

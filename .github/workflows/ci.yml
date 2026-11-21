@@ -275,5 +275,7 @@ jobs:
           node-version: 26
       - name: Download Go modules
         run: go mod download
+      - name: Test license detector
+        run: node --test scripts/check-licenses.test.mjs
       - name: Check licenses
         run: node scripts/check-licenses.mjs

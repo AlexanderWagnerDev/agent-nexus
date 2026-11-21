@@ -2,11 +2,36 @@ package hub
 
 import (
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
+
+// fanoutWorktreeKey collapses aliases that the host canonicalizes to the same
+// directory. The hub cannot resolve symlinks on a remote host, but separators,
+// "." / ".." segments, trailing slashes and Windows case differences would
+// otherwise let one fan-out start two writers in one worktree.
+func fanoutWorktreeKey(hostOS, cwd string) string {
+	raw := strings.TrimSpace(cwd)
+	windows := strings.HasPrefix(strings.ToLower(strings.TrimSpace(hostOS)), "windows")
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '/' || raw[2] == '\\') {
+		if (raw[0] >= 'a' && raw[0] <= 'z') || (raw[0] >= 'A' && raw[0] <= 'Z') {
+			windows = true
+		}
+	}
+	// A backslash is a legal character in a Unix directory name; only fold it
+	// on Windows or for a Windows-style drive path.
+	if windows {
+		raw = strings.ReplaceAll(raw, "\\", "/")
+	}
+	clean := path.Clean(raw)
+	if windows {
+		clean = strings.ToLower(clean)
+	}
+	return clean
+}
 
 type fanoutTarget struct {
 	HostID string `json:"host_id"`
@@ -55,17 +80,17 @@ func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "cwd must be an absolute path")
 			return
 		}
-		key := target.HostID + "\x00" + target.Cwd
-		if seen[key] {
-			writeError(w, http.StatusBadRequest, "two targets would write to the same worktree")
-			return
-		}
-		seen[key] = true
 		host, err := s.store.HostByID(target.HostID)
 		if err != nil || host.RevokedAt != nil {
 			writeError(w, http.StatusNotFound, "host not found")
 			return
 		}
+		key := target.HostID + "\x00" + fanoutWorktreeKey(host.OS, target.Cwd)
+		if seen[key] {
+			writeError(w, http.StatusBadRequest, "two targets would write to the same worktree")
+			return
+		}
+		seen[key] = true
 		if host.DisabledAt != nil {
 			writeError(w, http.StatusConflict, "host is disabled")
 			return
@@ -99,7 +124,7 @@ func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 			errors = append(errors, target.HostID+": "+err.Error())
 			continue
 		}
-		if _, err := s.store.EnqueuePrompt(run.ID, u.ID, device.ID, strings.TrimSpace(req.Prompt), nil, nil); err != nil {
+		if _, err := s.store.EnqueuePrompt(run.ID, u.ID, device.ID, strings.TrimSpace(req.Prompt), nil, nil, maxQueuedRunBytes); err != nil {
 			_ = s.sendHost(target.HostID, protocol.Envelope{Type: "run.stop", RunID: run.ID})
 			s.setRunState(run.ID, protocol.StateFailed)
 			_ = s.store.AddFanoutRun(fanoutID, run.ID, target.HostID, target.Agent, "cannot queue prompt: "+err.Error())

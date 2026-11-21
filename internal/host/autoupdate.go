@@ -338,8 +338,13 @@ func (d *Daemon) autoInstall(ctx context.Context, prefs UpdateSettings, state up
 	d.saveUpdateState(state)
 	d.reportUpdateStatus()
 
-	cleanupStagedUpdates(filepath.Join(dir, "updates"), strings.TrimPrefix(info.Latest, "v"))
-	stagedDir := filepath.Join(dir, "updates", strings.TrimPrefix(info.Latest, "v"))
+	versionDir, err := safeReleaseVersionDir(info.Latest)
+	if err != nil {
+		d.updateFailed(state, info.Latest, err, prefs, false)
+		return
+	}
+	cleanupStagedUpdates(filepath.Join(dir, "updates"), versionDir)
+	stagedDir := filepath.Join(dir, "updates", versionDir)
 	staged, mode, err := StageUpdateWithMode(ctx, info, stagedDir, prefs.SignatureRequired())
 	if err != nil {
 		d.updateFailed(state, info.Latest, err, prefs, false)
