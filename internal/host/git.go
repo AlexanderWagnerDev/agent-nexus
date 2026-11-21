@@ -42,32 +42,38 @@ func gitEnv() []string {
 func gitFilterOverrides(ctx context.Context, cwd string) []string {
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--local", "--name-only", "--get-regexp", `^filter\..*\.(clean|process)$`)
-	cmd.Dir = cwd
-	cmd.Env = gitEnv()
-	hideProcessWindow(cmd)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil
-	}
+	// Follow include.path in each scope: --local alone does not read included
+	// files, and worktree-specific filters live in config.worktree.
+	scopes := []string{"--local", "--worktree"}
 	seen := map[string]bool{}
 	var overrides []string
-	for _, key := range strings.Split(string(out), "\n") {
-		key = strings.TrimSpace(key)
-		parts := strings.Split(key, ".")
-		if len(parts) < 3 || parts[0] != "filter" {
+	for _, scope := range scopes {
+		cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", scope, "--includes", "--name-only", "--get-regexp", `^filter\..*\.(clean|process)$`)
+		cmd.Dir = cwd
+		cmd.Env = gitEnv()
+		hideProcessWindow(cmd)
+		out, err := cmd.Output()
+		if err != nil {
+			// --worktree fails when worktree config is not enabled.
 			continue
 		}
-		name := strings.Join(parts[1:len(parts)-1], ".")
-		if name == "" || seen[name] {
-			continue
+		for _, key := range strings.Split(string(out), "\n") {
+			key = strings.TrimSpace(key)
+			parts := strings.Split(key, ".")
+			if len(parts) < 3 || parts[0] != "filter" {
+				continue
+			}
+			name := strings.Join(parts[1:len(parts)-1], ".")
+			if name == "" || seen[name] {
+				continue
+			}
+			seen[name] = true
+			overrides = append(overrides,
+				"-c", "filter."+name+".clean=cat",
+				"-c", "filter."+name+".process=",
+				"-c", "filter."+name+".required=false",
+			)
 		}
-		seen[name] = true
-		overrides = append(overrides,
-			"-c", "filter."+name+".clean=cat",
-			"-c", "filter."+name+".process=",
-			"-c", "filter."+name+".required=false",
-		)
 	}
 	return overrides
 }

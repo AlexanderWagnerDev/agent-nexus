@@ -113,6 +113,75 @@ func TestGitViewDoesNotRunRepositoryCleanFilter(t *testing.T) {
 	}
 }
 
+func TestGitViewDoesNotRunIncludedOrWorktreeCleanFilters(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not available for the helper script")
+	}
+	dir := t.TempDir()
+	includedMarker := filepath.Join(dir, "included-filter-ran")
+	worktreeMarker := filepath.Join(dir, "worktree-filter-ran")
+	helper := filepath.Join(dir, "filter-helper.sh")
+	if err := os.WriteFile(helper, []byte("echo ran > \"$1\"\ncat\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	filterCommand := func(marker string) string {
+		return "sh " + shellSingleQuote(filepath.ToSlash(helper)) + " " + shellSingleQuote(filepath.ToSlash(marker))
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=included\n*.md filter=worktree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+
+	includedConfig := filepath.Join(dir, ".git", "extra.config")
+	if err := os.WriteFile(includedConfig, []byte("[filter \"included\"]\n\tclean = "+filterCommand(includedMarker)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("config", "--add", "include.path", filepath.ToSlash(includedConfig))
+	git("config", "extensions.worktreeConfig", "true")
+	if err := os.WriteFile(filepath.Join(dir, ".git", "config.worktree"), []byte("[filter \"worktree\"]\n\tclean = "+filterCommand(worktreeMarker)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	view, err := d.gitView(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{includedMarker, worktreeMarker} {
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("repository-configured clean filter ran during read-only Git review: %s", marker)
+		}
+	}
+	if !strings.Contains(view.Diff, "+two") {
+		t.Fatalf("ordinary diff output changed:\n%s", view.Diff)
+	}
+}
+
 func TestGitViewInsideAllowedRoot(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
