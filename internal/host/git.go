@@ -50,25 +50,122 @@ func safeFilterName(name string) bool {
 	return true
 }
 
-// gitFilterOverrides disables repository-configured clean/process filters.
-// A diff converts working-tree content through the clean filter, so a hostile
-// .gitattributes/.git/config pair can execute a command even with external
-// diff and textconv disabled. Reading the config does not run any filter.
-// One --list call covers system-free local, included and worktree config.
-func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
+type filterConfig struct {
+	withCommands  map[string]bool
+	required      map[string]bool
+	commandOrder  []string
+	requiredOrder []string
+}
+
+func newFilterConfig() *filterConfig {
+	return &filterConfig{withCommands: map[string]bool{}, required: map[string]bool{}}
+}
+
+func (c *filterConfig) merge(other *filterConfig) {
+	for _, name := range other.commandOrder {
+		if !c.withCommands[name] {
+			c.withCommands[name] = true
+			c.commandOrder = append(c.commandOrder, name)
+		}
+	}
+	for _, name := range other.requiredOrder {
+		if !c.required[name] {
+			c.required[name] = true
+			c.requiredOrder = append(c.requiredOrder, name)
+		}
+	}
+}
+
+func (c *filterConfig) add(key, name string) error {
+	// smudge cannot run during status/diff, so an unusual name there must not
+	// block the review.
+	if key != "clean" && key != "process" && key != "required" {
+		return nil
+	}
+	if name == "" || !safeFilterName(name) {
+		return errors.New("git filter configuration uses an unsupported filter name")
+	}
+	switch key {
+	case "clean", "process":
+		if !c.withCommands[name] {
+			c.withCommands[name] = true
+			c.commandOrder = append(c.commandOrder, name)
+		}
+	case "required":
+		if !c.required[name] {
+			c.required[name] = true
+			c.requiredOrder = append(c.requiredOrder, name)
+		}
+	}
+	return nil
+}
+
+func (c *filterConfig) overrides() []string {
+	var overrides []string
+	for _, name := range c.commandOrder {
+		overrides = append(overrides,
+			"-c", "filter."+name+".clean=cat",
+			"-c", "filter."+name+".process=",
+			"-c", "filter."+name+".required=false",
+		)
+	}
+	// A required driver without clean/process would make Git abort the clean
+	// conversion. Clearing only the flag keeps the patch readable and does not
+	// invent a clean command.
+	for _, name := range c.requiredOrder {
+		if !c.withCommands[name] {
+			overrides = append(overrides, "-c", "filter."+name+".required=false")
+		}
+	}
+	return overrides
+}
+
+func submodulePaths(ctx context.Context, cwd string) ([]string, error) {
+	path := filepath.Join(cwd, ".gitmodules")
+	if _, err := os.Stat(path); err != nil {
+		return nil, nil
+	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--list", "--name-only", "--show-origin", "--includes")
+	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--file", ".gitmodules", "--get-regexp", `^submodule\..*\.path$`)
 	cmd.Dir = cwd
 	cmd.Env = gitEnv()
 	hideProcessWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
+		return nil, errors.New("could not read .gitmodules")
+	}
+	var paths []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if i := strings.IndexAny(line, " \t"); i >= 0 {
+			if p := strings.TrimSpace(line[i+1:]); p != "" {
+				paths = append(paths, p)
+			}
+		}
+	}
+	return paths, nil
+}
+
+func collectFilterConfig(ctx context.Context, cwd string, depth int, seen map[string]bool) (*filterConfig, error) {
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		return nil, err
+	}
+	cfg := newFilterConfig()
+	if depth < 0 || seen[abs] {
+		return cfg, nil
+	}
+	seen[abs] = true
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--list", "--name-only", "--show-origin", "--includes")
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
+	hideProcessWindow(cmd)
+	out, err := cmd.Output()
+	cancel()
+	if err != nil {
 		return nil, errors.New("could not read the git filter configuration")
 	}
-	withCommands := map[string]bool{}
-	required := map[string]bool{}
-	var commandOrder, requiredOrder []string
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		// --show-origin prefixes each key with "<origin>\t".
@@ -80,45 +177,49 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 			continue
 		}
 		name := strings.Join(parts[1:len(parts)-1], ".")
-		key := parts[len(parts)-1]
-		// smudge cannot run during status/diff, so an unusual name there must
-		// not block the review.
-		if key != "clean" && key != "process" && key != "required" {
+		if err := cfg.add(parts[len(parts)-1], name); err != nil {
+			return nil, err
+		}
+	}
+	if depth == 0 {
+		return cfg, nil
+	}
+	paths, err := submodulePaths(ctx, cwd)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range paths {
+		if filepath.IsAbs(rel) {
 			continue
 		}
-		if name == "" || !safeFilterName(name) {
-			return nil, errors.New("git filter configuration uses an unsupported filter name")
+		sub := filepath.Join(cwd, filepath.FromSlash(rel))
+		if within, err := filepath.Rel(cwd, sub); err != nil || within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) {
+			continue
 		}
-		switch key {
-		case "clean", "process":
-			if !withCommands[name] {
-				withCommands[name] = true
-				commandOrder = append(commandOrder, name)
-			}
-		case "required":
-			if !required[name] {
-				required[name] = true
-				requiredOrder = append(requiredOrder, name)
-			}
+		if _, err := os.Stat(filepath.Join(sub, ".git")); err != nil {
+			continue
 		}
-	}
-	var overrides []string
-	for _, name := range commandOrder {
-		overrides = append(overrides,
-			"-c", "filter."+name+".clean=cat",
-			"-c", "filter."+name+".process=",
-			"-c", "filter."+name+".required=false",
-		)
-	}
-	// A required driver without clean/process would make Git abort the clean
-	// conversion. Clearing only the flag keeps the patch readable and does not
-	// invent a clean command.
-	for _, name := range requiredOrder {
-		if !withCommands[name] {
-			overrides = append(overrides, "-c", "filter."+name+".required=false")
+		child, err := collectFilterConfig(ctx, sub, depth-1, seen)
+		if err != nil {
+			return nil, err
 		}
+		cfg.merge(child)
 	}
-	return overrides, nil
+	return cfg, nil
+}
+
+// gitFilterOverrides disables repository-configured clean/process filters.
+// A diff converts working-tree content through the clean filter, so a hostile
+// .gitattributes/.git/config pair can execute a command even with external
+// diff and textconv disabled. Reading the config does not run any filter.
+// Initialized submodules are included because parent status/diff can recurse
+// into them.
+func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
+	cfg, err := collectFilterConfig(ctx, cwd, 4, map[string]bool{})
+	if err != nil {
+		return nil, err
+	}
+	return cfg.overrides(), nil
 }
 
 // gitCommand builds a read-only Git invocation. The repository can configure
@@ -129,8 +230,8 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 // clean/process commands. Callers that run several commands pass filters once
 // instead of probing the config for every invocation.
 func gitCommand(ctx context.Context, cwd string, filters []string, args ...string) *exec.Cmd {
-	// diff.submodule=short keeps submodule output to a gitlink line. A
-	// submodule's own filters are outside this config and must not run.
+	// diff.submodule=short keeps submodule output to a gitlink line. Filter
+	// overrides include initialized submodules and reach their child Git.
 	base := []string{"-c", "core.fsmonitor=false", "-c", "diff.submodule=short"}
 	base = append(base, filters...)
 	base = append(base, "-C", cwd)
@@ -282,7 +383,7 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 			return "", false
 		}
 		if len(args) > 0 && args[0] == "diff" {
-			args = append([]string{"diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all"}, args[1:]...)
+			args = append([]string{"diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=dirty"}, args[1:]...)
 		}
 		var filters []string
 		if filtered {
@@ -312,9 +413,9 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	branch, _ := run(false, 4096, "rev-parse", "--abbrev-ref", "HEAD")
 	root, _ := run(false, 4096, "rev-parse", "--show-toplevel")
-	// Do not recurse into submodules: the parent config cannot neutralize
-	// filters defined inside a submodule.
-	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1", "--ignore-submodules=all")
+	// Dirty submodule worktrees are ignored rather than scanned; commit-pointer
+	// changes stay visible. Submodule filters are included in the overrides.
+	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1", "--ignore-submodules=dirty")
 	stat, statTruncated := run(true, 100_000, "diff", "HEAD", "--stat", "--no-color")
 	diff, diffTruncated := "", false
 	if !statOnly {
