@@ -27,6 +27,36 @@ func TestPromptQueueRejectsEndedRun(t *testing.T) {
 	expectStatus(t, status, http.StatusConflict, body, "queue item on an ended run")
 }
 
+func TestPromptQueueDeleteAllowedAfterRunEnds(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "queue-cleanup-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "opencode", NativeID: "native-queue-cleanup", Title: "cleanup", Cwd: "/work",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sessionID, err := hub.store.SessionIDForNative(hostID, "opencode", "native-queue-cleanup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const runID = "run-queue-cleanup"
+	if err := hub.store.CreateRun(runID, sessionID, hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	item, err := hub.store.EnqueuePrompt(runID, owner.ID, "device", "remove me", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub.server.setRunState(runID, protocol.StateExited)
+	status, body := hub.do(nil, http.MethodDelete, "/api/v1/runs/"+runID+"/queue/"+item.ID, nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "delete prompt after run end")
+}
+
 func TestPromptQueueByteBudget(t *testing.T) {
 	hub := newAPITestHub(t, Config{})
 	hub.setupOK()

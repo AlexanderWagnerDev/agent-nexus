@@ -75,7 +75,7 @@ func parseQueueSchedule(value string) (*time.Time, string) {
 
 // queueAccess loads the run, session and user and enforces ownership,
 // structured mode, resume permission and (for mutations) the controller lease.
-func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease bool) (User, protocol.RunView, protocol.SessionView, bool) {
+func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease, allowEnded bool) (User, protocol.RunView, protocol.SessionView, bool) {
 	u := userFrom(r)
 	run, startedBy, err := s.store.RunByID(r.PathValue("id"))
 	if err != nil || (startedBy != u.ID && !isAdminRole(u.Role)) {
@@ -86,7 +86,7 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 		writeError(w, http.StatusBadRequest, "prompt queues are only available in structured mode")
 		return u, run, protocol.SessionView{}, false
 	}
-	if needLease && (run.EndedAt != nil || terminalRunState(run.State)) {
+	if needLease && !allowEnded && (run.EndedAt != nil || terminalRunState(run.State)) {
 		writeError(w, http.StatusConflict, "run has ended; queued prompts are read-only")
 		return u, run, protocol.SessionView{}, false
 	}
@@ -116,7 +116,7 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 }
 
 func (s *Server) handleGetPromptQueue(w http.ResponseWriter, r *http.Request) {
-	_, run, _, ok := s.queueAccess(w, r, false)
+	_, run, _, ok := s.queueAccess(w, r, false, false)
 	if !ok {
 		return
 	}
@@ -130,7 +130,7 @@ func (s *Server) handleGetPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -174,7 +174,7 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -214,7 +214,9 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	// Cleanup stays possible after a run ends and does not depend on the stale
+	// controller lease; adding, editing and reordering remain blocked.
+	u, run, _, ok := s.queueAccess(w, r, false, true)
 	if !ok {
 		return
 	}
@@ -229,7 +231,7 @@ func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleReorderPromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
@@ -251,7 +253,7 @@ func (s *Server) handleReorderPromptQueue(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handlePausePromptQueue(w http.ResponseWriter, r *http.Request) {
-	u, run, _, ok := s.queueAccess(w, r, true)
+	u, run, _, ok := s.queueAccess(w, r, true, false)
 	if !ok {
 		return
 	}
