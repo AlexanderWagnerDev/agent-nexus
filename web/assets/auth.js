@@ -229,6 +229,13 @@ export function renderDevicePair(token) {
       renderShell('overview');
       await route();
     } catch (err) {
+      if (err.status === 401) {
+        // The token is expired or already used; stop restoring it on reload.
+        try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
+        history.replaceState({}, '', '/');
+        renderAuth('login', err.message);
+        return;
+      }
       renderDevicePair(token);
       toast(err.message, true);
     }
