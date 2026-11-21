@@ -23,3 +23,10 @@ test('BSD-4-Clause is not misclassified as BSD-2-Clause', () => {
 4. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software.`);
   assert.equal(detect(text), 'BSD-4-Clause');
 });
+
+test('BSD-4-Clause survives line wrapping in the advertising clause', () => {
+  const text = bsd(`3. All advertising materials mentioning features or use of this
+software must display the following acknowledgement.
+4. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software.`);
+  assert.equal(detect(text), 'BSD-4-Clause');
+});

@@ -192,7 +192,7 @@ func (s *Store) DuePromptQueue(now time.Time) ([]protocol.PromptQueueItem, error
 	rows, err := s.db.Query(`SELECT q.id,q.run_id,q.user_id,q.device_id,q.position,q.text,q.options,q.scheduled_at,q.state,q.attempts,q.last_error,q.created_at,q.updated_at
 		FROM prompt_queue q JOIN runs r ON r.id=q.run_id
 		WHERE q.state='queued' AND (q.scheduled_at IS NULL OR q.scheduled_at<=?)
-		  AND r.queue_paused=0 AND (r.state='idle' OR r.ended_at IS NOT NULL)
+		  AND ((r.queue_paused=0 AND r.state='idle') OR r.ended_at IS NOT NULL)
 		ORDER BY q.run_id, q.position, q.created_at LIMIT 500`, ms(now))
 	if err != nil {
 		return nil, err
@@ -265,13 +265,15 @@ func (s *Store) CountQueuedPrompts(runID string) int {
 	return n
 }
 
-// PromptQueueBytes reports the stored text and option bytes still waiting for
-// one run. The item count alone does not bound memory: one item may carry 24 MiB
-// of base64 attachments.
+// PromptQueueBytes reports the stored text and option bytes retained for one
+// run. Failed items stay in the table and are still loaded by ListPromptQueue,
+// so they count toward the budget too. length(CAST(... AS BLOB)) measures UTF-8
+// bytes; SQLite length(text) would count characters and undercount multibyte
+// prompts.
 func (s *Store) PromptQueueBytes(runID string) int64 {
 	var n int64
-	_ = s.db.QueryRow(`SELECT COALESCE(SUM(length(text)+length(options)),0) FROM prompt_queue
-		WHERE run_id=? AND state IN ('queued','sending')`, runID).Scan(&n)
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(length(CAST(text AS BLOB))+length(CAST(options AS BLOB))),0)
+		FROM prompt_queue WHERE run_id=? AND state IN ('queued','sending','failed')`, runID).Scan(&n)
 	return n
 }
 

@@ -19,6 +19,9 @@ func TestFanoutWorktreeKeyNormalizesHostAliases(t *testing.T) {
 	if fanoutWorktreeKey("linux", "/work/x/../x") != fanoutWorktreeKey("linux", "/work/x") {
 		t.Fatal("dot segments must collapse")
 	}
+	if fanoutWorktreeKey("linux", `/work/a\b`) == fanoutWorktreeKey("linux", "/work/a/b") {
+		t.Fatal("a literal backslash in a Unix directory must not become a separator")
+	}
 }
 
 func TestTelegramTokenIsNotLeakedInErrors(t *testing.T) {

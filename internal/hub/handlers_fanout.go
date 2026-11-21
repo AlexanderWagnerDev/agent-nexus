@@ -14,13 +14,19 @@ import (
 // "." / ".." segments, trailing slashes and Windows case differences would
 // otherwise let one fan-out start two writers in one worktree.
 func fanoutWorktreeKey(hostOS, cwd string) string {
-	clean := path.Clean(strings.ReplaceAll(strings.TrimSpace(cwd), "\\", "/"))
+	raw := strings.TrimSpace(cwd)
 	windows := strings.HasPrefix(strings.ToLower(strings.TrimSpace(hostOS)), "windows")
-	if len(clean) >= 3 && clean[1] == ':' && clean[2] == '/' {
-		if (clean[0] >= 'a' && clean[0] <= 'z') || (clean[0] >= 'A' && clean[0] <= 'Z') {
+	if len(raw) >= 3 && raw[1] == ':' && (raw[2] == '/' || raw[2] == '\\') {
+		if (raw[0] >= 'a' && raw[0] <= 'z') || (raw[0] >= 'A' && raw[0] <= 'Z') {
 			windows = true
 		}
 	}
+	// A backslash is a legal character in a Unix directory name; only fold it
+	// on Windows or for a Windows-style drive path.
+	if windows {
+		raw = strings.ReplaceAll(raw, "\\", "/")
+	}
+	clean := path.Clean(raw)
 	if windows {
 		clean = strings.ToLower(clean)
 	}

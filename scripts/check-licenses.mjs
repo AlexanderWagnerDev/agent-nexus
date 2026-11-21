@@ -26,9 +26,11 @@ export function detect(text) {
   if (lower.includes('redistribution and use in source and binary forms')) {
     // BSD-4-Clause has the advertising clause as clause 3 and moves the
     // non-endorsement clause to 4. Checking clause 3 for "Neither the name"
-    // alone would misclassify BSD-4 as the allowed BSD-2.
-    if (/all advertising materials mentioning features or use of this software/i.test(text)) return 'BSD-4-Clause';
-    return /3\.\s*Neither the name/i.test(text) ? 'BSD-3-Clause' : 'BSD-2-Clause';
+    // alone would misclassify BSD-4 as the allowed BSD-2. Collapse whitespace
+    // first so a clause wrapped across lines is still recognized.
+    const compact = text.replace(/\s+/g, ' ');
+    if (/all advertising materials mentioning features or use of this software/i.test(compact)) return 'BSD-4-Clause';
+    return /3\.\s*Neither the name/i.test(compact) ? 'BSD-3-Clause' : 'BSD-2-Clause';
   }
   if (lower.includes('boost software license')) return 'BSL-1.0';
   return 'UNKNOWN';
