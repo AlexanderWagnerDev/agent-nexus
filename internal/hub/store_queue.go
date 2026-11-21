@@ -146,8 +146,18 @@ func (s *Store) UpdatePromptQueueItem(runID, itemID, text string, scheduledAt *t
 	return tx.Commit()
 }
 
-func (s *Store) DeletePromptQueueItem(runID, itemID string) error {
-	res, err := s.db.Exec(`DELETE FROM prompt_queue WHERE id=? AND run_id=? AND state!='sending'`, itemID, runID)
+// DeletePromptQueueItem removes an item, but rechecks the run state and lease
+// in the same statement: a host reconnect can clear ended_at between the
+// handler's authorization check and this delete, and an active run must still
+// require the controller lease.
+func (s *Store) DeletePromptQueueItem(runID, itemID, deviceID string) error {
+	res, err := s.db.Exec(`DELETE FROM prompt_queue
+		WHERE id=? AND run_id=? AND state!='sending'
+		  AND (
+		    EXISTS (SELECT 1 FROM runs WHERE id=? AND (ended_at IS NOT NULL OR state IN ('exited','completed','failed')))
+		    OR EXISTS (SELECT 1 FROM runs WHERE id=? AND ended_at IS NULL AND state NOT IN ('exited','completed','failed')
+		      AND lease_device_id!='' AND lease_device_id=?)
+		  )`, itemID, runID, runID, runID, deviceID)
 	if err != nil {
 		return err
 	}

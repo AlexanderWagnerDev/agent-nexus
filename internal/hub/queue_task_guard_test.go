@@ -59,6 +59,39 @@ func TestPromptQueueDeleteAllowedAfterRunEnds(t *testing.T) {
 	expectStatus(t, status, http.StatusOK, body, "delete prompt after run end")
 }
 
+func TestPromptQueueDeleteRequiresCurrentLeaseWhileActive(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "queue-lease-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "opencode", NativeID: "native-queue-lease", Title: "queue", Cwd: "/work",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sessionID, err := hub.store.SessionIDForNative(hostID, "opencode", "native-queue-lease")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const runID = "run-queue-lease"
+	if err := hub.store.CreateRun(runID, sessionID, hostID, protocol.ModeStructured, owner.ID, "device-a"); err != nil {
+		t.Fatal(err)
+	}
+	item, err := hub.store.EnqueuePrompt(runID, owner.ID, "device-a", "remove me", nil, nil, maxQueuedRunBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.DeletePromptQueueItem(runID, item.ID, "device-b"); err == nil {
+		t.Fatal("an active run's queue item was deleted without the controller lease")
+	}
+	if err := hub.store.DeletePromptQueueItem(runID, item.ID, "device-a"); err != nil {
+		t.Fatalf("lease holder could not delete the item: %v", err)
+	}
+}
+
 func TestPromptQueueByteBudget(t *testing.T) {
 	hub := newAPITestHub(t, Config{})
 	hub.setupOK()

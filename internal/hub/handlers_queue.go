@@ -215,7 +215,7 @@ func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	itemID := r.PathValue("itemID")
-	if err := s.store.DeletePromptQueueItem(run.ID, itemID); err != nil {
+	if err := s.store.DeletePromptQueueItem(run.ID, itemID, deviceFrom(r).ID); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}

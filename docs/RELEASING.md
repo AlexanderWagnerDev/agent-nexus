@@ -98,8 +98,11 @@ accurately without turning optional testing into release blockers.
    tag, recreate and push it first so the next dispatch can start from it.
 4. Releases produced before this procedure (including v0.1.15) carry a
    `refs/heads/main` certificate identity and fail the tag-bound cosign check.
-   Republish them from a recreated tag, or users with cosign installed must use
-   the checksum-only path until they are republished.
+   Republish them from a recreated tag. On a machine with cosign installed the
+   installers refuse such a release; removing cosign from `PATH` would fall
+   back to SHA-256 only, but that skips the signature check. The post-install
+   checksum-only options configure future auto-updates and do not bypass an
+   install-time cosign failure.
 5. Then run **Container** with `release_tag=v0.1.15` and `publish_latest=true`
    for a stable release. The dispatch publishes `v0.1.15`, `0.1.15`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.

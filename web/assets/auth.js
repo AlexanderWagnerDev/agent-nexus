@@ -215,16 +215,23 @@ export function renderDevicePair(token) {
   document.getElementById('pair-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const name = new FormData(event.target).get('name');
+    let paired = false;
+    let sessionLoaded = false;
     try {
       await api('/auth/device-pair', { method: 'POST', body: { token, name }, allow401: true });
+      // The single-use token is consumed; never restore it if a later step
+      // fails, or a reload would show the pairing form again instead of the
+      // valid session.
+      paired = true;
+      try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
       // The pairing token decides which account this browser now belongs to;
       // do not carry the previous account's tabs or drafts across.
       clearAccountArtifacts();
       state.me = await api('/me');
+      sessionLoaded = true;
       adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
-      try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
       history.replaceState({}, '', '/');
       renderShell('overview');
       await route();
@@ -232,6 +239,19 @@ export function renderDevicePair(token) {
       if (err.status === 401) {
         // The token is expired or already used; stop restoring it on reload.
         try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
+        history.replaceState({}, '', '/');
+        renderAuth('login', err.message);
+        return;
+      }
+      if (sessionLoaded) {
+        // Pairing and session initialization succeeded; only a later UI step
+        // failed. Keep the session instead of returning to the login screen.
+        renderShell('overview');
+        toast(err.message, true);
+        return;
+      }
+      if (paired) {
+        // The token is consumed but /me failed. Reload retries the session.
         history.replaceState({}, '', '/');
         renderAuth('login', err.message);
         return;
