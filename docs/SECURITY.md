@@ -391,9 +391,10 @@ command with `cat`/empty while clearing `required` for drivers that have no
 command. The filter set is re-read immediately before each filtered command;
 a configuration change made after that read and before Git opens its
 configuration is not covered, but it requires write access to the host's Git
-configuration, which already permits code execution. Recursive submodule
-inspection is disabled (`--ignore-submodules=all`), so changes inside
-submodules are not shown and submodule-local filters cannot run. Filter names that are empty or contain
+configuration, which already permits code execution. Recursive scanning of
+submodule worktrees is disabled (`--ignore-submodules=dirty`), so dirty files
+inside submodules are ignored and submodule-local filters cannot run; commit
+pointer changes remain visible through the short submodule output. Filter names that are empty or contain
 characters that cannot be expressed unambiguously in a Git `-c` key are
 refused instead of reviewed. If the host cannot read the repository's Git
 configuration, the Git view fails closed and returns an error without status

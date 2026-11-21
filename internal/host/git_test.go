@@ -408,6 +408,19 @@ func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
 		t.Fatalf("configure submodule filter: %v\n%s", err, out)
 	}
 	git("config", "diff.submodule", "diff")
+	if err := os.WriteFile(filepath.Join(subWork, "b.txt"), []byte("second\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	subCmd := exec.Command("git", "-C", subWork, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit", "add", "b.txt")
+	subCmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := subCmd.CombinedOutput(); err != nil {
+		t.Fatalf("stage submodule revision: %v\n%s", err, out)
+	}
+	subCmd = exec.Command("git", "-C", subWork, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit", "commit", "-qm", "second")
+	subCmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := subCmd.CombinedOutput(); err != nil {
+		t.Fatalf("commit submodule revision: %v\n%s", err, out)
+	}
 	if err := os.WriteFile(filepath.Join(subWork, "a.txt"), []byte("two\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -415,6 +428,9 @@ func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The setup commands above (git add/commit in the submodule) already ran
+	// the filter; only the review that follows must stay clean.
+	_ = os.Remove(marker)
 	d := &Daemon{policy: Policy{AllowedRoots: []string{parent}}}
 	view, err := d.gitView(context.Background(), parent)
 	if err != nil {
@@ -425,6 +441,9 @@ func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
 	}
 	if !strings.Contains(view.Diff, "+two") {
 		t.Fatalf("ordinary parent diff output missing:\n%s", view.Diff)
+	}
+	if !strings.Contains(view.Diff, "Subproject commit") {
+		t.Fatalf("submodule revision update missing from diff:\n%s", view.Diff)
 	}
 }
 
