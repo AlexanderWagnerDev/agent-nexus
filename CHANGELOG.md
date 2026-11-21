@@ -4,6 +4,65 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.16] - 2026-11-21
+
+### Changed
+
+- Read-only Git review neutralizes repository-configured helpers before every
+  command that can run one: `GIT_*` location/config variables are removed,
+  external diff, textconv and `core.fsmonitor` are disabled, and clean/process
+  filter drivers, including those of initialized submodules and `include.path`
+  includes, are replaced by `cat`. Filter overrides are refreshed before each
+  filter-capable command, and a filter name that cannot be represented safely
+  fails the review instead of rewriting another key. HTTPS remote credentials
+  are dropped before the repository URL reaches the hub.
+- Agent child processes no longer inherit `GITHUB_TOKEN`, `GH_TOKEN` or
+  AgentNexus token/secret/key variables from the daemon environment.
+- The prompt queue enforces a 64 MiB text-and-attachment budget per run inside
+  the insert and edit transaction, counts UTF-8 bytes, includes failed items,
+  and returns `429` with `reason: queue_bytes` when full. Ended runs are
+  read-only except for deleting queued items. The worker loads only eligible
+  runs, and a hub restart delays dispatch for 30 seconds so reconnecting hosts
+  can re-adopt their runs.
+- WebSocket run replay, run reads and approval text require the current host
+  grants (`read_transcript`, `approve`, `view`), not just run ownership.
+- A passkey credential ID that already belongs to another account is rejected
+  with `409` instead of replacing that account's public key.
+- Fan-out collapses worktree aliases (separators, `.`/`..`, trailing slashes,
+  Windows case), so one worktree cannot receive two writers.
+- Search-index results are filtered through the live policy and root checks at
+  query time, and candidates are paged until the requested number of allowed
+  hits is filled.
+- Host update staging accepts only single-component asset and version names;
+  Telegram bot tokens and chat IDs are validated, and endpoint errors no longer
+  echo the URL.
+- The Release workflow must be dispatched from the signed tag and refuses a
+  missing tag, so the cosign identity always matches the installer expectation.
+- Visual regression baselines are stored per platform; Linux baselines are
+  committed, the nightly job compares against them at a 1% tolerance, and a
+  manual `update_baselines` run uploads a refreshed set. The license detector
+  recognizes BSD-4-Clause (including wrapped clauses) and runs under a test in
+  CI. `github.com/klauspost/compress` is updated to v1.20.5.
+
+### Fixed
+
+- Git review: smudge-only filter drivers are ignored; empty filter names are
+  rejected; names with `/` and `+` are accepted; a required driver without a
+  clean/process command keeps its patch visible; submodule pointer updates stay
+  visible while dirty submodule files are not scanned; an empty `.gitmodules`
+  manifest no longer blocks the review.
+- Deleting a queued prompt after a run ends works without the stale controller
+  lease, while an active run still requires the lease atomically in the delete
+  statement; adding, editing, reordering and pausing stay blocked on ended runs.
+- A blocked PTY write can no longer hang `Run.Stop`; the stop falls through to
+  termination after 500 ms.
+- Device pairing keeps the single-use token in `sessionStorage` instead of the
+  URL, clears it once consumed, and stops restoring it after a `401`. A late
+  `/me` or TOTP response is ignored when the signed-in account changed. Logout
+  clears tabs, notifications and favourites before best-effort push cleanup
+  and warns when the hub could not revoke the session.
+- Unknown or prototype-named agent logos no longer crash rendering.
+
 ## [0.1.15] - 2026-11-18
 
 ### Added
@@ -320,6 +379,7 @@ sessions, tasks, usage, fan-out, multi-user grants, passkeys, Web Push, signed
 host auto-updates with rollback, the read-only MCP endpoint and the `nexus`
 terminal client.
 
+[0.1.16]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.16
 [0.1.15]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.15
 [0.1.14]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.14
 [0.1.13]: https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.13

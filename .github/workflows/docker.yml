@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional official version tag to publish, for example v0.1.15 (creates v0.1.15, 0.1.15, 0.1 and alpha tags)'
+        description: 'Optional official version tag to publish, for example v0.1.16 (creates v0.1.16, 0.1.16, 0.1 and alpha tags)'
         required: false
         type: string
       publish_latest:
