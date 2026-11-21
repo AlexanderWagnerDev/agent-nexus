@@ -1,28 +1,31 @@
 name: Release
 
 # Publication is intentionally manual. No push or tag triggers this workflow.
-# A maintainer creates and pushes the annotated tag first, then dispatches this
-# workflow from that tag. The OIDC certificate identity is the ref that started
-# the run, so dispatching from main would make every cosign bundle fail the
-# installers' and updater's refs/tags/ identity check.
+# Dispatch it from main with the approved tag: the guard job creates and pushes
+# the annotated tag, then re-dispatches this workflow from that tag. Cosign
+# keyless identity is bound to the ref that started the run, so only the
+# tag-started run publishes; a main-started run only creates the tag.
 # See docs/RELEASING.md.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to create or republish, for example v0.1.16'
+        description: 'Release tag to create or republish, for example v0.1.16'
         required: true
         type: string
 
 permissions:
+  actions: write
   contents: write
   id-token: write
 
 jobs:
   guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    outputs:
+      publish: ${{ steps.mode.outputs.publish }}
     steps:
       - name: Validate tag
         env:
@@ -36,30 +39,66 @@ jobs:
             echo "Refusing to release: tag must look like v1.2.3 or v1.2.3-rc.1." >&2
             exit 1
           fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Create the tag and start the tag-bound run
+        id: mode
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" = "refs/tags/$TAG" ]; then
+            echo "Running from tag $TAG; publishing in this run."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Refusing to release: dispatch from main or from $TAG (got $GITHUB_REF)." >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; republishing it."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "AgentNexus $TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG"
+            echo "Created and pushed the tag $TAG at $GITHUB_SHA."
+          fi
+          # workflow_dispatch is the documented exception that GITHUB_TOKEN may
+          # use to start a new run. That run starts at the tag, which is what
+          # binds the cosign certificate identity to refs/tags/<tag>.
+          gh workflow run release.yml --ref "$TAG" -f tag="$TAG"
+          echo "Started the tag-bound release run for $TAG."
+          echo "publish=false" >> "$GITHUB_OUTPUT"
 
   release:
     needs: guard
+    if: needs.guard.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - name: Ensure the release tag
+      - name: Verify the tag-bound run
         env:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
-            echo "Refusing to release: dispatch from the tag $TAG (got $GITHUB_REF)." >&2
+            echo "Refusing to publish: this run did not start from refs/tags/$TAG (got $GITHUB_REF)." >&2
             echo "Cosign keyless identity is bound to the ref that started the run." >&2
             exit 1
           fi
           if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "Refusing to release: tag $TAG does not exist; create and push it first." >&2
+            echo "Refusing to publish: tag $TAG does not exist." >&2
             exit 1
           fi
-          echo "Publishing the existing tag $TAG at $(git rev-list -n1 "refs/tags/$TAG")."
+          echo "Publishing the tag $TAG at $(git rev-list -n1 "refs/tags/$TAG")."
           git checkout --detach "refs/tags/$TAG"
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:

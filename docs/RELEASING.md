@@ -16,12 +16,13 @@ require the maintainer's explicit approval.
 - Older withdrawn tags and releases (`v0.1.7`, `v0.1.0-rc.*`, `v0.2.0-rc.*`,
   `v0.3.*`) stay removed. Do not recreate them.
 - Ordinary commits and pull requests must not produce a GitHub release. The
-  release workflow is `workflow_dispatch` only and must be dispatched **from
-  the release tag**, after the annotated tag has been created and pushed on the
-  approved `main` commit. Dispatching from `main` is refused. Cosign keyless
-  identity is derived from the ref that started the workflow run, and the
-  installers and updater require
-  `.github/workflows/release.yml@refs/tags/<tag>`.
+  release workflow is `workflow_dispatch` only. Dispatch it from `main` with the
+  approved tag; the guard job creates and pushes the annotated tag at the
+  dispatched commit and then re-dispatches the workflow from that tag. Only the
+  tag-started run publishes, because cosign keyless identity is derived from
+  the ref that started the run and the installers and updater require
+  `.github/workflows/release.yml@refs/tags/<tag>`. Dispatching from `main` with
+  an existing tag republishes that tag.
 - `goreleaser` publishes the release directly, without a draft stage.
   `release.prerelease: auto` keeps stable tags stable and only marks a
   `-rc`/`-beta`/`-alpha` tag as a prerelease.
@@ -81,30 +82,28 @@ accurately without turning optional testing into release blockers.
 
 ## Manual release procedure (only after approval)
 
-1. Create and push the approved annotated tag on the approved `main` commit,
-   for example `git tag -a v0.1.16 -m "AgentNexus v0.1.16" && git push origin
-   v0.1.16`.
-2. Run **Release** from that tag, for example
-   `gh workflow run release.yml --ref v0.1.16 -f tag=v0.1.16`, and approve the
-   run. The workflow refuses a dispatch from `main` or from any other ref,
-   because the cosign certificate identity must be
-   `.../.github/workflows/release.yml@refs/tags/<tag>`. Re-running it from the
-   same tag targets that tag; existing release assets may have to be removed
-   first because GitHub does not guarantee in-place replacement.
-3. Review the published release's assets, checksums, SBOMs and the cosign
+1. Run **Release** from `main` with the approved tag, for example
+   `gh workflow run release.yml --ref main -f tag=v0.1.16`, and approve the
+   run. The guard job validates the tag, creates and pushes the annotated tag
+   at the dispatched `main` commit, then starts the workflow from that tag.
+   The first run ends without publishing; the tag-started run builds and
+   publishes. If the tag already exists, the guard job re-dispatches it
+   instead. Existing release assets may have to be removed first because
+   GitHub does not guarantee in-place replacement.
+2. Review the published release's assets, checksums, SBOMs and the cosign
    bundle. The archive names are
    `agent-nexus_<version>_<os>_<arch>.tar.gz` or `.zip` on Windows, which is
    exactly what the host updater expects. If the run produced a broken
-   release, delete the release before re-dispatching; if you also delete the
-   tag, recreate and push it first so the next dispatch can start from it.
-4. Releases produced before this procedure (including v0.1.15) carry a
+   release, delete the release and re-dispatch from `main`; the existing tag is
+   reused. Delete the tag as well only when it must move to another commit.
+3. Releases produced before this procedure (including v0.1.15) carry a
    `refs/heads/main` certificate identity and fail the tag-bound cosign check.
    Republish them from a recreated tag. On a machine with cosign installed the
    installers refuse such a release; removing cosign from `PATH` would fall
    back to SHA-256 only, but that skips the signature check. The post-install
    checksum-only options configure future auto-updates and do not bypass an
    install-time cosign failure.
-5. Then run **Container** with `release_tag=v0.1.16` and `publish_latest=true`
+4. Then run **Container** with `release_tag=v0.1.16` and `publish_latest=true`
    for a stable release. The dispatch publishes `v0.1.16`, `0.1.16`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
@@ -112,7 +111,7 @@ accurately without turning optional testing into release blockers.
    block a release rebuild, while a non-main branch is rejected.
    Ordinary `main` builds keep publishing `alpha`/`sha-*` and can never
    overwrite the version tags.
-6. Verify a host update on a disposable installation before announcing it.
+5. Verify a host update on a disposable installation before announcing it.
 
 ## Leftover artifacts from removed releases
 
