@@ -69,6 +69,9 @@ function teardownPage() {
 export function clearAccountArtifacts() {
   teardownPage();
   state.openTabs = [];
+  state.favorites = new Set();
+  state.notifications = [];
+  state.unread = 0;
   storeSet('nexus-tabs', []);
   try {
     localStorage.removeItem('nexus-recent');
@@ -172,7 +175,19 @@ export function renderAuth(mode, error = '') {
 }
 
 export async function logout() {
-  try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  let revoked = true;
+  try {
+    await api('/auth/logout', { method: 'POST' });
+  } catch {
+    // The local session is cleared below so a shared browser does not keep
+    // showing the account, but the server-side session may still be valid.
+    revoked = false;
+  }
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    const subscription = await registration?.pushManager?.getSubscription();
+    await subscription?.unsubscribe();
+  } catch { /* push is optional */ }
   state.me = null;
   clearAccountArtifacts();
   if (state.notifTimer) {
@@ -181,9 +196,13 @@ export async function logout() {
   }
   disconnectWS();
   renderAuth('login');
+  if (!revoked) toast(t('The hub could not be reached to revoke this session; it may still be active on the server.'), true);
 }
 
 export function renderDevicePair(token) {
+  // Keep the single-use token in memory, not in the address bar, history or
+  // same-origin Referer of later asset/fetch requests.
+  try { history.replaceState(null, '', '/'); } catch { /* ignore */ }
   authFrame(`
     <h2 class="mt-0">${t('Pair this device')}</h2>
     <p class="hint mb-2">${t('A signed-in device requested this pairing. Give this browser a name and confirm; the link is single-use.')}</p>

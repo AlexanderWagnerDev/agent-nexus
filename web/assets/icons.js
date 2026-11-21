@@ -80,7 +80,10 @@ const agentLogos = {
 };
 
 export function agentLogo(agent) {
-  const logo = agentLogos[String(agent || '').toLowerCase()];
+  const key = String(agent || '').toLowerCase();
+  // Host-reported names can be "__proto__" or "constructor"; inherited object
+  // properties are truthy but have no paths array, which crashed every render.
+  const logo = Object.hasOwn(agentLogos, key) ? agentLogos[key] : null;
   if (!logo) return '';
   const rule = logo.evenodd ? ' fill-rule="evenodd"' : '';
   const paths = logo.paths.map((d) => `<path d="${d}"/>`).join('');

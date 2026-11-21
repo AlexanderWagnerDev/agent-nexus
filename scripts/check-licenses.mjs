@@ -16,7 +16,7 @@ const exceptionsPath = path.join(root, 'scripts', 'license-exceptions.json');
 const exceptions = fs.existsSync(exceptionsPath) ? JSON.parse(fs.readFileSync(exceptionsPath, 'utf8')) : {};
 const failures = [];
 
-function detect(text) {
+export function detect(text) {
   const lower = text.toLowerCase();
   if (lower.includes('mozilla public license') && lower.includes('version 2.0')) return 'MPL-2.0';
   if (lower.includes('apache license') && lower.includes('version 2.0')) return 'Apache-2.0';
@@ -24,6 +24,10 @@ function detect(text) {
   if (lower.includes('permission to use, copy, modify') && lower.includes('with or without fee')) return 'ISC';
   if (lower.includes('permission is hereby granted, free of charge')) return 'MIT';
   if (lower.includes('redistribution and use in source and binary forms')) {
+    // BSD-4-Clause has the advertising clause as clause 3 and moves the
+    // non-endorsement clause to 4. Checking clause 3 for "Neither the name"
+    // alone would misclassify BSD-4 as the allowed BSD-2.
+    if (/all advertising materials mentioning features or use of this software/i.test(text)) return 'BSD-4-Clause';
     return /3\.\s*Neither the name/i.test(text) ? 'BSD-3-Clause' : 'BSD-2-Clause';
   }
   if (lower.includes('boost software license')) return 'BSL-1.0';
@@ -98,13 +102,15 @@ function checkNpm() {
   console.log(`checked ${count} npm packages`);
 }
 
-checkGo();
-checkNpm();
-if (failures.length) {
-  console.error('\nLicense policy violations:');
-  for (const failure of failures) console.error(`  - ${failure}`);
-  console.error('\nAllowed: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD.');
-  console.error('MPL-2.0 is accepted only for packages listed in scripts/license-exceptions.json.');
-  process.exit(1);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  checkGo();
+  checkNpm();
+  if (failures.length) {
+    console.error('\nLicense policy violations:');
+    for (const failure of failures) console.error(`  - ${failure}`);
+    console.error('\nAllowed: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD.');
+    console.error('MPL-2.0 is accepted only for packages listed in scripts/license-exceptions.json.');
+    process.exit(1);
+  }
+  console.log('license policy passed');
 }
-console.log('license policy passed');

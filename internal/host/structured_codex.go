@@ -145,7 +145,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = append(childEnv(), "TERM=xterm-256color")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()

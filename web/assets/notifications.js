@@ -10,7 +10,11 @@ export function notificationIcon(kind) {
 }
 
 export async function loadNotifications() {
+  const userId = state.me?.id;
   const data = await api('/notifications?limit=40');
+  // A response can arrive after logout or an account switch; never write the
+  // previous account's notification titles into the next account's shell.
+  if (!state.me || state.me.id !== userId) return;
   state.notifications = data.notifications || [];
   state.unread = data.unread || 0;
   updateNotificationBadge();

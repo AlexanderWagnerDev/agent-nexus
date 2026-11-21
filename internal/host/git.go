@@ -4,12 +4,31 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// gitCommand builds a read-only Git invocation. The repository can configure
+// helpers such as core.fsmonitor or diff.external, which Git would otherwise
+// execute as the host user; a read-only transcript grant must not become code
+// execution. --no-ext-diff/--no-textconv cover diff, and core.fsmonitor=false
+// covers status. The environment is scrubbed of interactive and system config.
+func gitCommand(ctx context.Context, cwd string, args ...string) *exec.Cmd {
+	base := []string{"-c", "core.fsmonitor=false", "-C", cwd}
+	cmd := exec.CommandContext(ctx, "git", append(base, args...)...)
+	cmd.Dir = cwd
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_PAGER=cat",
+	)
+	hideProcessWindow(cmd)
+	return cmd
+}
 
 // cappedBuffer keeps at most limit bytes and remembers that it dropped data.
 // It always reports a full write so the child is not killed by a write error.
@@ -56,9 +75,7 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 	var repo gitRepoCache
 	if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		cmd := exec.CommandContext(cctx, "git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
-		cmd.Dir = cwd
-		hideProcessWindow(cmd)
+		cmd := gitCommand(cctx, cwd, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel")
 		out, err := cmd.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -71,9 +88,7 @@ func (d *Daemon) gitRepo(ctx context.Context, cwd string) gitRepoCache {
 			}
 		}
 		cctx, cancel = context.WithTimeout(ctx, 3*time.Second)
-		remote := exec.CommandContext(cctx, "git", "-C", cwd, "remote", "get-url", "origin")
-		remote.Dir = cwd
-		hideProcessWindow(remote)
+		remote := gitCommand(cctx, cwd, "remote", "get-url", "origin")
 		out, err = remote.CombinedOutput()
 		cancel()
 		if err == nil {
@@ -108,6 +123,15 @@ func normalizeRepoURL(raw string) string {
 		}
 		value = "https://" + value
 	}
+	// A remote may embed a username or access token. The grouped project key
+	// only needs host and path; never send credentials to the hub or store them
+	// in its database.
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		parsed.User = nil
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		value = parsed.String()
+	}
 	value = strings.TrimSuffix(strings.TrimRight(value, "/"), ".git")
 	return value
 }
@@ -141,9 +165,10 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	run := func(limit int, args ...string) (string, bool) {
-		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
-		cmd.Dir = cwd
-		hideProcessWindow(cmd)
+		if len(args) > 0 && args[0] == "diff" {
+			args = append([]string{"diff", "--no-ext-diff", "--no-textconv"}, args[1:]...)
+		}
+		cmd := gitCommand(ctx, cwd, args...)
 		// Bound the allocation while git runs. A multi-hundred-megabyte diff
 		// used to be fully buffered before the truncation check.
 		buf := &cappedBuffer{limit: limit}

@@ -197,6 +197,10 @@ func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Requ
 		name = "Passkey"
 	}
 	if err := s.store.SavePasskey(u.ID, name, cred); err != nil {
+		if errors.Is(err, errPasskeyOwned) {
+			writeError(w, http.StatusConflict, "passkey is already registered to another account")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

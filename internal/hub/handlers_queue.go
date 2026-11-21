@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -9,6 +10,11 @@ import (
 )
 
 const maxQueuedAttachments = 24 << 20
+
+// maxQueuedRunBytes bounds one run's queued text and attachment payloads. The
+// 100-item cap alone would allow 2.4 GiB of base64 attachments to be loaded by
+// the queue worker and by GET /queue.
+var maxQueuedRunBytes = int64(64 << 20)
 
 type queueAddRequest struct {
 	Text        string                  `json:"text"`
@@ -80,6 +86,10 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease b
 		writeError(w, http.StatusBadRequest, "prompt queues are only available in structured mode")
 		return u, run, protocol.SessionView{}, false
 	}
+	if needLease && (run.EndedAt != nil || terminalRunState(run.State)) {
+		writeError(w, http.StatusConflict, "run has ended; queued prompts are read-only")
+		return u, run, protocol.SessionView{}, false
+	}
 	sess, err := s.store.SessionByID(u.ID, run.SessionID, isAdminRole(u.Role))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
@@ -134,6 +144,16 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.store.CountQueuedPrompts(run.ID) >= 100 {
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue is full", "reason": "queue_limit"})
+		return
+	}
+	incoming := int64(len(req.Text))
+	if req.Options != nil {
+		if raw, err := json.Marshal(req.Options); err == nil {
+			incoming += int64(len(raw))
+		}
+	}
+	if s.store.PromptQueueBytes(run.ID)+incoming > maxQueuedRunBytes {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue byte budget is full", "reason": "queue_bytes"})
 		return
 	}
 	scheduled, msg := parseQueueSchedule(req.ScheduledAt)

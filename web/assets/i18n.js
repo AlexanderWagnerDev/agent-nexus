@@ -33,6 +33,8 @@ const de = {
   'No sessions yet': 'Noch keine Sessions',
   'No hosts paired': 'Keine Hosts gekoppelt',
   'Could not load workspace.': 'Arbeitsbereich konnte nicht geladen werden.',
+  'The hub could not be reached to revoke this session; it may still be active on the server.':
+    'Der Hub war nicht erreichbar, um diese Sitzung zu beenden; sie kann auf dem Server noch aktiv sein.',
   'All {n} sessions': 'Alle {n} Sessions',
 
   // roles

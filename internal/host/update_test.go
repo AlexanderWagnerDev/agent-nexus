@@ -19,6 +19,30 @@ import (
 	"time"
 )
 
+func TestStageUpdateRejectsPathInAssetName(t *testing.T) {
+	info := UpdateInfo{
+		AssetName:   "../escape.zip",
+		DownloadURL: "https://example.invalid/asset",
+		ChecksumURL: "https://example.invalid/checksums.txt",
+	}
+	if _, _, err := StageUpdateWithMode(context.Background(), info, t.TempDir(), false); err == nil {
+		t.Fatal("asset name with a parent segment was accepted")
+	}
+}
+
+func TestSafeReleaseVersionDir(t *testing.T) {
+	for _, version := range []string{"v0.1.15", "1.2.3"} {
+		if got, err := safeReleaseVersionDir(version); err != nil || got == "" {
+			t.Fatalf("valid version %q rejected: %q %v", version, got, err)
+		}
+	}
+	for _, version := range []string{"", "v", "v1.2.3/../../x", "v1.2.3\\x", "v..", "latest"} {
+		if _, err := safeReleaseVersionDir(version); err == nil {
+			t.Fatalf("unsafe version %q accepted", version)
+		}
+	}
+}
+
 func TestCompareVersions(t *testing.T) {
 	cases := []struct {
 		a, b string

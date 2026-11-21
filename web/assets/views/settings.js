@@ -199,6 +199,7 @@ export async function pageSettings() {
     } catch (err) { toast(err.message, true); }
   }));
   document.getElementById('settings-token-add').addEventListener('click', () => {
+    const gen = state.pageGen;
     modal(`<h2>${t('Create read-only token')}</h2>
       <label class="label">${t('Name')}<input class="input" id="token-name" maxlength="80" placeholder="${t('e.g. Claude Desktop')}"></label>
       <p class="hint">${t('The token grants read-only access to hosts, sessions, transcripts and Git status that your user may already view.')}</p>
@@ -208,6 +209,7 @@ export async function pageSettings() {
       if (!name) { toast(t('Name is required'), true); return; }
       try {
         const result = await api('/me/api-tokens', { method: 'POST', body: { name } });
+        if (gen !== state.pageGen || !state.me) return;
         modal(`<h2>${t('Token created')}</h2>
           <p class="hint">${t('Copy this token now. It cannot be shown again.')}</p>
           <div class="copy-line"><code id="token-secret">${esc(result.secret)}</code><button class="icon-btn" type="button" id="token-copy" title="${t('Copy')}">${svgIcon('copy', 14)}</button></div>

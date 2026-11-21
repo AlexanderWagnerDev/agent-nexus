@@ -646,11 +646,20 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "not your run")
 		return
 	}
+	// Run ownership alone does not survive a revoked or reduced host grant.
+	if !s.hostPermission(u, run.HostID, "view") {
+		writeError(w, http.StatusForbidden, "host view permission required")
+		return
+	}
 	run.LastEventSeq = s.runEventCursor(run.ID)
 	// A finished or stopping run cannot answer an approval anymore. Do not
-	// resurrect a stale approval card after a reload.
+	// resurrect a stale approval card after a reload. The approval text is
+	// agent output, so only a principal that may read the transcript or answer
+	// the approval receives it.
 	if !terminalRunState(run.State) && run.State != protocol.StateStopping {
-		run.PendingApproval = s.pendingApproval(run.ID)
+		if s.hostPermission(u, run.HostID, "read_transcript") || s.hostPermission(u, run.HostID, "approve") {
+			run.PendingApproval = s.pendingApproval(run.ID)
+		}
 	}
 	writeJSON(w, http.StatusOK, run)
 }
@@ -664,6 +673,10 @@ func (s *Server) handleRunOptions(w http.ResponseWriter, r *http.Request) {
 	}
 	if startedBy != u.ID && !isAdminRole(u.Role) {
 		writeError(w, http.StatusForbidden, "not your run")
+		return
+	}
+	if !s.hostPermission(u, run.HostID, "view") {
+		writeError(w, http.StatusForbidden, "host view permission required")
 		return
 	}
 	if !s.hostOnline(run.HostID) {
