@@ -1,7 +1,7 @@
 package hub
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -146,23 +146,17 @@ func (s *Server) handleAddPromptQueue(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue is full", "reason": "queue_limit"})
 		return
 	}
-	incoming := int64(len(req.Text))
-	if req.Options != nil {
-		if raw, err := json.Marshal(req.Options); err == nil {
-			incoming += int64(len(raw))
-		}
-	}
-	if s.store.PromptQueueBytes(run.ID)+incoming > maxQueuedRunBytes {
-		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue byte budget is full", "reason": "queue_bytes"})
-		return
-	}
 	scheduled, msg := parseQueueSchedule(req.ScheduledAt)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	item, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, strings.TrimSpace(req.Text), req.Options, scheduled)
+	item, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, strings.TrimSpace(req.Text), req.Options, scheduled, maxQueuedRunBytes)
 	if err != nil {
+		if errors.Is(err, errQueueByteBudget) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error(), "reason": "queue_bytes"})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -197,11 +191,11 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "queue item not found")
 		return
 	}
-	if s.store.PromptQueueBytes(run.ID)-int64(len(old.Text))+int64(len(req.Text)) > maxQueuedRunBytes {
-		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue byte budget is full", "reason": "queue_bytes"})
-		return
-	}
-	if err := s.store.UpdatePromptQueueItem(run.ID, itemID, strings.TrimSpace(req.Text), scheduled); err != nil {
+	if err := s.store.UpdatePromptQueueItem(run.ID, itemID, strings.TrimSpace(req.Text), scheduled, maxQueuedRunBytes); err != nil {
+		if errors.Is(err, errQueueByteBudget) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": err.Error(), "reason": "queue_bytes"})
+			return
+		}
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}

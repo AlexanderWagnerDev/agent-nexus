@@ -40,7 +40,7 @@ func TestPausedQueueOnEndedRunIsResolvedAfterGrace(t *testing.T) {
 	if err := store.SetPromptQueuePaused(runID, true); err != nil {
 		t.Fatal(err)
 	}
-	item, err := store.EnqueuePrompt(runID, owner.ID, "device", "paused restart", nil, nil)
+	item, err := store.EnqueuePrompt(runID, owner.ID, "device", "paused restart", nil, nil, maxQueuedRunBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestDuePromptSurvivesStartupRecoveryGrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	store.UpdateRunState(runID, protocol.StateRunning)
-	item, err := store.EnqueuePrompt(runID, owner.ID, "device", "survive restart", nil, nil)
+	item, err := store.EnqueuePrompt(runID, owner.ID, "device", "survive restart", nil, nil, maxQueuedRunBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
