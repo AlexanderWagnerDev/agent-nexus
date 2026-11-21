@@ -64,6 +64,11 @@ func TestPromptQueueByteBudget(t *testing.T) {
 	if !json.Valid(body) {
 		t.Fatalf("invalid response: %s", body)
 	}
+	// SQLite length(text) counts characters; the budget must count UTF-8 bytes.
+	maxQueuedRunBytes = 3
+	status, body = hub.do(nil, http.MethodPost, "/api/v1/runs/"+runID+"/queue",
+		map[string]string{"text": "éé"}, nil)
+	expectStatus(t, status, http.StatusTooManyRequests, body, "queue byte budget counts UTF-8 bytes")
 }
 
 func TestTaskDeleteRejectsDelegatedRunBeforeSessionBinding(t *testing.T) {

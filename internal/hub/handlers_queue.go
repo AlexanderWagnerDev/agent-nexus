@@ -192,6 +192,15 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	itemID := r.PathValue("itemID")
+	old, err := s.store.PromptQueueItem(itemID)
+	if err != nil || old.RunID != run.ID {
+		writeError(w, http.StatusNotFound, "queue item not found")
+		return
+	}
+	if s.store.PromptQueueBytes(run.ID)-int64(len(old.Text))+int64(len(req.Text)) > maxQueuedRunBytes {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "prompt queue byte budget is full", "reason": "queue_bytes"})
+		return
+	}
 	if err := s.store.UpdatePromptQueueItem(run.ID, itemID, strings.TrimSpace(req.Text), scheduled); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return

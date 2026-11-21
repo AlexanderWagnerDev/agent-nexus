@@ -385,8 +385,8 @@ func (x *SearchIndex) Search(ctx context.Context, query string, limit int) ([]pr
 	if limit <= 0 {
 		limit = 50
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > 1000 {
+		limit = 1000
 	}
 	rows, err := x.db.QueryContext(ctx, `
 SELECT d.agent, d.native_id, d.title, d.updated_at,

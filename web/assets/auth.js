@@ -200,8 +200,10 @@ export async function logout() {
 }
 
 export function renderDevicePair(token) {
-  // Keep the single-use token in memory, not in the address bar, history or
-  // same-origin Referer of later asset/fetch requests.
+  // Keep the single-use token out of the address bar, history and same-origin
+  // Referer, but in sessionStorage so a language-switch reload can restore the
+  // pairing form. It is cleared on success and disappears with the tab.
+  try { sessionStorage.setItem('nexus-pair-token', token); } catch { /* storage unavailable */ }
   try { history.replaceState(null, '', '/'); } catch { /* ignore */ }
   authFrame(`
     <h2 class="mt-0">${t('Pair this device')}</h2>
@@ -220,9 +222,9 @@ export function renderDevicePair(token) {
       clearAccountArtifacts();
       state.me = await api('/me');
       adoptAccountArtifacts(state.me.id);
-      adoptAccountArtifacts(state.me.id);
       state.hubName = state.me.hub_name || state.hubName;
       await loadUserTheme();
+      try { sessionStorage.removeItem('nexus-pair-token'); } catch { /* storage unavailable */ }
       history.replaceState({}, '', '/');
       renderShell('overview');
       await route();
