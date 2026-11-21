@@ -59,8 +59,10 @@ export async function pageDevices() {
     });
   });
   document.getElementById('pair-device')?.addEventListener('click', async () => {
+    const gen = state.pageGen;
     try {
       const data = await api('/devices/pairing', { method: 'POST' });
+      if (gen !== state.pageGen || !state.me) return;
       modal(`
         <h2>${t('Pair a device')}</h2>
         <p class="hint">${t('Scan this code on a new device. It is single-use and expires in two minutes. The new device gets its own revocable session.')}</p>
@@ -90,8 +92,10 @@ export async function pageDevices() {
     }
   });
   document.getElementById('totp-begin')?.addEventListener('click', async () => {
+    const gen = state.pageGen;
     try {
       const data = await api('/auth/totp/begin', { method: 'POST' });
+      if (gen !== state.pageGen || !state.me) return;
       modal(`
         <h2>${t('Set up authenticator')}</h2>
         <p class="hint">${t('Add this secret to your authenticator app, then enter the current six-digit code to confirm.')}</p>
@@ -105,6 +109,7 @@ export async function pageDevices() {
         e.preventDefault();
         try {
           await api('/auth/totp/enable', { method: 'POST', body: { secret: data.secret, code: new FormData(e.target).get('code') } });
+          if (gen !== state.pageGen || !state.me) return;
           closeModal();
           state.me = await api('/me');
           toast(t('TOTP enabled'));

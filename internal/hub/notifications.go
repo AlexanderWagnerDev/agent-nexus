@@ -10,10 +10,16 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
 )
+
+// Telegram bot tokens are digits, a colon and a base64url-style secret. The
+// value is interpolated into the API URL, so a control character must be
+// rejected before it can appear in an http.Request error or audit entry.
+var telegramTokenPattern = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
 
 var notificationKinds = map[string]bool{
 	"ntfy": true, "gotify": true, "telegram": true, "discord": true, "slack": true, "webhook": true,
@@ -106,7 +112,15 @@ func validateNotificationConfig(kind, name string, config map[string]string, all
 	}
 	if kind == "telegram" {
 		// The token is part of the URL path; validate the fixed API host
-		// without requiring a DNS lookup of api.telegram.org.
+		// without requiring a DNS lookup of api.telegram.org. Reject control
+		// characters because they make http.NewRequest echo the token back in
+		// an error that is logged and audited.
+		if !telegramTokenPattern.MatchString(config["token"]) {
+			return errors.New("telegram token is invalid")
+		}
+		if strings.ContainsAny(config["chat_id"], "\r\n\x00") {
+			return errors.New("telegram chat_id is invalid")
+		}
 		return nil
 	}
 	return validateNotificationURL(endpoint, allowPrivate)
@@ -168,7 +182,8 @@ func (s *Server) channelRequest(ctx context.Context, kind string, config map[str
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		// Never return the URL in the error: it can carry a webhook or bot token.
+		return nil, errors.New("notification endpoint is invalid")
 	}
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "AgentNexus/"+Version)

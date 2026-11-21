@@ -15,6 +15,7 @@ func TestNormalizeRepoURL(t *testing.T) {
 		"ssh://git@github.com/owner/repo.git":   "https://github.com/owner/repo",
 		"https://github.com/owner/repo.git":     "https://github.com/owner/repo",
 		"https://gitlab.com/group/sub/repo/":    "https://gitlab.com/group/sub/repo",
+		"https://user:token@github.com/o/r.git": "https://github.com/o/r",
 		"  https://example.com/team/repo.git  ": "https://example.com/team/repo",
 		"":                                      "",
 	}
@@ -22,6 +23,44 @@ func TestNormalizeRepoURL(t *testing.T) {
 		if got := normalizeRepoURL(input); got != want {
 			t.Errorf("normalizeRepoURL(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestGitViewDoesNotRunRepositoryExternalDiff(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not available for the helper script")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "helper-ran")
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "a.txt")
+	git("commit", "-qm", "initial")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := "echo ran > " + strings.ReplaceAll(marker, `\`, "/")
+	git("config", "diff.external", "sh -c '"+script+"'")
+
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	if _, err := d.gitView(context.Background(), dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("repository-configured diff.external ran during read-only Git review")
 	}
 }
 

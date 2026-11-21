@@ -185,11 +185,15 @@ func (s *Store) PromptQueuePaused(runID string) (bool, error) {
 	return paused != 0, err
 }
 
-// DuePromptQueue returns queued items whose schedule has arrived.
+// DuePromptQueue returns queued items whose schedule has arrived for runs that
+// can accept them now. Filtering in SQL keeps the worker from loading large
+// attachment payloads for every busy or paused run on every two-second pass.
 func (s *Store) DuePromptQueue(now time.Time) ([]protocol.PromptQueueItem, error) {
-	rows, err := s.db.Query(`SELECT id,run_id,user_id,device_id,position,text,options,scheduled_at,state,attempts,last_error,created_at,updated_at
-		FROM prompt_queue WHERE state='queued' AND (scheduled_at IS NULL OR scheduled_at<=?)
-		ORDER BY run_id, position, created_at LIMIT 500`, ms(now))
+	rows, err := s.db.Query(`SELECT q.id,q.run_id,q.user_id,q.device_id,q.position,q.text,q.options,q.scheduled_at,q.state,q.attempts,q.last_error,q.created_at,q.updated_at
+		FROM prompt_queue q JOIN runs r ON r.id=q.run_id
+		WHERE q.state='queued' AND (q.scheduled_at IS NULL OR q.scheduled_at<=?)
+		  AND r.queue_paused=0 AND (r.state='idle' OR r.ended_at IS NOT NULL)
+		ORDER BY q.run_id, q.position, q.created_at LIMIT 500`, ms(now))
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +262,16 @@ func (s *Store) HasQueuedPrompts() (bool, error) {
 func (s *Store) CountQueuedPrompts(runID string) int {
 	var n int
 	_ = s.db.QueryRow(`SELECT COUNT(*) FROM prompt_queue WHERE run_id=? AND state IN ('queued','sending')`, runID).Scan(&n)
+	return n
+}
+
+// PromptQueueBytes reports the stored text and option bytes still waiting for
+// one run. The item count alone does not bound memory: one item may carry 24 MiB
+// of base64 attachments.
+func (s *Store) PromptQueueBytes(runID string) int64 {
+	var n int64
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(length(text)+length(options)),0) FROM prompt_queue
+		WHERE run_id=? AND state IN ('queued','sending')`, runID).Scan(&n)
 	return n
 }
 

@@ -14,6 +14,32 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+// childEnv is the environment handed to an agent process. AgentNexus' own
+// secrets (update tokens, hub API tokens) must not be inherited by a
+// prompt-injected or malicious agent. The agent's own credentials are files it
+// manages itself and are never added here.
+func childEnv() []string {
+	parent := os.Environ()
+	out := make([]string, 0, len(parent))
+	for _, entry := range parent {
+		key := entry
+		if i := strings.IndexByte(entry, '='); i >= 0 {
+			key = entry[:i]
+		}
+		upper := strings.ToUpper(key)
+		if upper == "GITHUB_TOKEN" || upper == "GH_TOKEN" ||
+			upper == "NEXUS_GITHUB_TOKEN" || upper == "NEXUS_PASSWORD" || upper == "NEXUS_METRICS_TOKEN" {
+			continue
+		}
+		if strings.HasPrefix(upper, "NEXUS_") &&
+			(strings.HasSuffix(upper, "_TOKEN") || strings.HasSuffix(upper, "_SECRET") || strings.HasSuffix(upper, "_KEY")) {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 func pageMessages(all []protocol.Message, offset, limit int) (protocol.Transcript, error) {
 	if offset < 0 {
 		offset = 0

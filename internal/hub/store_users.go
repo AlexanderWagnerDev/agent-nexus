@@ -372,16 +372,28 @@ func (s *Store) PurgeExpiredSessions() int {
 
 // ---- host grants ----
 
+// errPasskeyOwned is returned when a registration tries to reuse a credential ID
+// that belongs to another account. WebAuthn requires the relying party to make
+// this check; the library leaves it to the caller (registration step 17).
+var errPasskeyOwned = errors.New("passkey credential is already registered to another account")
+
 func (s *Store) SavePasskey(userID, name string, cred *webauthn.Credential) error {
 	raw, err := json.Marshal(cred)
 	if err != nil {
 		return err
 	}
 	id := base64.RawURLEncoding.EncodeToString(cred.ID)
-	_, err = s.db.Exec(`INSERT INTO passkeys(credential_id,user_id,name,data,created_at) VALUES(?,?,?,?,?)
-		ON CONFLICT(credential_id) DO UPDATE SET name=excluded.name, data=excluded.data`,
+	res, err := s.db.Exec(`INSERT INTO passkeys(credential_id,user_id,name,data,created_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(credential_id) DO UPDATE SET name=excluded.name, data=excluded.data
+		WHERE passkeys.user_id = excluded.user_id`,
 		id, userID, name, string(raw), ms(time.Now()))
-	return err
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return errPasskeyOwned
+	}
+	return nil
 }
 
 func (s *Store) Passkeys(userID string) ([]webauthn.Credential, error) {

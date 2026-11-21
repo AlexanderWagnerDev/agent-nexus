@@ -116,7 +116,7 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1")
+	cmd.Env = append(childEnv(), "TERM=xterm-256color", "NO_COLOR=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()

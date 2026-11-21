@@ -82,7 +82,16 @@ func terminalQueueState(state string) bool {
 // dispatchDuePrompts sends at most one queued prompt per run per pass and
 // only when the run is idle. The SQL claim makes duplicate delivery
 // impossible even if two passes overlap.
+// queueStartupGrace lets a reconnecting host re-adopt its runs before queued
+// prompts are judged against the hub's recovery state. Without it the queue
+// worker races the first host link and fails every due item for a run that
+// RecoverStaleRuns closed moments earlier.
+const queueStartupGrace = 30 * time.Second
+
 func (s *Server) dispatchDuePrompts() {
+	if !s.queueGraceUntil.IsZero() && time.Now().Before(s.queueGraceUntil) {
+		return
+	}
 	items, err := s.store.DuePromptQueue(time.Now())
 	if err != nil || len(items) == 0 {
 		return

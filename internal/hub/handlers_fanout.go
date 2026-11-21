@@ -2,11 +2,30 @@ package hub
 
 import (
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
+
+// fanoutWorktreeKey collapses aliases that the host canonicalizes to the same
+// directory. The hub cannot resolve symlinks on a remote host, but separators,
+// "." / ".." segments, trailing slashes and Windows case differences would
+// otherwise let one fan-out start two writers in one worktree.
+func fanoutWorktreeKey(hostOS, cwd string) string {
+	clean := path.Clean(strings.ReplaceAll(strings.TrimSpace(cwd), "\\", "/"))
+	windows := strings.HasPrefix(strings.ToLower(strings.TrimSpace(hostOS)), "windows")
+	if len(clean) >= 3 && clean[1] == ':' && clean[2] == '/' {
+		if (clean[0] >= 'a' && clean[0] <= 'z') || (clean[0] >= 'A' && clean[0] <= 'Z') {
+			windows = true
+		}
+	}
+	if windows {
+		clean = strings.ToLower(clean)
+	}
+	return clean
+}
 
 type fanoutTarget struct {
 	HostID string `json:"host_id"`
@@ -55,17 +74,17 @@ func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "cwd must be an absolute path")
 			return
 		}
-		key := target.HostID + "\x00" + target.Cwd
-		if seen[key] {
-			writeError(w, http.StatusBadRequest, "two targets would write to the same worktree")
-			return
-		}
-		seen[key] = true
 		host, err := s.store.HostByID(target.HostID)
 		if err != nil || host.RevokedAt != nil {
 			writeError(w, http.StatusNotFound, "host not found")
 			return
 		}
+		key := target.HostID + "\x00" + fanoutWorktreeKey(host.OS, target.Cwd)
+		if seen[key] {
+			writeError(w, http.StatusBadRequest, "two targets would write to the same worktree")
+			return
+		}
+		seen[key] = true
 		if host.DisabledAt != nil {
 			writeError(w, http.StatusConflict, "host is disabled")
 			return

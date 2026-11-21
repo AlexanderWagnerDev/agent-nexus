@@ -1,8 +1,10 @@
 name: Release
 
 # Publication is intentionally manual. No push or tag triggers this workflow.
-# A maintainer dispatches it from main with the new tag name; the workflow
-# creates the annotated tag and goreleaser publishes the release directly.
+# A maintainer creates and pushes the annotated tag first, then dispatches this
+# workflow from that tag. The OIDC certificate identity is the ref that started
+# the run, so dispatching from main would make every cosign bundle fail the
+# installers' and updater's refs/tags/ identity check.
 # See docs/RELEASING.md.
 
 on:
@@ -48,23 +50,16 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          case "$GITHUB_REF" in
-            refs/heads/main|"refs/tags/$TAG") ;;
-            *)
-              echo "Refusing to release: dispatch from main or from $TAG, not $GITHUB_REF." >&2
-              exit 1
-              ;;
-          esac
-
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "Publishing the existing tag $TAG at $(git rev-list -n1 "refs/tags/$TAG")."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$TAG" -m "AgentNexus $TAG" "$GITHUB_SHA"
-            git push origin "refs/tags/$TAG"
-            echo "Created and pushed the tag $TAG at $GITHUB_SHA."
+          if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
+            echo "Refusing to release: dispatch from the tag $TAG (got $GITHUB_REF)." >&2
+            echo "Cosign keyless identity is bound to the ref that started the run." >&2
+            exit 1
           fi
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Refusing to release: tag $TAG does not exist; create and push it first." >&2
+            exit 1
+          fi
+          echo "Publishing the existing tag $TAG at $(git rev-list -n1 "refs/tags/$TAG")."
           git checkout --detach "refs/tags/$TAG"
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:

@@ -64,10 +64,11 @@ type Server struct {
 	passkeySessions passkeySessionStore
 	metrics         *metrics
 
-	queueOnce  sync.Once
-	queueKick  chan struct{}
-	queueMu    sync.Mutex
-	queueArmed map[string]bool
+	queueOnce       sync.Once
+	queueKick       chan struct{}
+	queueMu         sync.Mutex
+	queueArmed      map[string]bool
+	queueGraceUntil time.Time
 
 	notificationAllowPrivate bool
 	mcpLimiter               *rateLimiter
@@ -131,6 +132,9 @@ func NewServer(cfg Config, store *Store, logger *slog.Logger) *Server {
 	// reconciled, so a crashed delegation is not left "running" forever.
 	if n := store.RecoverStaleRuns(); n > 0 {
 		logger.Info("closed runs left active by the previous hub process", "runs", n)
+		// Give reconnecting hosts time to re-adopt their runs before the queue
+		// worker judges due prompts against the synthetic restart failure.
+		s.queueGraceUntil = time.Now().Add(queueStartupGrace)
 	}
 	store.ReconcileTasks()
 	store.PurgeExpiredSessions()

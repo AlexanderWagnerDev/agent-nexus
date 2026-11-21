@@ -369,6 +369,9 @@ func StageUpdateNamed(ctx context.Context, info UpdateInfo, stagedDir, binaryNam
 	if binaryName == "" || filepath.Base(binaryName) != binaryName {
 		return "", "", errors.New("invalid staged binary name")
 	}
+	if info.AssetName == "" || filepath.Base(info.AssetName) != info.AssetName || strings.ContainsAny(info.AssetName, `/\`) {
+		return "", "", errors.New("invalid release asset name")
+	}
 	tmp, err := os.MkdirTemp("", "agentnexus-update-*")
 	if err != nil {
 		return "", "", err
@@ -411,6 +414,18 @@ func stagedBinaryName(name string) string {
 		return name + ".exe"
 	}
 	return name
+}
+
+// safeReleaseVersionDir turns a release tag into one directory component.
+// Release metadata may come from a custom update mirror; a slash or a parent
+// segment must never escape <config>/updates.
+func safeReleaseVersionDir(version string) (string, error) {
+	value := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if !validReleaseVersion(version) || value == "" || value == "." || value == ".." ||
+		strings.ContainsAny(value, `/\:`) {
+		return "", errors.New("invalid release version for the update directory")
+	}
+	return value, nil
 }
 
 // VerifyStagedBinary runs the downloaded daemon's version command before it

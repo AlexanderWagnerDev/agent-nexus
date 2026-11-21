@@ -1005,7 +1005,17 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		}
 		if d.index != nil && d.index.Status().State == "ready" {
 			if hits, err := d.index.Search(context.Background(), p.Query, p.Limit); err == nil {
-				return hits, nil
+				// The index can contain documents from before a policy change or
+				// from an adapter whose store was temporarily unreadable. Apply
+				// the live policy at query time, exactly like the adapter fallback.
+				filtered := hits[:0]
+				for _, hit := range hits {
+					if !d.policy.AgentAllowed(hit.Agent) || !d.sessionWithinRoots(hit.Agent, hit.NativeID) {
+						continue
+					}
+					filtered = append(filtered, hit)
+				}
+				return filtered, nil
 			} else {
 				d.log.Warn("search index query failed; falling back to adapters", "error", err)
 			}

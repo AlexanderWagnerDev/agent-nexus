@@ -177,18 +177,25 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		state := run.State
 		var chunks []protocol.ServerEnvelope
 		var events []protocol.ServerEnvelope
+		// A subscription is not a transcript grant. The live path checks
+		// read_transcript on every broadcast; the replay path must enforce the
+		// same permission, or a run owner whose grant was reduced can re-subscribe
+		// and dump the buffered output and events.
+		replayAllowed := s.hostPermission(c.user, run.HostID, "read_transcript")
 		if rs != nil {
 			rs.mu.Lock()
 			if rs.state != "" {
 				state = rs.state
 			}
-			for _, ch := range coalesceChunks(rs.chunks, msg.LastSeq, replayBatchBytes) {
-				chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
-			}
-			for i := range rs.events {
-				ev := rs.events[i]
-				if ev.Seq > msg.LastSeq {
-					events = append(events, protocol.ServerEnvelope{Type: "run.event", RunID: msg.RunID, Seq: ev.Seq, Event: &ev})
+			if replayAllowed {
+				for _, ch := range coalesceChunks(rs.chunks, msg.LastSeq, replayBatchBytes) {
+					chunks = append(chunks, protocol.ServerEnvelope{Type: "run.output", RunID: msg.RunID, Seq: ch.seq, Data: ch.data})
+				}
+				for i := range rs.events {
+					ev := rs.events[i]
+					if ev.Seq > msg.LastSeq {
+						events = append(events, protocol.ServerEnvelope{Type: "run.event", RunID: msg.RunID, Seq: ev.Seq, Event: &ev})
+					}
 				}
 			}
 			rs.mu.Unlock()
