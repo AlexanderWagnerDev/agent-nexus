@@ -133,6 +133,10 @@ func submodulePaths(ctx context.Context, cwd string) ([]string, error) {
 	hideProcessWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return nil, nil // no submodule path matched
+		}
 		return nil, errors.New("could not read .gitmodules")
 	}
 	var paths []string

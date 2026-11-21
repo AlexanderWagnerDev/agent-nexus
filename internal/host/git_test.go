@@ -428,6 +428,20 @@ func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	overrides, err := gitFilterOverrides(context.Background(), parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundOverride := false
+	for i := 0; i+1 < len(overrides); i++ {
+		if overrides[i] == "-c" && overrides[i+1] == "filter.evil.clean=cat" {
+			foundOverride = true
+			break
+		}
+	}
+	if !foundOverride {
+		t.Fatalf("submodule filter override missing: %v", overrides)
+	}
 	// The setup commands above (git add/commit in the submodule) already ran
 	// the filter; only the review that follows must stay clean.
 	_ = os.Remove(marker)
@@ -444,6 +458,41 @@ func TestGitViewDoesNotRunSubmoduleCleanFilter(t *testing.T) {
 	}
 	if !strings.Contains(view.Diff, "Subproject commit") {
 		t.Fatalf("submodule revision update missing from diff:\n%s", view.Diff)
+	}
+}
+
+func TestGitViewHandlesEmptyGitmodules(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitmodules"), []byte("[submodule \"commented\"]\n\t# no path\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-qm", "initial")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := &Daemon{policy: Policy{AllowedRoots: []string{dir}}}
+	view, err := d.gitView(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(view.Diff, "+two") {
+		t.Fatalf("ordinary diff missing with an empty submodule manifest:\n%s", view.Diff)
 	}
 }
 
