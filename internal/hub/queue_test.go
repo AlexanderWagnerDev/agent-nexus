@@ -30,11 +30,11 @@ func TestPromptQueueStoreLifecycle(t *testing.T) {
 	if err := hub.store.CreateRun(runID, sess.ID, hostID, protocol.ModeStructured, owner.ID, "device-1"); err != nil {
 		t.Fatal(err)
 	}
-	first, err := hub.store.EnqueuePrompt(runID, owner.ID, "device-1", "first", nil, nil)
+	first, err := hub.store.EnqueuePrompt(runID, owner.ID, "device-1", "first", nil, nil, maxQueuedRunBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := hub.store.EnqueuePrompt(runID, owner.ID, "device-1", "second", nil, nil)
+	second, err := hub.store.EnqueuePrompt(runID, owner.ID, "device-1", "second", nil, nil, maxQueuedRunBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestPromptQueueStoreLifecycle(t *testing.T) {
 	if err != nil || len(items) != 2 || items[0].ID != second.ID {
 		t.Fatalf("reordered queue: %+v %v", items, err)
 	}
-	if err := hub.store.UpdatePromptQueueItem(runID, second.ID, "second edited", nil); err != nil {
+	if err := hub.store.UpdatePromptQueueItem(runID, second.ID, "second edited", nil, maxQueuedRunBytes); err != nil {
 		t.Fatal(err)
 	}
 	if err := hub.store.SetPromptQueuePaused(runID, true); err != nil {

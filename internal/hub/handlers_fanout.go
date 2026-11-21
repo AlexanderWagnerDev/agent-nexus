@@ -124,7 +124,7 @@ func (s *Server) handleCreateFanout(w http.ResponseWriter, r *http.Request) {
 			errors = append(errors, target.HostID+": "+err.Error())
 			continue
 		}
-		if _, err := s.store.EnqueuePrompt(run.ID, u.ID, device.ID, strings.TrimSpace(req.Prompt), nil, nil); err != nil {
+		if _, err := s.store.EnqueuePrompt(run.ID, u.ID, device.ID, strings.TrimSpace(req.Prompt), nil, nil, maxQueuedRunBytes); err != nil {
 			_ = s.sendHost(target.HostID, protocol.Envelope{Type: "run.stop", RunID: run.ID})
 			s.setRunState(run.ID, protocol.StateFailed)
 			_ = s.store.AddFanoutRun(fanoutID, run.ID, target.HostID, target.Agent, "cannot queue prompt: "+err.Error())

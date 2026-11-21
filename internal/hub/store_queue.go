@@ -9,9 +9,14 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+// errQueueByteBudget reports that a queue mutation would exceed maxBytes.
+var errQueueByteBudget = errors.New("prompt queue byte budget is full")
+
 // EnqueuePrompt stores one prompt at the end of a run's queue. Options may
-// contain bounded attachments; they are stored as JSON only on the hub.
-func (s *Store) EnqueuePrompt(runID, userID, deviceID, text string, options *protocol.PromptOptions, scheduledAt *time.Time) (protocol.PromptQueueItem, error) {
+// contain bounded attachments; they are stored as JSON only on the hub. The
+// byte budget is checked inside the insert transaction so concurrent requests
+// cannot all pass a stale check.
+func (s *Store) EnqueuePrompt(runID, userID, deviceID, text string, options *protocol.PromptOptions, scheduledAt *time.Time, maxBytes int64) (protocol.PromptQueueItem, error) {
 	rawOptions := ""
 	if options != nil {
 		raw, err := json.Marshal(options)
@@ -29,6 +34,13 @@ func (s *Store) EnqueuePrompt(runID, userID, deviceID, text string, options *pro
 		return protocol.PromptQueueItem{}, err
 	}
 	defer tx.Rollback()
+	used, err := queryPromptQueueBytes(tx, runID)
+	if err != nil {
+		return protocol.PromptQueueItem{}, err
+	}
+	if used+int64(len(text))+int64(len(rawOptions)) > maxBytes {
+		return protocol.PromptQueueItem{}, errQueueByteBudget
+	}
 	var position int
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(position),0)+1 FROM prompt_queue WHERE run_id=?`, runID).Scan(&position); err != nil {
 		return protocol.PromptQueueItem{}, err
@@ -98,12 +110,32 @@ func (s *Store) ListPromptQueue(runID string) ([]protocol.PromptQueueItem, error
 	return out, rows.Err()
 }
 
-func (s *Store) UpdatePromptQueueItem(runID, itemID, text string, scheduledAt *time.Time) error {
+func (s *Store) UpdatePromptQueueItem(runID, itemID, text string, scheduledAt *time.Time, maxBytes int64) error {
 	var scheduled any
 	if scheduledAt != nil {
 		scheduled = ms(*scheduledAt)
 	}
-	res, err := s.db.Exec(`UPDATE prompt_queue SET text=?, scheduled_at=?, updated_at=? WHERE id=? AND run_id=? AND state='queued'`,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var old string
+	err = tx.QueryRow(`SELECT text FROM prompt_queue WHERE id=? AND run_id=? AND state='queued'`, itemID, runID).Scan(&old)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New("queue item is no longer editable")
+	}
+	if err != nil {
+		return err
+	}
+	used, err := queryPromptQueueBytes(tx, runID)
+	if err != nil {
+		return err
+	}
+	if used-int64(len(old))+int64(len(text)) > maxBytes {
+		return errQueueByteBudget
+	}
+	res, err := tx.Exec(`UPDATE prompt_queue SET text=?, scheduled_at=?, updated_at=? WHERE id=? AND run_id=? AND state='queued'`,
 		text, scheduled, ms(time.Now()), itemID, runID)
 	if err != nil {
 		return err
@@ -111,7 +143,7 @@ func (s *Store) UpdatePromptQueueItem(runID, itemID, text string, scheduledAt *t
 	if n, _ := res.RowsAffected(); n == 0 {
 		return errors.New("queue item is no longer editable")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *Store) DeletePromptQueueItem(runID, itemID string) error {
@@ -268,15 +300,26 @@ func (s *Store) CountQueuedPrompts(runID string) int {
 	return n
 }
 
-// PromptQueueBytes reports the stored text and option bytes retained for one
-// run. Failed items stay in the table and are still loaded by ListPromptQueue,
-// so they count toward the budget too. length(CAST(... AS BLOB)) measures UTF-8
-// bytes; SQLite length(text) would count characters and undercount multibyte
-// prompts.
-func (s *Store) PromptQueueBytes(runID string) int64 {
+// promptQueueBytesQuery measures UTF-8 bytes via CAST(... AS BLOB); SQLite
+// length(text) counts characters and would undercount multibyte prompts. Failed
+// items stay in the table and are still loaded by ListPromptQueue, so they
+// count toward the budget too.
+const promptQueueBytesQuery = `SELECT COALESCE(SUM(length(CAST(text AS BLOB))+length(CAST(options AS BLOB))),0)
+	FROM prompt_queue WHERE run_id=? AND state IN ('queued','sending','failed')`
+
+type rowQuerier interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func queryPromptQueueBytes(q rowQuerier, runID string) (int64, error) {
 	var n int64
-	_ = s.db.QueryRow(`SELECT COALESCE(SUM(length(CAST(text AS BLOB))+length(CAST(options AS BLOB))),0)
-		FROM prompt_queue WHERE run_id=? AND state IN ('queued','sending','failed')`, runID).Scan(&n)
+	err := q.QueryRow(promptQueueBytesQuery, runID).Scan(&n)
+	return n, err
+}
+
+// PromptQueueBytes reports the stored text and option bytes retained for one run.
+func (s *Store) PromptQueueBytes(runID string) int64 {
+	n, _ := queryPromptQueueBytes(s.db, runID)
 	return n
 }
 

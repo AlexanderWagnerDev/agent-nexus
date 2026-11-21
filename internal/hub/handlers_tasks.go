@@ -410,7 +410,7 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	if options.Model == "" && options.AgentMode == "" {
 		options = nil
 	}
-	if _, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, prompt, options, nil); err != nil {
+	if _, err := s.store.EnqueuePrompt(run.ID, u.ID, deviceFrom(r).ID, prompt, options, nil, maxQueuedRunBytes); err != nil {
 		s.store.SetTaskStatus(task.ID, protocol.TaskFailed, "", "cannot queue the delegated prompt: "+err.Error())
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

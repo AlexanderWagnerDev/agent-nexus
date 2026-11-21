@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -48,7 +49,7 @@ func TestPromptQueueDeleteAllowedAfterRunEnds(t *testing.T) {
 	if err := hub.store.CreateRun(runID, sessionID, hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
 		t.Fatal(err)
 	}
-	item, err := hub.store.EnqueuePrompt(runID, owner.ID, "device", "remove me", nil, nil)
+	item, err := hub.store.EnqueuePrompt(runID, owner.ID, "device", "remove me", nil, nil, maxQueuedRunBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +100,42 @@ func TestPromptQueueByteBudget(t *testing.T) {
 	status, body = hub.do(nil, http.MethodPost, "/api/v1/runs/"+runID+"/queue",
 		map[string]string{"text": "éé"}, nil)
 	expectStatus(t, status, http.StatusTooManyRequests, body, "queue byte budget counts UTF-8 bytes")
+}
+
+func TestPromptQueueByteBudgetIsAtomic(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	hostID, err := hub.store.CreateHost(owner.ID, "queue-bytes-atomic-host", make([]byte, 32), "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := hub.store.ReplaceHostSessions(hostID, []protocol.Session{{
+		Agent: "opencode", NativeID: "native-queue-bytes-atomic", Title: "queue", Cwd: "/work",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sessionID, err := hub.store.SessionIDForNative(hostID, "opencode", "native-queue-bytes-atomic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const runID = "run-queue-bytes-atomic"
+	if err := hub.store.CreateRun(runID, sessionID, hostID, protocol.ModeStructured, owner.ID, "device"); err != nil {
+		t.Fatal(err)
+	}
+	const limit = 4
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = hub.store.EnqueuePrompt(runID, owner.ID, "device", "abc", nil, nil, limit)
+		}()
+	}
+	wg.Wait()
+	if got := hub.store.PromptQueueBytes(runID); got > limit {
+		t.Fatalf("concurrent enqueues exceeded the byte budget: %d > %d", got, limit)
+	}
 }
 
 func TestTaskDeleteRejectsDelegatedRunBeforeSessionBinding(t *testing.T) {

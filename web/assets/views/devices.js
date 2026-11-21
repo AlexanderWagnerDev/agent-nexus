@@ -107,13 +107,16 @@ export async function pageDevices() {
         </form>`);
       document.getElementById('totp-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const accountID = state.me?.id;
         try {
           await api('/auth/totp/enable', { method: 'POST', body: { secret: data.secret, code: new FormData(e.target).get('code') } });
-          if (gen !== state.pageGen || !state.me) return;
+          // Refresh account state even if the user left the page, but never
+          // apply the result to a different signed-in account.
           const me = await api('/me');
-          if (gen !== state.pageGen || !state.me) return;
-          closeModal();
+          if (!accountID || me.id !== accountID) return;
           state.me = me;
+          if (gen !== state.pageGen) return;
+          closeModal();
           toast(t('TOTP enabled'));
           pageDevices();
         } catch (err) { toast(err.message, true); }
