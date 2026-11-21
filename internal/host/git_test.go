@@ -197,15 +197,44 @@ func TestGitFilterOverridesIgnoreSmudgeOnlyDriver(t *testing.T) {
 	}
 	git("init", "-q")
 	git("config", "filter.smudgeonly.smudge", "cat")
+	git("config", "filter.team/format+v2.smudge", "cat")
 	overrides, err := gitFilterOverrides(context.Background(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, arg := range overrides {
-		if strings.HasPrefix(arg, "filter.smudgeonly.") {
+		if strings.HasPrefix(arg, "filter.smudgeonly.") || strings.HasPrefix(arg, "filter.team/") {
 			t.Fatalf("smudge-only driver got a clean override: %s", arg)
 		}
 	}
+}
+
+func TestGitFilterOverridesAllowPunctuatedDriver(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=audit@example.invalid", "-c", "user.name=Audit"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "filter.team/format+v2.clean", "cat")
+	overrides, err := gitFilterOverrides(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "filter.team/format+v2.clean=cat"
+	for i := 0; i+1 < len(overrides); i++ {
+		if overrides[i] == "-c" && overrides[i+1] == want {
+			return
+		}
+	}
+	t.Fatalf("punctuated filter driver was not overridden: %v", overrides)
 }
 
 func TestGitViewRejectsUnsafeFilterName(t *testing.T) {

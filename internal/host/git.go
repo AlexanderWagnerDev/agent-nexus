@@ -42,7 +42,7 @@ func safeFilterName(name string) bool {
 		return false
 	}
 	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' || r == '/' || r == '+' {
 			continue
 		}
 		return false
@@ -64,7 +64,7 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 	hideProcessWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, errors.New("could not read the Git filter configuration")
+		return nil, errors.New("could not read the git filter configuration")
 	}
 	withCommands := map[string]bool{}
 	required := map[string]bool{}
@@ -83,10 +83,16 @@ func gitFilterOverrides(ctx context.Context, cwd string) ([]string, error) {
 		if name == "" {
 			continue
 		}
-		if !safeFilterName(name) {
-			return nil, errors.New("Git filter configuration uses an unsupported filter name")
+		key := parts[len(parts)-1]
+		// smudge cannot run during status/diff, so an unusual name there must
+		// not block the review.
+		if key != "clean" && key != "process" && key != "required" {
+			continue
 		}
-		switch parts[len(parts)-1] {
+		if !safeFilterName(name) {
+			return nil, errors.New("git filter configuration uses an unsupported filter name")
+		}
+		switch key {
 		case "clean", "process":
 			if !withCommands[name] {
 				withCommands[name] = true
