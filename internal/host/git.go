@@ -39,41 +39,40 @@ func gitEnv() []string {
 // A diff converts working-tree content through the clean filter, so a hostile
 // .gitattributes/.git/config pair can execute a command even with external
 // diff and textconv disabled. Reading the config does not run any filter.
+// One --list call covers system-free local, included and worktree config.
 func gitFilterOverrides(ctx context.Context, cwd string) []string {
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	// Follow include.path in each scope: --local alone does not read included
-	// files, and worktree-specific filters live in config.worktree.
-	scopes := []string{"--local", "--worktree"}
+	cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", "--list", "--name-only", "--show-origin", "--includes")
+	cmd.Dir = cwd
+	cmd.Env = gitEnv()
+	hideProcessWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
 	seen := map[string]bool{}
 	var overrides []string
-	for _, scope := range scopes {
-		cmd := exec.CommandContext(cctx, "git", "-C", cwd, "config", scope, "--includes", "--name-only", "--get-regexp", `^filter\..*\.(clean|process)$`)
-		cmd.Dir = cwd
-		cmd.Env = gitEnv()
-		hideProcessWindow(cmd)
-		out, err := cmd.Output()
-		if err != nil {
-			// --worktree fails when worktree config is not enabled.
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		// --show-origin prefixes each key with "<origin>\t".
+		if i := strings.LastIndexByte(line, '\t'); i >= 0 {
+			line = strings.TrimSpace(line[i+1:])
+		}
+		parts := strings.Split(line, ".")
+		if len(parts) < 3 || parts[0] != "filter" {
 			continue
 		}
-		for _, key := range strings.Split(string(out), "\n") {
-			key = strings.TrimSpace(key)
-			parts := strings.Split(key, ".")
-			if len(parts) < 3 || parts[0] != "filter" {
-				continue
-			}
-			name := strings.Join(parts[1:len(parts)-1], ".")
-			if name == "" || seen[name] {
-				continue
-			}
-			seen[name] = true
-			overrides = append(overrides,
-				"-c", "filter."+name+".clean=cat",
-				"-c", "filter."+name+".process=",
-				"-c", "filter."+name+".required=false",
-			)
+		name := strings.Join(parts[1:len(parts)-1], ".")
+		if name == "" || seen[name] {
+			continue
 		}
+		seen[name] = true
+		overrides = append(overrides,
+			"-c", "filter."+name+".clean=cat",
+			"-c", "filter."+name+".process=",
+			"-c", "filter."+name+".required=false",
+		)
 	}
 	return overrides
 }
@@ -231,10 +230,15 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	filters := gitFilterOverrides(ctx, cwd)
-	run := func(limit int, args ...string) (string, bool) {
+	run := func(filtered bool, limit int, args ...string) (string, bool) {
 		if len(args) > 0 && args[0] == "diff" {
 			args = append([]string{"diff", "--no-ext-diff", "--no-textconv"}, args[1:]...)
+		}
+		var filters []string
+		if filtered {
+			// Refresh immediately before each command that can run a filter:
+			// a config change during the review must not outlive discovery.
+			filters = gitFilterOverrides(ctx, cwd)
 		}
 		cmd := gitCommand(ctx, cwd, filters, args...)
 		// Bound the allocation while git runs. A multi-hundred-megabyte diff
@@ -251,19 +255,19 @@ func (d *Daemon) gitViewOptions(ctx context.Context, cwd string, statOnly bool) 
 		}
 		return text, false
 	}
-	branch, _ := run(4096, "rev-parse", "--abbrev-ref", "HEAD")
-	root, _ := run(4096, "rev-parse", "--show-toplevel")
-	status, statusTruncated := run(100_000, "status", "--porcelain=v1")
-	stat, statTruncated := run(100_000, "diff", "HEAD", "--stat", "--no-color")
+	branch, _ := run(false, 4096, "rev-parse", "--abbrev-ref", "HEAD")
+	root, _ := run(false, 4096, "rev-parse", "--show-toplevel")
+	status, statusTruncated := run(true, 100_000, "status", "--porcelain=v1")
+	stat, statTruncated := run(true, 100_000, "diff", "HEAD", "--stat", "--no-color")
 	diff, diffTruncated := "", false
 	if !statOnly {
-		diff, diffTruncated = run(200_000, "diff", "HEAD", "--no-color")
+		diff, diffTruncated = run(true, 200_000, "diff", "HEAD", "--no-color")
 	}
 	if strings.Contains(stat, "fatal: ambiguous argument 'HEAD'") || strings.Contains(diff, "fatal: ambiguous argument 'HEAD'") {
 		// A repository without a first commit has no HEAD.
-		stat, statTruncated = run(100_000, "diff", "--stat", "--no-color")
+		stat, statTruncated = run(true, 100_000, "diff", "--stat", "--no-color")
 		if !statOnly {
-			diff, diffTruncated = run(200_000, "diff", "--no-color")
+			diff, diffTruncated = run(true, 200_000, "diff", "--no-color")
 		}
 	}
 	fileCount := 0
