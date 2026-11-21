@@ -99,7 +99,7 @@ func (s *Server) queueAccess(w http.ResponseWriter, r *http.Request, needLease, 
 		writeError(w, http.StatusForbidden, "resume permission required")
 		return u, run, sess, false
 	}
-	if needLease {
+	if needLease && run.EndedAt == nil && !terminalRunState(run.State) {
 		if !s.hostPermission(u, sess.HostID, "terminal_input") {
 			writeError(w, http.StatusForbidden, "terminal_input permission required")
 			return u, run, sess, false
@@ -216,7 +216,7 @@ func (s *Server) handleEditPromptQueue(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeletePromptQueue(w http.ResponseWriter, r *http.Request) {
 	// Cleanup stays possible after a run ends and does not depend on the stale
 	// controller lease; adding, editing and reordering remain blocked.
-	u, run, _, ok := s.queueAccess(w, r, false, true)
+	u, run, _, ok := s.queueAccess(w, r, true, true)
 	if !ok {
 		return
 	}
