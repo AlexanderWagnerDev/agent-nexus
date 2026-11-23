@@ -342,8 +342,17 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 			s.broadcast(protocol.ServerEnvelope{Type: "run.usage", RunID: msg.RunID, Usage: &usage})
 		}
 	case "run.exit":
+		// A run the user asked to stop ends in StateExited, as documented in
+		// the run state machine (stopping -> exited). The host reports the
+		// exit code of the process it just killed, which is normally non-zero;
+		// classifying that as a crash painted a deliberate stop as a failure
+		// and sent a failure notification.
+		stopping := false
+		if run, _, err := s.store.RunByID(msg.RunID); err == nil && run.State == protocol.StateStopping {
+			stopping = true
+		}
 		state := protocol.StateExited
-		if msg.Code != 0 {
+		if msg.Code != 0 && !stopping {
 			state = protocol.StateFailed
 			s.store.SetRunError(msg.RunID, ClassifyRunError(msg.Reason), msg.Reason)
 		}
