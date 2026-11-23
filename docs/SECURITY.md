@@ -51,10 +51,12 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 - TOTP secrets and the VAPID private key are encrypted with AES-256-GCM under a
   `0600` key file next to the database. Legacy plaintext is migrated on startup;
   a missing or damaged key fails closed.
-- Attachment names are reduced to a safe basename across both separator styles,
-  image and PDF payloads are checked against magic bytes, empty uploads fail,
-  failed uploads clean up their directory, and stale directories older than
-  24 hours are removed at daemon start.
+- Attachment names are reduced to a safe basename across both separator styles
+  and made portable (characters Windows rejects and trailing dots or spaces are
+  replaced), each prompt stages into its own directory so an earlier prompt's
+  file is never overwritten, image and PDF payloads are checked against magic
+  bytes, empty uploads fail, failed uploads clean up their directory, and stale
+  directories older than 24 hours are removed at daemon start.
 - Prompt text is capped at 256 KiB and terminal paste input at 2 MiB on both
   hub and host; password input is capped at 1 KiB before Argon2.
 - Every agent process is contained in a process tree: Unix runs in their own

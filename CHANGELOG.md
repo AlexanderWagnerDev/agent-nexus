@@ -10,12 +10,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 - A run that the user stopped ends in `exited` instead of `failed`. The host
   reports the non-zero exit code of the process it just killed; the hub now
-  honours its own `stopping` state, so a deliberate stop no longer records an
-  error or sends an "Agent run failed" notification.
+  keeps `stopping` sticky (including a stop that arrives before `run.started`)
+  and honours it on exit, so a deliberate stop no longer records an error or
+  sends an "Agent run failed" notification. A task delegated to the stopped run
+  is marked `cancelled` instead of `completed`, so its dependents stay blocked.
 - Prompt attachments whose names contain characters that Windows rejects
   (`< > : " | ? *`, trailing dots or spaces) are staged instead of failing the
   whole prompt on Windows hosts. Long names are truncated by rune, never
-  splitting a UTF-8 character.
+  splitting a UTF-8 character, and every prompt stages into its own directory
+  so a later prompt cannot overwrite a file an earlier one already referenced.
 
 ## [0.1.16] - 2026-11-21
 
