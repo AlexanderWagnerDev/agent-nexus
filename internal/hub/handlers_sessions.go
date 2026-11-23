@@ -722,11 +722,17 @@ func (s *Server) handleStopRun(w http.ResponseWriter, r *http.Request) {
 	if !s.verifyHTTPDeviceSignature(w, r, deviceFrom(r).ID, nil) {
 		return
 	}
+	// Persist the stop before it reaches the host: the host may kill the
+	// process and report run.exit immediately, and that exit must see
+	// "stopping" or a deliberate stop is recorded as a crash.
+	s.setRunState(run.ID, protocol.StateStopping)
 	if err := s.sendHost(run.HostID, protocol.Envelope{Type: "run.stop", RunID: run.ID}); err != nil {
+		// The stop never reached the host; restore the previous state so the
+		// run is not stuck in "stopping" forever.
+		s.setRunState(run.ID, run.State)
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	s.setRunState(run.ID, protocol.StateStopping)
 	// Stop invalidates any approval that is still waiting.
 	s.metrics.approvalsEnded(run.ID)
 	s.store.FailPendingPromptQueue(run.ID, "run was stopped before the queued prompt was sent")

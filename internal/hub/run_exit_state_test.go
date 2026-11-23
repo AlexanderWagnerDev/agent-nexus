@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"net/http"
 	"testing"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
@@ -124,6 +125,43 @@ func TestStoppedRunCancelsDelegatedTask(t *testing.T) {
 	}
 	if after.Status != protocol.TaskBlocked {
 		t.Fatalf("dependent status after stop = %q, want %q", after.Status, protocol.TaskBlocked)
+	}
+}
+
+// A stop that cannot reach the host must not leave the run stuck in
+// "stopping": the previous state is restored and the caller sees the failure.
+func TestStopOnOfflineHostRestoresState(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	if status, body := hub.setup(); status != http.StatusCreated {
+		t.Fatalf("setup: %d %s", status, body)
+	}
+	owner, err := hub.store.UserByUsername("owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostID, err := hub.store.CreateHost(owner.ID, "offline", public, "linux", "amd64", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.CreateRunAt("run-offline", "", hostID, "/work", protocol.ModeTerminal, owner.ID, "device-1"); err != nil {
+		t.Fatal(err)
+	}
+	hub.server.setRunState("run-offline", protocol.StateRunning)
+
+	status, _ := hub.do(nil, http.MethodPost, "/api/v1/runs/run-offline/stop", nil, nil)
+	if status != http.StatusBadGateway {
+		t.Fatalf("stop on offline host: status %d, want %d", status, http.StatusBadGateway)
+	}
+	run, _, err := hub.store.RunByID("run-offline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.State != protocol.StateRunning {
+		t.Fatalf("state after failed stop = %q, want %q", run.State, protocol.StateRunning)
 	}
 }
 

@@ -244,8 +244,8 @@ func (s *Server) handleHostUpdateSettings(w http.ResponseWriter, r *http.Request
 			// hub refuses its reconnect.
 			if runs, err := s.store.ActiveRuns(id); err == nil {
 				for _, run := range runs {
-					_ = s.sendHost(id, protocol.Envelope{Type: "run.stop", RunID: run.ID})
 					s.setRunState(run.ID, protocol.StateStopping)
+					_ = s.sendHost(id, protocol.Envelope{Type: "run.stop", RunID: run.ID})
 				}
 			}
 			go func() {
