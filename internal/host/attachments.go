@@ -113,11 +113,20 @@ func writePromptAttachments(runID string, attachments []protocol.Attachment) ([]
 	if len(decoded) == 0 {
 		return nil, nil
 	}
-	dir := attachmentDir(runID)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	base := attachmentDir(runID)
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return nil, err
+	}
+	// One directory per prompt: sanitised names from different prompts may
+	// collapse to the same file name, and an earlier prompt's staged file must
+	// keep the bytes the agent already saw. The whole run directory is still
+	// removed when the run stops.
+	dir, err := os.MkdirTemp(base, "prompt-")
+	if err != nil {
 		return nil, err
 	}
 	if err := secureDirOwner(dir); err != nil {
+		_ = os.RemoveAll(dir)
 		return nil, err
 	}
 	_ = os.Chmod(dir, 0o700)

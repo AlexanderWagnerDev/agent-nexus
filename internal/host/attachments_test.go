@@ -35,8 +35,42 @@ func TestSafeAttachmentName(t *testing.T) {
 			t.Errorf("safeAttachmentName(%q) = %q, want %q", input, got, want)
 		}
 	}
-	if got := safeAttachmentName(strings.Repeat("ä", 100)+".txt", 1); !utf8.ValidString(got) {
+	if got := safeAttachmentName("a"+strings.Repeat("ä", 100), 1); !utf8.ValidString(got) {
 		t.Errorf("truncated name is not valid UTF-8: %q", got)
+	} else if len(got) > 120 {
+		t.Errorf("truncated name has %d bytes, want at most 120", len(got))
+	}
+}
+
+// Names that normalise to the same file name in different prompts must not
+// overwrite the file an earlier prompt already handed to the agent.
+func TestWritePromptAttachmentsKeepsEarlierPrompts(t *testing.T) {
+	runID := "test-prompt-batches"
+	t.Cleanup(func() { cleanupPromptAttachments(runID) })
+	encode := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	first, err := writePromptAttachments(runID, []protocol.Attachment{{
+		Name: "draft?.txt", MIME: "text/plain", Data: encode("first"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := writePromptAttachments(runID, []protocol.Attachment{{
+		Name: "draft_.txt", MIME: "text/plain", Data: encode("second"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first[0].Path == second[0].Path {
+		t.Fatalf("both prompts staged the same path %q", first[0].Path)
+	}
+	for path, want := range map[string]string{first[0].Path: "first", second[0].Path: "second"} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("staged file is missing: %v", err)
+		}
+		if string(got) != want {
+			t.Fatalf("%s contains %q, want %q", path, got, want)
+		}
 	}
 }
 
