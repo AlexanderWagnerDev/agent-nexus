@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -147,6 +148,11 @@ func writePromptAttachments(runID string, attachments []protocol.Attachment) ([]
 	return files, nil
 }
 
+// windowsInvalidNameChars cannot appear in a Windows file name. They are legal
+// on Unix, but the same upload must stage on every supported host, so they are
+// replaced instead of failing the whole prompt on Windows.
+const windowsInvalidNameChars = `<>:"|?*`
+
 // safeAttachmentName keeps only a basename, strips control characters and
 // bounds the length. Both separator styles are treated as separators so the
 // same payload is safe on Windows, Linux and macOS.
@@ -154,22 +160,44 @@ func safeAttachmentName(raw string, index int) string {
 	name := strings.ReplaceAll(strings.TrimSpace(raw), "\\", "/")
 	name = path.Base(name)
 	name = strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f || r == 0x202e {
+		switch {
+		case r < 0x20 || r == 0x7f || r == 0x202e:
 			return -1
+		case strings.ContainsRune(windowsInvalidNameChars, r):
+			return '_'
+		default:
+			return r
 		}
-		return r
 	}, name)
+	// Windows silently strips trailing dots and spaces, so the staged path
+	// would differ from the one the agent is told about.
+	name = strings.TrimRight(name, ". ")
 	if name == "" || name == "." || name == ".." || name == "/" {
 		name = fmt.Sprintf("attachment-%d", index)
 	}
 	if len(name) > 120 {
-		ext := filepath.Ext(name)
-		if len(ext) > 16 {
-			ext = ""
-		}
-		name = name[:120-len(ext)] + ext
+		name = truncateAttachmentName(name, 120)
 	}
 	return name
+}
+
+// truncateAttachmentName keeps the extension and never splits a UTF-8 rune.
+func truncateAttachmentName(name string, limit int) string {
+	ext := filepath.Ext(name)
+	if len(ext) > 16 {
+		ext = ""
+	}
+	stem := name[:len(name)-len(ext)]
+	budget := limit - len(ext)
+	var b strings.Builder
+	for _, r := range stem {
+		size := utf8.RuneLen(r)
+		if b.Len()+size > budget {
+			break
+		}
+		b.WriteString(string(r))
+	}
+	return strings.TrimRight(b.String(), ". ") + ext
 }
 
 // validateAttachmentMIME rejects a declared type that contradicts the actual
