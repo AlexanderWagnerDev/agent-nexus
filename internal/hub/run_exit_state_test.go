@@ -56,6 +56,77 @@ func TestUserStoppedRunEndsExited(t *testing.T) {
 	}
 }
 
+// A stop that arrives before the daemon registers the process must survive the
+// later run.started message; otherwise the exit of the process it kills looks
+// like a crash.
+func TestStopBeforeRunStartedStaysStopping(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hostID := newRunForExitTest(t, hub, "run-early-stop")
+	hub.server.setRunState("run-early-stop", protocol.StateStopping)
+
+	hub.server.handleHostMessage(context.Background(), &hostConn{id: hostID}, protocol.Envelope{
+		Type: "run.started", RunID: "run-early-stop", Action: protocol.ActionNew,
+	})
+	if run, _, err := hub.store.RunByID("run-early-stop"); err != nil || run.State != protocol.StateStopping {
+		t.Fatalf("state after run.started = %q (%v), want %q", run.State, err, protocol.StateStopping)
+	}
+	hub.server.handleHostMessage(context.Background(), &hostConn{id: hostID}, protocol.Envelope{
+		Type: "run.exit", RunID: "run-early-stop", Code: -1, Reason: "run stopped by user",
+	})
+	if run, _, err := hub.store.RunByID("run-early-stop"); err != nil || run.State != protocol.StateExited {
+		t.Fatalf("state after run.exit = %q (%v), want %q", run.State, err, protocol.StateExited)
+	}
+}
+
+// Stopping a delegated run must not complete the task or unblock its
+// dependents.
+func TestStoppedRunCancelsDelegatedTask(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hostID := newRunForExitTest(t, hub, "run-task-stop")
+	owner, err := hub.store.UserByUsername("owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := hub.store.CreateTask(protocol.Task{
+		UserID: owner.ID, Title: "generate report", Status: protocol.TaskRunning,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.store.LinkTaskRun(task.ID, "run-task-stop", ""); err != nil {
+		t.Fatal(err)
+	}
+	dependent, err := hub.store.CreateTask(protocol.Task{
+		UserID: owner.ID, Title: "review report", Status: protocol.TaskReady,
+	}, []string{task.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dependent.Status != protocol.TaskBlocked {
+		t.Fatalf("dependent status = %q, want %q", dependent.Status, protocol.TaskBlocked)
+	}
+
+	hub.server.setRunState("run-task-stop", protocol.StateStopping)
+	hub.server.handleHostMessage(context.Background(), &hostConn{id: hostID}, protocol.Envelope{
+		Type: "run.exit", RunID: "run-task-stop", Code: -1, Reason: "run stopped by user",
+	})
+
+	updated, err := hub.store.TaskByID(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != protocol.TaskCancelled {
+		t.Fatalf("stopped task status = %q, want %q", updated.Status, protocol.TaskCancelled)
+	}
+	after, err := hub.store.TaskByID(dependent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status != protocol.TaskBlocked {
+		t.Fatalf("dependent status after stop = %q, want %q", after.Status, protocol.TaskBlocked)
+	}
+}
+
 // An unprompted non-zero exit is still a failure.
 func TestUnexpectedRunExitFails(t *testing.T) {
 	hub := newAPITestHub(t, Config{})
