@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -22,11 +23,38 @@ func TestSafeAttachmentName(t *testing.T) {
 		"":                                "attachment-1",
 		"a/b/":                            "b",
 		strings.Repeat("x", 200) + ".txt": strings.Repeat("x", 116) + ".txt",
+		// Characters that are legal on Unix but invalid on Windows used to make
+		// the whole prompt fail when the host staged the file.
+		"report: final?.txt": "report_ final_.txt",
+		`a<b>c"d|e*f.txt`:    "a_b_c_d_e_f.txt",
+		"trailing dots... ":  "trailing dots",
+		"CON.txt":            "CON.txt",
 	}
 	for input, want := range cases {
 		if got := safeAttachmentName(input, 1); got != want {
 			t.Errorf("safeAttachmentName(%q) = %q, want %q", input, got, want)
 		}
+	}
+	if got := safeAttachmentName(strings.Repeat("ä", 100)+".txt", 1); !utf8.ValidString(got) {
+		t.Errorf("truncated name is not valid UTF-8: %q", got)
+	}
+}
+
+func TestWritePromptAttachmentsStagesNamesWindowsRejects(t *testing.T) {
+	runID := "test-name-characters"
+	t.Cleanup(func() { cleanupPromptAttachments(runID) })
+	data := base64.StdEncoding.EncodeToString([]byte("hello"))
+	files, err := writePromptAttachments(runID, []protocol.Attachment{{
+		Name: "report: final?.txt", MIME: "text/plain", Data: data,
+	}})
+	if err != nil {
+		t.Fatalf("attachment with Windows-invalid characters was not staged: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("staged %d files, want 1", len(files))
+	}
+	if _, err := os.Stat(files[0].Path); err != nil {
+		t.Fatalf("staged file is missing: %v", err)
 	}
 }
 

@@ -4,6 +4,19 @@ All notable changes to AgentNexus are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- A run that the user stopped ends in `exited` instead of `failed`. The host
+  reports the non-zero exit code of the process it just killed; the hub now
+  honours its own `stopping` state, so a deliberate stop no longer records an
+  error or sends an "Agent run failed" notification.
+- Prompt attachments whose names contain characters that Windows rejects
+  (`< > : " | ? *`, trailing dots or spaces) are staged instead of failing the
+  whole prompt on Windows hosts. Long names are truncated by rune, never
+  splitting a UTF-8 character.
+
 ## [0.1.16] - 2026-11-21
 
 ### Changed
