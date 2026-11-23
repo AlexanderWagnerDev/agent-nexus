@@ -436,6 +436,17 @@ func (s *Store) SyncTaskRunState(runID, runState string) {
 	}
 }
 
+// CancelTaskForRun marks the task that delegated a run as cancelled when the
+// run was stopped instead of finishing. A task the agent already completed is
+// kept: the stop may have arrived just after the work was done.
+func (s *Store) CancelTaskForRun(runID, reason string) {
+	task, err := s.TaskByRunID(runID)
+	if err != nil || task.Status == protocol.TaskCompleted || task.Status == protocol.TaskCancelled {
+		return
+	}
+	_ = s.SetTaskStatus(task.ID, protocol.TaskCancelled, task.Result, reason)
+}
+
 // ReconcileTasks runs at hub start. A task whose run is gone can no longer be
 // trusted to be running; leave tasks with a live run untouched so a
 // reconnecting host can continue them.

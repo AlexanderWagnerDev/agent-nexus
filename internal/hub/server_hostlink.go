@@ -321,6 +321,12 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		if msg.NativeID != "" {
 			s.adoptNativeSession(msg.RunID, msg.NativeID, msg.Agent, msg.Cwd, msg.Action, msg.ForkedFrom)
 		}
+		// A stop that arrived before the host registered the process is
+		// applied immediately after run.started. Keep "stopping" sticky so the
+		// exit of the process it kills is not classified as a crash.
+		if run, _, err := s.store.RunByID(msg.RunID); err == nil && run.State == protocol.StateStopping {
+			break
+		}
 		s.setRunState(msg.RunID, protocol.StateRunning)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.state", RunID: msg.RunID, State: protocol.StateRunning, Epoch: s.epoch})
 	case "run.output":
@@ -355,6 +361,12 @@ func (s *Server) handleHostMessage(ctx context.Context, hc *hostConn, msg protoc
 		if msg.Code != 0 && !stopping {
 			state = protocol.StateFailed
 			s.store.SetRunError(msg.RunID, ClassifyRunError(msg.Reason), msg.Reason)
+		}
+		if stopping {
+			// A task delegated to this run did not finish. Cancel it before the
+			// terminal state is recorded: setRunState maps an exit to
+			// "completed", which would otherwise unblock its dependents.
+			s.store.CancelTaskForRun(msg.RunID, "run was stopped before it finished")
 		}
 		s.setRunState(msg.RunID, state)
 		s.broadcast(protocol.ServerEnvelope{Type: "run.exit", RunID: msg.RunID, State: state, Message: msg.Reason})
