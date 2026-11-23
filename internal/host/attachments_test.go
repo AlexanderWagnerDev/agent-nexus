@@ -29,6 +29,9 @@ func TestSafeAttachmentName(t *testing.T) {
 		`a<b>c"d|e*f.txt`:    "a_b_c_d_e_f.txt",
 		"trailing dots... ":  "trailing dots",
 		"CON.txt":            "CON.txt",
+		// A dot-only basename with a long "extension" used to truncate to an
+		// empty name.
+		strings.Repeat(".", 120) + strings.Repeat("x", 17): "attachment-1",
 	}
 	for input, want := range cases {
 		if got := safeAttachmentName(input, 1); got != want {

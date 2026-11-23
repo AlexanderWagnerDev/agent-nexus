@@ -187,6 +187,10 @@ func safeAttachmentName(raw string, index int) string {
 	if len(name) > 120 {
 		name = truncateAttachmentName(name, 120)
 	}
+	// Truncation can strip an all-dot basename down to nothing.
+	if name == "" || name == "." || name == ".." {
+		name = fmt.Sprintf("attachment-%d", index)
+	}
 	return name
 }
 
