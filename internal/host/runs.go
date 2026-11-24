@@ -36,11 +36,12 @@ type Run struct {
 	buffer     *outputBuffer
 
 	// Reader progress lets the exit supervisor close the pty only after the
-	// available output was consumed. A fixed deadline would drop the tail
-	// while the reader is still sending a chunk over a slow link.
+	// available output was consumed. The quiet clock starts when the reader
+	// begins waiting for more input, so time spent forwarding a chunk over a
+	// slow link never counts as drained output.
 	readerStarted atomic.Bool
 	readerBusy    atomic.Bool
-	lastReadAt    atomic.Int64
+	readerIdleAt  atomic.Int64
 }
 
 // closePTYSlave closes the daemon's own copy of the Unix pty slave. go-pty
@@ -190,8 +191,8 @@ func (r *Run) superviseTerminalExit(c *pty.Cmd, exited chan<- struct{}) {
 	deadline := time.Now().Add(terminalExitMaxDrain)
 	for {
 		if r.readerStarted.Load() && !r.readerBusy.Load() {
-			last := r.lastReadAt.Load()
-			if last == 0 || time.Since(time.Unix(0, last)) >= terminalExitQuiet {
+			idle := r.readerIdleAt.Load()
+			if idle == 0 || time.Since(time.Unix(0, idle)) >= terminalExitQuiet {
 				break
 			}
 		}
@@ -357,13 +358,13 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 		r.readerStarted.Store(true)
 		for {
 			r.readerBusy.Store(false)
+			r.readerIdleAt.Store(time.Now().UnixNano())
 			n, err := p.Read(buf)
 			if n > 0 {
 				// Mark the chunk as in flight before the (possibly slow) hub
 				// write so the exit supervisor does not close the pty under
 				// the reader.
 				r.readerBusy.Store(true)
-				r.lastReadAt.Store(time.Now().UnixNano())
 				seq := r.seq.Add(1)
 				data := append([]byte(nil), buf[:n]...)
 				// Keep a bounded replay buffer so a short hub outage or
