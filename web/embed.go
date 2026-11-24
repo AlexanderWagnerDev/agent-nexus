@@ -42,8 +42,36 @@ func Handler() http.Handler {
 		// Filenames are not content-hashed, so clients must revalidate after
 		// an upgrade instead of caching assets for a year.
 		w.Header().Set("Cache-Control", "no-cache")
+		if ctype := assetContentType(p); ctype != "" {
+			// Pin the types the app depends on instead of trusting the host
+			// MIME table: Windows registry mappings and unregistered
+			// extensions otherwise yield text/plain, which nosniff turns into
+			// a refused module script or manifest.
+			w.Header().Set("Content-Type", ctype)
+		}
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = "/" + p
 		fileServer.ServeHTTP(w, r2)
 	})
+}
+
+func assetContentType(name string) string {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".js", ".mjs":
+		return "text/javascript; charset=utf-8"
+	case ".css":
+		return "text/css; charset=utf-8"
+	case ".webmanifest":
+		return "application/manifest+json"
+	case ".json":
+		return "application/json"
+	case ".svg":
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	case ".ico":
+		return "image/x-icon"
+	default:
+		return ""
+	}
 }
