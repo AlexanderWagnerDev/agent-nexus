@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to create or republish, for example v0.1.16'
+        description: 'Release tag to create or republish, for example v0.1.17'
         required: true
         type: string
 

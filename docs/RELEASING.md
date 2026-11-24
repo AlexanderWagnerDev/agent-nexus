@@ -1,9 +1,10 @@
 # Releasing
 
-AgentNexus **v0.1.16** is the current release (published 2026-11-21);
-**v0.1.15** was published on 2026-11-18, **v0.1.14** on 2026-11-18,
-**v0.1.13** on 2026-11-17, **v0.1.12** on 2026-11-17,
-**v0.1.11** on 2026-11-17, **v0.1.10** on 2026-11-17, **v0.1.9** on 2026-11-17,
+AgentNexus **v0.1.17** is the current release (published 2026-11-24);
+**v0.1.16** was published on 2026-11-21, **v0.1.15** on 2026-11-18,
+**v0.1.14** on 2026-11-18, **v0.1.13** on 2026-11-17,
+**v0.1.12** on 2026-11-17, **v0.1.11** on 2026-11-17,
+**v0.1.10** on 2026-11-17, **v0.1.9** on 2026-11-17,
 **v0.1.8** on 2026-11-16,
 **v0.1.6** on 2026-11-16, **v0.1.5** on 2026-11-16, **v0.1.4** on 2026-11-16,
 **v0.1.3** on 2026-11-16, **v0.1.2** on 2026-11-16, **v0.1.1** on 2026-11-15, and
@@ -33,7 +34,7 @@ require the maintainer's explicit approval.
 - Container builds on `main` publish `alpha` (moving) and `sha-<short>`
   (pinned) tags. Official releases use an explicit **Container** workflow
   dispatch with the `release_tag` input, which publishes the matching
-  `v0.1.16`, `0.1.16`, `0.1` and `alpha` tags; the `latest` tag additionally
+  `v0.1.17`, `0.1.17`, `0.1` and `alpha` tags; the `latest` tag additionally
   requires `publish_latest=true`. `alpha` keeps moving with `main` after the
   release.
 - The hub, daemon and terminal client report their version as `alpha` unless a
@@ -45,7 +46,8 @@ require the maintainer's explicit approval.
 
 | Version | Date | Artifacts |
 | --- | --- | --- |
-| [v0.1.16](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.16) | 2026-11-21 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.16`, `0.1.16`, `0.1`, `alpha`, `latest` (digest pending) |
+| [v0.1.17](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.17) | 2026-11-24 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.17`, `0.1.17`, `0.1`, `alpha`, `latest` (digest pending) |
+| [v0.1.16](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.16) | 2026-11-21 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.16`, `0.1.16`, `0.1`, `alpha`, `latest` |
 | [v0.1.15](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.15) | 2026-11-18 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.15`, `0.1.15`, `0.1`, `alpha`, `latest` (digest pending) |
 | [v0.1.14](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.14) | 2026-11-18 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.14`, `0.1.14`, `0.1`, `alpha`, `latest` (digest `sha256:d04808ccea2f9e1502bb8a1872adc9d2cb6ea3fed36ae7dd7409ffc3c3704157`) |
 | [v0.1.13](https://github.com/AlexanderWagnerDev/agent-nexus/releases/tag/v0.1.13) | 2026-11-17 | GitHub release archives, checksums, SBOMs, cosign bundle; Docker Hub and GHCR images `v0.1.13`, `0.1.13`, `0.1`, `alpha`, `latest` (digest `sha256:7bcae952f08cbafc7982eeec4f98d0f3b9efb88e3af4d46385279d84dcd36d9f`) |
@@ -65,7 +67,7 @@ require the maintainer's explicit approval.
 > **Withdrawn:** `v0.1.7` was published briefly on 2026-11-16 and removed the
 > same day. Its Windows task started `nexusd.exe run --hidden`, but
 > `GetConsoleWindow` was loaded from the wrong DLL and the daemon panicked.
-> Its GitHub release and tag were removed; do not pin it. Use `v0.1.16`.
+> Its GitHub release and tag were removed; do not pin it. Use `v0.1.17`.
 > Container tags produced from that build may still exist in the registries.
 
 ## Release decision
@@ -83,7 +85,7 @@ accurately without turning optional testing into release blockers.
 ## Manual release procedure (only after approval)
 
 1. Run **Release** from `main` with the approved tag, for example
-   `gh workflow run release.yml --ref main -f tag=v0.1.16`, and approve the
+   `gh workflow run release.yml --ref main -f tag=v0.1.17`, and approve the
    run. The guard job validates the tag, creates and pushes the annotated tag
    at the dispatched `main` commit, then starts the workflow from that tag.
    The first run ends without publishing; the tag-started run builds and
@@ -103,8 +105,8 @@ accurately without turning optional testing into release blockers.
    back to SHA-256 only, but that skips the signature check. The post-install
    checksum-only options configure future auto-updates and do not bypass an
    install-time cosign failure.
-4. Then run **Container** with `release_tag=v0.1.16` and `publish_latest=true`
-   for a stable release. The dispatch publishes `v0.1.16`, `0.1.16`, `0.1`,
+4. Then run **Container** with `release_tag=v0.1.17` and `publish_latest=true`
+   for a stable release. The dispatch publishes `v0.1.17`, `0.1.17`, `0.1`,
    `alpha` and `latest`; without `publish_latest` it publishes the first four.
    Dispatch it from `main` or from the tag; when `release_tag` is set the
    workflow checks out that tag before building, so a newer `main` does not
@@ -135,6 +137,6 @@ workflow logs. At the time of the cleanup:
 
 ## Versioning
 
-The first approved version was `v0.1.0`; the current release is `v0.1.16`.
+The first approved version was `v0.1.0`; the current release is `v0.1.17`.
 Builds without a release tag are identified by commit SHA. Do not infer or
 promise a later version number from this document.

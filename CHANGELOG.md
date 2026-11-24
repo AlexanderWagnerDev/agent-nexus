@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-11-24
+
 ### Fixed
 
 - A run that the user stopped ends in `exited` instead of `failed`. The host
@@ -19,6 +21,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
   whole prompt on Windows hosts. Long names are truncated by rune, never
   splitting a UTF-8 character, and every prompt stages into its own directory
   so a later prompt cannot overwrite a file an earlier one already referenced.
+- The Windows installer no longer aborts on a fresh host. `schtasks /End` and
+  `taskkill` fail while the scheduled task or the daemon process does not exist
+  yet, and Windows PowerShell 5.1 turns their stderr into a terminating error
+  under `$ErrorActionPreference = "Stop"`; the cleanup calls are best-effort
+  now, including the uninstall path. Architecture detection uses
+  `PROCESSOR_ARCHITECTURE` and its WOW64 fallback instead of
+  `RuntimeInformation::OSArchitecture`, which returned `$null` on some hosts and
+  rejected a normal x64 machine as unsupported.
 
 ## [0.1.16] - 2026-11-21
 
