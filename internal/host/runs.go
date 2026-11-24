@@ -200,7 +200,12 @@ func (r *Run) superviseTerminalExit(c *pty.Cmd, exited chan<- struct{}) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	r.closePTY()
+	// Terminate the contained process tree and close the pty. Killing the
+	// group also releases a Unix pty whose blocking read cannot be interrupted
+	// by closing the master; Windows needs the close because ConPTY keeps the
+	// pipe open until then. The normal path already ran terminate from the
+	// read loop, so closeOnce makes this a no-op.
+	r.terminate()
 }
 
 func randomRunKey() string {
