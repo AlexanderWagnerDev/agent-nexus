@@ -59,6 +59,9 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		shortID = shortID[:8]
 	}
 	name := "agentnexus-" + shortID
+	// A transcript is sensitive agent output; never let the browser or an
+	// intermediate cache retain an export on disk.
+	w.Header().Set("Cache-Control", "no-store")
 	if format == "json" {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name+".json"))
