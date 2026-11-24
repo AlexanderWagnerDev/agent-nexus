@@ -38,10 +38,10 @@ func TestTerminalExitClosesPTYWithLingeringDescendant(t *testing.T) {
 		r.readerStarted.Store(true)
 		for {
 			r.readerBusy.Store(false)
+			r.readerIdleAt.Store(time.Now().UnixNano())
 			n, err := p.Read(buf)
 			if n > 0 {
 				r.readerBusy.Store(true)
-				r.lastReadAt.Store(time.Now().UnixNano())
 				r.readerBusy.Store(false)
 			}
 			if err != nil {
