@@ -700,12 +700,11 @@ func (r *StructuredRun) streamEvents(ctx context.Context) {
 		if attempt >= 5 {
 			ev := protocol.RunEvent{Type: "run.error", Error: "opencode event stream stopped; the run is no longer receiving events"}
 			_ = r.daemon.send(protocol.Envelope{Type: "run.event", RunID: r.id, Event: &ev})
-			if r.shared {
-				// The native client's service is gone; release the run instead
-				// of leaving it registered forever. Stop never kills a shared
-				// service, so this only removes our registration.
-				r.Stop()
-			}
+			// Without the event stream the run can never leave its last state,
+			// so release it in both cases. Stop never kills a shared service;
+			// for a private server it terminates the process and the exit
+			// supervisor reports run.exit.
+			r.Stop()
 			return
 		}
 		select {
