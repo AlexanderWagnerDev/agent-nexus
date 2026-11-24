@@ -34,6 +34,13 @@ type Run struct {
 	ptyOnce    sync.Once
 	writeMu    sync.Mutex
 	buffer     *outputBuffer
+
+	// Reader progress lets the exit supervisor close the pty only after the
+	// available output was consumed. A fixed deadline would drop the tail
+	// while the reader is still sending a chunk over a slow link.
+	readerStarted atomic.Bool
+	readerBusy    atomic.Bool
+	lastReadAt    atomic.Int64
 }
 
 // closePTYSlave closes the daemon's own copy of the Unix pty slave. go-pty
@@ -163,19 +170,37 @@ func (r *Run) closePTY() {
 	r.ptyOnce.Do(func() { _ = r.pty.Close() })
 }
 
-// terminalExitDrain gives ConPTY a moment to flush output the agent wrote just
-// before it exited.
-const terminalExitDrain = 250 * time.Millisecond
+// terminalExitQuiet is how long the pty must stay unread after the child
+// exited before a lingering descendant is assumed to hold it open.
+const terminalExitQuiet = 250 * time.Millisecond
 
-// superviseTerminalExit reaps the direct child and then closes the pty. A
-// descendant that inherited the pty (an MCP server, a background helper) keeps
-// the master read open after the agent exits; without this close the run would
-// stay "running" forever and block resuming its session.
-func superviseTerminalExit(c *pty.Cmd, exited chan<- struct{}, closePTY func()) {
+// terminalExitMaxDrain bounds how long a busy or unstarted reader can delay the
+// forced close. A slow hub write can legitimately take up to its 10 s timeout.
+const terminalExitMaxDrain = 30 * time.Second
+
+// superviseTerminalExit reaps the direct child, then closes the pty once the
+// reader has no more output to consume. A descendant that inherited the pty (an
+// MCP server, a background helper) keeps the master read open after the agent
+// exits; without the close the run would stay "running" forever and block
+// resuming its session. The close waits for reader progress so final output is
+// not dropped while it is still being forwarded.
+func (r *Run) superviseTerminalExit(c *pty.Cmd, exited chan<- struct{}) {
 	_ = c.Wait()
 	close(exited)
-	time.Sleep(terminalExitDrain)
-	closePTY()
+	deadline := time.Now().Add(terminalExitMaxDrain)
+	for {
+		if r.readerStarted.Load() && !r.readerBusy.Load() {
+			last := r.lastReadAt.Load()
+			if last == 0 || time.Since(time.Unix(0, last)) >= terminalExitQuiet {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	r.closePTY()
 }
 
 func randomRunKey() string {
@@ -311,7 +336,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 	d.runMu.Unlock()
 
 	exited := make(chan struct{})
-	go superviseTerminalExit(c, exited, r.closePTY)
+	go r.superviseTerminalExit(c, exited)
 
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: spec.Action})
 	if d.consumePendingStop(spec.RunID) {
@@ -324,9 +349,16 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 
 	go func() {
 		buf := make([]byte, 32*1024)
+		r.readerStarted.Store(true)
 		for {
+			r.readerBusy.Store(false)
 			n, err := p.Read(buf)
 			if n > 0 {
+				// Mark the chunk as in flight before the (possibly slow) hub
+				// write so the exit supervisor does not close the pty under
+				// the reader.
+				r.readerBusy.Store(true)
+				r.lastReadAt.Store(time.Now().UnixNano())
 				seq := r.seq.Add(1)
 				data := append([]byte(nil), buf[:n]...)
 				// Keep a bounded replay buffer so a short hub outage or
@@ -338,6 +370,7 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 				if sendErr := d.send(protocol.Envelope{Type: "run.output", RunID: spec.RunID, Seq: seq, Data: data}); sendErr != nil {
 					d.log.Debug("run output buffered while hub is offline", "run_id", spec.RunID)
 				}
+				r.readerBusy.Store(false)
 			}
 			if err != nil {
 				if !errors.Is(err, io.EOF) && !r.stopped.Load() {
@@ -346,8 +379,9 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 				break
 			}
 		}
-		// The supervisor reaps the process and closes the pty after a short
-		// drain. Waiting here also makes ProcessState visible.
+		// The supervisor reaps the process and closes the pty once the reader
+		// has nothing left to forward. Waiting here also makes ProcessState
+		// visible.
 		<-exited
 		code := 0
 		reason := "agent exited"

@@ -5,7 +5,6 @@ package host
 import (
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -27,18 +26,25 @@ func TestTerminalExitClosesPTYWithLingeringDescendant(t *testing.T) {
 		_ = p.Close()
 		t.Fatal(err)
 	}
-	var once sync.Once
-	closePTY := func() { once.Do(func() { _ = p.Close() }) }
-	t.Cleanup(closePTY)
+	r := &Run{id: "pty-descendant", pty: p, cmd: c}
+	t.Cleanup(r.closePTY)
 
 	exited := make(chan struct{})
-	go superviseTerminalExit(c, exited, closePTY)
+	go r.superviseTerminalExit(c, exited)
 
 	readDone := make(chan struct{})
 	go func() {
 		buf := make([]byte, 4096)
+		r.readerStarted.Store(true)
 		for {
-			if _, err := p.Read(buf); err != nil {
+			r.readerBusy.Store(false)
+			n, err := p.Read(buf)
+			if n > 0 {
+				r.readerBusy.Store(true)
+				r.lastReadAt.Store(time.Now().UnixNano())
+				r.readerBusy.Store(false)
+			}
+			if err != nil {
 				close(readDone)
 				return
 			}
