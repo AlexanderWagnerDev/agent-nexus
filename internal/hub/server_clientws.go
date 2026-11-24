@@ -316,6 +316,11 @@ func (s *Server) handleClientMessage(ctx context.Context, c *clientConn, msg pro
 		if err != nil || (startedBy != c.user.ID && !isAdminRole(c.user.Role)) {
 			return
 		}
+		// Resize is terminal control. The lease alone is not enough: a grant
+		// can be revoked while the socket (and its lease) stays open.
+		if !s.hostPermission(c.user, run.HostID, "terminal_input") {
+			return
+		}
 		if run.LeaseDeviceID != c.device.ID {
 			return
 		}
