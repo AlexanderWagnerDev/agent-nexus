@@ -1,8 +1,13 @@
 package hub
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -111,5 +116,45 @@ func TestMarkdownExport(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Fatalf("markdown export is missing %q:\n%s", want, md)
 		}
+	}
+}
+
+// A transcript export is sensitive agent output and must not be cached by the
+// browser or a proxy.
+func TestMarkdownExportIsNotCacheable(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	owner := hub.testOwner()
+	host := startFakeHost(t, hub, owner, "export-host")
+	host.setAnswer(func(method string, params json.RawMessage) (any, string) {
+		if method != "transcript" {
+			return nil, "unexpected method " + method
+		}
+		return protocol.Transcript{Messages: []protocol.Message{{Role: "user", Kind: "text", Text: "hello export"}}}, ""
+	})
+	if _, _, err := hub.store.ReplaceHostSessions(host.hostID, []protocol.Session{{
+		Agent: "codex", NativeID: "native-export", Title: "Export", Cwd: "/tmp/export", UpdatedAt: time.Now(),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	sessionID, err := hub.store.SessionIDForNative(host.hostID, "codex", "native-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sessions/"+sessionID+"/export?format=markdown", nil)
+	req.SetPathValue("id", sessionID)
+	req = req.WithContext(context.WithValue(req.Context(), ctxUser, owner))
+	rec := httptest.NewRecorder()
+	hub.server.handleExport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	if !strings.Contains(rec.Body.String(), "hello export") {
+		t.Fatalf("export body is missing the transcript: %s", rec.Body.String())
 	}
 }
