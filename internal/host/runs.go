@@ -31,6 +31,7 @@ type Run struct {
 	seq        atomic.Uint64
 	stopped    atomic.Bool
 	closeOnce  sync.Once
+	ptyOnce    sync.Once
 	writeMu    sync.Mutex
 	buffer     *outputBuffer
 }
@@ -146,7 +147,7 @@ func (r *Run) terminate() {
 		if r.guard != nil {
 			r.guard.Kill()
 		}
-		_ = r.pty.Close()
+		r.closePTY()
 		if r.cmd != nil && r.cmd.Process != nil {
 			_ = r.cmd.Process.Kill()
 		}
@@ -154,6 +155,27 @@ func (r *Run) terminate() {
 			r.guard.Close()
 		}
 	})
+}
+
+// closePTY closes the pty exactly once. The exit supervisor and the stop path
+// can both reach this point; the Windows pty does not guard Close itself.
+func (r *Run) closePTY() {
+	r.ptyOnce.Do(func() { _ = r.pty.Close() })
+}
+
+// terminalExitDrain gives ConPTY a moment to flush output the agent wrote just
+// before it exited.
+const terminalExitDrain = 250 * time.Millisecond
+
+// superviseTerminalExit reaps the direct child and then closes the pty. A
+// descendant that inherited the pty (an MCP server, a background helper) keeps
+// the master read open after the agent exits; without this close the run would
+// stay "running" forever and block resuming its session.
+func superviseTerminalExit(c *pty.Cmd, exited chan<- struct{}, closePTY func()) {
+	_ = c.Wait()
+	close(exited)
+	time.Sleep(terminalExitDrain)
+	closePTY()
 }
 
 func randomRunKey() string {
@@ -288,6 +310,9 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 	d.runs[spec.RunID] = r
 	d.runMu.Unlock()
 
+	exited := make(chan struct{})
+	go superviseTerminalExit(c, exited, r.closePTY)
+
 	_ = d.send(protocol.Envelope{Type: "run.started", RunID: spec.RunID, Reason: spec.Action})
 	if d.consumePendingStop(spec.RunID) {
 		d.log.Info("run was stopped while starting", "run_id", spec.RunID)
@@ -321,7 +346,9 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 				break
 			}
 		}
-		_ = c.Wait()
+		// The supervisor reaps the process and closes the pty after a short
+		// drain. Waiting here also makes ProcessState visible.
+		<-exited
 		code := 0
 		reason := "agent exited"
 		if c.ProcessState != nil {
