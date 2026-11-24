@@ -96,6 +96,13 @@ vendor documentation above:
 - **Terminal replay:** each terminal run keeps a bounded 1 MiB ring buffer
   (`run_buffer_bytes`, clamped to 64 KiB-16 MiB). Output produced during a hub
   outage is replayed on reconnect and deduplicated by sequence number.
+- **Terminal exit:** a run ends when the agent process exits. The daemon drains
+  the output already available, then terminates descendants that still hold the
+  pty, so a background helper or MCP server cannot leave the run `running`.
+- **OpenCode event stream:** when `/api/event` fails five consecutive times the
+  run is ended with `run.error`. A shared `opencode serve` owned by a native
+  client is only detached from; a private server started for the run is
+  stopped. A structured run without an event stream cannot report state.
 - **Structured fork:** Codex app-server exposes `thread/fork`; AgentNexus
   uses it in structured mode and links the run to the new native thread. The
   source thread is not modified. OpenCode 2.x is forked through
