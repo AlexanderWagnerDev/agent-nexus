@@ -79,6 +79,16 @@ function Fail([string]$Message) {
   exit 1
 }
 
+# Windows PowerShell 5.1 turns a native command's stderr into a terminating
+# error under ErrorActionPreference=Stop, even when stderr is redirected. The
+# cleanup commands below fail normally on a fresh host (no task, no process);
+# their stderr must not abort the installer.
+function Invoke-Ignored([scriptblock]$Action) {
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try { & $Action 2>$null | Out-Null } catch { } finally { $ErrorActionPreference = $previous }
+}
+
 # Add the install directory to the current user's PATH exactly once. The
 # registry value is written back with its original kind so existing
 # REG_EXPAND_SZ entries such as %USERPROFILE% keep working.
@@ -200,10 +210,14 @@ function Get-ReleaseTag {
   return $release.tag_name
 }
 
-$arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-  "X64" { "amd64" }
-  "Arm64" { "arm64" }
-  default { Fail "Unsupported Windows architecture: $_" }
+# PROCESSOR_ARCHITECTURE is always set by Windows. RuntimeInformation is only
+# present with .NET Framework 4.7.1+ and returned null on some hosts, which sent
+# a normal x64 machine into the default branch.
+$osArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+$arch = switch ($osArch) {
+  "AMD64" { "amd64" }
+  "ARM64" { "arm64" }
+  default { Fail "Unsupported Windows architecture: '$osArch' (64-bit x64 or arm64 required)" }
 }
 
 $dir = Join-Path $env:LOCALAPPDATA "AgentNexus"
@@ -212,10 +226,10 @@ $cli = Join-Path $dir "nexus.exe"
 $taskName = "AgentNexus Host"
 
 if ($Uninstall) {
-  schtasks.exe /End /TN "AgentNexus Host" 2>$null | Out-Null
-  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
-  if (Test-Path $dest) { & $dest service uninstall | Out-Null }
-  & schtasks.exe /Delete /TN "AgentNexus Host Update" /F 2>$null | Out-Null
+  Invoke-Ignored { schtasks.exe /End /TN "AgentNexus Host" }
+  Invoke-Ignored { taskkill.exe /F /IM nexusd.exe }
+  if (Test-Path $dest) { Invoke-Ignored { & $dest service uninstall } }
+  Invoke-Ignored { schtasks.exe /Delete /TN "AgentNexus Host Update" /F }
   Remove-Item -Force -ErrorAction SilentlyContinue $dest, $cli, "$dest.previous", "$cli.previous"
   Write-Host "Removed $dest and $cli"
   if ($PurgeConfig) {
@@ -346,9 +360,9 @@ try {
   }
 
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  schtasks.exe /End /TN "AgentNexus Host" 2>$null | Out-Null
-  taskkill.exe /F /IM nexusd.exe 2>$null | Out-Null
-  if (Test-Path $dest) { & $dest service uninstall | Out-Null }
+  Invoke-Ignored { schtasks.exe /End /TN "AgentNexus Host" }
+  Invoke-Ignored { taskkill.exe /F /IM nexusd.exe }
+  if (Test-Path $dest) { Invoke-Ignored { & $dest service uninstall } }
   Start-Sleep -Milliseconds 800
   if (Test-Path $dest) { Copy-Item $dest "$dest.previous" -Force }
   if (Test-Path $cli) { Copy-Item $cli "$cli.previous" -Force }
