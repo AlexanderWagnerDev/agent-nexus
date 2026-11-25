@@ -281,6 +281,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   position: relative; z-index: 30;
 }
 .topbar-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.topbar-title > div { min-width: 0; }
 .topbar-title h1 { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 620; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw; }
 .topbar-title .sub { margin-top: 1px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw; }
 .topbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -294,6 +295,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   color: var(--muted); padding: 0 10px; font-size: 12.5px;
 }
 .command-trigger:hover { border-color: var(--line-strong); color: var(--text); }
+.command-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-trigger svg { width: 15px; height: 15px; }
 .command-trigger kbd { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; }
 .notification-button { position: relative; overflow: visible; }
@@ -441,7 +443,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .audit-row { padding: 8px 12px; background: var(--bg-elev); }
 .audit-row + .audit-row { border-top: 1px solid var(--line-soft); }
 .audit-details { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; max-width: 100%; }
 .usage-cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .usage-card { display: grid; gap: 3px; padding: 10px 12px; }
 .usage-card strong { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -699,9 +701,10 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 .aside-note { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0; }
 .aside-actions { display: grid; gap: 6px; }
 .meta-list { display: grid; gap: 5px; }
-.meta-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
-.meta-list span { color: var(--muted); }
-.meta-list strong { font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.meta-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; min-width: 0; }
+.meta-list span { color: var(--muted); white-space: nowrap; }
+.meta-list strong { font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.meta-list strong.wrap { white-space: normal; overflow-wrap: anywhere; }
 .copy-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .copy-line code { flex: 1; min-width: 0; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .copy-line .icon-btn { width: 24px; height: 24px; }
@@ -1186,6 +1189,14 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   .view { padding: 20px 22px 40px; }
   .detail-layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
   .chat-page.context-open { grid-template-columns: minmax(0, 1fr) 290px; }
+  .command-trigger { min-width: 140px; }
+}
+@media (max-width: 1200px) {
+  /* Page actions get their own scrollable row instead of overlapping the
+     title (host pages carry up to six buttons). */
+  .topbar { flex-wrap: wrap; row-gap: 6px; }
+  .topbar-title { flex: 1 1 auto; }
+  .topbar-actions { order: 3; flex: 1 0 100%; margin-left: 0; overflow-x: auto; }
 }
 @media (max-width: 1100px) {
   .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1340,7 +1351,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 
 /* ---------- host detail ---------- */
 
-.section-card { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); margin-bottom: 12px; }
+.section-card { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); margin-bottom: 12px; min-width: 0; }
 .detail-main > .section-card:last-child { margin-bottom: 0; }
 .detail-aside .section-card { margin-bottom: 0; }
 .health-list { display: grid; gap: 6px; }

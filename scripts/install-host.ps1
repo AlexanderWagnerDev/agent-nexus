@@ -305,10 +305,12 @@ try {
     $zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $temp $archiveName))
     try {
       foreach ($entry in $zip.Entries) {
-        $name = [System.IO.Path]::GetFileName($entry.FullName)
-        if ($entry.FullName.EndsWith("/") -or ($name -ne "nexusd.exe" -and $name -ne "nexus.exe")) { continue }
+        # Not $name: PowerShell variables are case-insensitive and overwriting
+        # the -Name parameter paired the first host as "nexus.exe".
+        $entryName = [System.IO.Path]::GetFileName($entry.FullName)
+        if ($entry.FullName.EndsWith("/") -or ($entryName -ne "nexusd.exe" -and $entryName -ne "nexus.exe")) { continue }
         if ($entry.Length -gt 128MB) { Fail "archive entry exceeds the extraction limit" }
-        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $temp $name), $true)
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $temp $entryName), $true)
       }
     } finally {
       $zip.Dispose()

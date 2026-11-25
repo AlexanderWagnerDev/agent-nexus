@@ -74,6 +74,11 @@ try {
   }
   if (-not $copied) { throw "binary remained locked" }
   Write-Log "binary replaced"
+  # Refresh the task definition from the new binary as well: a release can
+  # change the task XML (for example the self-heal repetition) and the old
+  # definition would otherwise survive every update. Best effort, the explicit
+  # /Run below still starts the previous definition if this fails.
+  try { & $Target service install | Out-Null } catch { Write-Log "task refresh failed: $_" }
   schtasks.exe /Run /TN $Task | Out-Null
   $runtime = Join-Path (Split-Path -Parent $Log) "runtime.json"
   $healthy = $false

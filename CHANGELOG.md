@@ -6,6 +6,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-25
+
+### Fixed
+
+- A fresh Windows install paired the host as `nexus.exe` instead of the
+  computer name. PowerShell variables are case-insensitive, so the archive
+  extraction loop overwrote the `-Name` parameter while collecting `nexus.exe`.
+  The loop uses its own variable now, and an already affected host self-corrects
+  on the next reconnect because the daemon reports its real OS name.
+- The Windows host task heals itself: the logon trigger repeats every five
+  minutes, so a daemon that crashed, was killed or was left stopped by a failed
+  update comes back instead of waiting for the next logon. A running instance is
+  not touched (`IgnoreNew`). The update helper re-runs `service install` with
+  the new binary, so the refreshed definition also reaches hosts that update
+  themselves (run `nexusd service install` once to adopt it immediately).
+- The install directory is re-added to the per-user `PATH` on every daemon start
+  and on `nexusd service install`, and the change is broadcast to Explorer.
+- The web UI no longer widens the viewport on host and detail pages. Up to six
+  page actions stay on one row above 1200px and move to their own scrollable row
+  below it instead of pushing the search/theme/notification tools and the right
+  sidebar past the window edge. Long values in detail cards and the agents
+  table ellipsize or scroll inside their card instead of enlarging the page.
+
 ## [0.1.17] - 2026-11-24
 
 ### Fixed

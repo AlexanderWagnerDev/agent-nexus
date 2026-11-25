@@ -45,6 +45,15 @@ func TestWindowsTaskXML(t *testing.T) {
 			t.Fatalf("task XML is missing %q:\n%s", want, xml)
 		}
 	}
+	// A logon trigger fires once per session. Without the repetition a daemon
+	// that died, was killed or was stopped by a failed update stays dead until
+	// the next logon, which is the bug this guards against.
+	if !strings.Contains(xml, "<Repetition>") || !strings.Contains(xml, "<Interval>PT5M</Interval>") {
+		t.Fatalf("task XML must repeat the logon trigger so the daemon self-heals:\n%s", xml)
+	}
+	if strings.Index(xml, "<Repetition>") > strings.Index(xml, "<UserId>") {
+		t.Fatalf("Repetition must precede UserId in the trigger schema:\n%s", xml)
+	}
 	if strings.Contains(xml, "<BootTrigger>") {
 		t.Fatal("task must start at logon, not boot, to stay in the user context")
 	}

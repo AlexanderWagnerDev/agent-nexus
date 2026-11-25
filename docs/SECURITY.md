@@ -2,9 +2,9 @@
 
 AgentNexus lets authenticated users drive coding agents on remote machines. A coding agent can read and modify files and execute commands, so **remote control of an agent is remote code execution**. Security is therefore a core design concern, not an add-on. This document defines the threat model and the security design. Architecture context: [ARCHITECTURE.md §11](ARCHITECTURE.md#11-security-architecture-overview); requirements: [PLAN.md](PLAN.md) (FR-02, FR-40 … FR-46, NFR-01, NFR-02).
 
-> **Status:** design plus implemented subset. The v0.1.17 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
+> **Status:** design plus implemented subset. The v0.1.18 build implements WebAuthn passkeys, password + optional TOTP, device sessions/revocation, Ed25519 host pairing and challenge-response, host policy, CSRF/Origin checks, hash-chained audit, OpenCode/Codex/ACP approvals, Web Push, multi-user grants, five-minute step-up confirmation for sensitive actions, replay-protected hub-to-host command signing, and checksum/optional-cosign verified host self-updates. Opt-in device-signed commands are implemented for native clients; the browser UI remains cookie-authenticated and host-side device-identity verification is not implemented. Host pairing requires SAS confirmation, device (QR) pairing does not yet. Nothing here has received an external audit.
 
-### v0.1.17 implementation notes
+### v0.1.18 implementation notes
 
 | Control | Implemented | Gap |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ AgentNexus lets authenticated users drive coding agents on remote machines. A co
 | Host-link isolation | a host may only emit `run.*` messages for runs whose `host_id` matches its authenticated identity | hub still trusts the host for its own run content |
 | Search authorization | federated search and git diff require `read_transcript` on the host | no per-folder transcript scoping |
 | Role limits | viewers cannot create host pairing codes and never gain write capabilities (run start, terminal input, approval, manage) even when an administrator stored such a grant; the grant is reduced to read-only on save | viewers can still read every host explicitly shared with them |
-| Windows autostart | per-user Task Scheduler task, logon trigger, least privilege, restart on failure | Server 2025 untested; no boot-time task by design |
+| Windows autostart | per-user Task Scheduler task, logon trigger repeated every five minutes as a self-heal, least privilege, restart on failure | Server 2025 untested; no boot-time task by design |
 
 **Hardening changes in this build (2026-11-11):**
 
@@ -465,6 +465,13 @@ unreadable or ambiguous filter name.
   explicitly selects checksum-only verification remains a residual risk.
 - macOS notarization and Windows Authenticode signing are not available in the
   alpha. SHA-256 and cosign verification are the current release trust chain.
+  For Windows the practical free path is **SignPath Foundation** (free hosted
+  Authenticode signing for open-source projects, triggered from the release
+  workflow); Certum's open-source certificate is a low-cost alternative. Until a
+  certificate is in use, report false positives to Microsoft Defender
+  (`https://www.microsoft.com/en-us/wdsi/filesubmission`) and to the vendor
+  named by the scanner. A signature reduces heuristic flags; SmartScreen
+  reputation still builds over downloads.
 
 ## Signed-command mode
 

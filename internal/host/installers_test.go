@@ -30,10 +30,18 @@ func TestInstallerPackagingContract(t *testing.T) {
 		`Get-VerifiedDevBinary "nexus"`,
 		"Copy-Item $newCli $cli -Force",
 		`if (-not (Test-Path $newCli)) { Fail`,
+		// PowerShell variables are case-insensitive: the extraction loop must
+		// not reuse $name, or it overwrites the -Name parameter and pairs the
+		// host as "nexus.exe".
+		"$entryName = [System.IO.Path]::GetFileName($entry.FullName)",
+		"ExtractToFile($entry, (Join-Path $temp $entryName), $true)",
 	} {
 		if !strings.Contains(ps, want) {
 			t.Errorf("install-host.ps1 no longer installs the terminal client: missing %q", want)
 		}
+	}
+	if strings.Contains(ps, "$name = [System.IO.Path]::GetFileName") {
+		t.Error("install-host.ps1 overwrites the -Name parameter with the archive entry name")
 	}
 
 	sh := read("../../scripts/install-host.sh")

@@ -131,6 +131,9 @@ func runCmd(args []string) {
 	if *hidden {
 		host.HideConsoleWindow()
 	}
+	if err := host.EnsureInstallDirOnPath(); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: cannot add the install directory to the user PATH:", err)
+	}
 	cfg, err := host.LoadConfig()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

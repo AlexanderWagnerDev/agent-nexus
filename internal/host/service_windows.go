@@ -69,6 +69,9 @@ func installWindowsTask(exe string) error {
 	if out, err := runWindowsCommand("schtasks", "/Create", "/TN", windowsTaskName, "/XML", name, "/F"); err != nil {
 		return fmt.Errorf("schtasks create failed: %v: %s", err, strings.TrimSpace(out))
 	}
+	if err := ensureUserPath(filepath.Dir(exe)); err != nil {
+		fmt.Printf("warning: could not add %s to the user PATH: %v\n", filepath.Dir(exe), err)
+	}
 	removeLegacyStartupLauncher()
 	if out, err := runWindowsCommand("schtasks", "/Run", "/TN", windowsTaskName); err != nil {
 		fmt.Printf("warning: the task was installed but could not be started yet: %v: %s\n", err, strings.TrimSpace(out))
@@ -213,6 +216,13 @@ func windowsTaskXML(exe, userID string) string {
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
+      <!-- Repetition is the self-healing part: Task Scheduler restarts the
+           daemon within five minutes when it died, was stopped by a failed
+           update or was killed externally. IgnoreNew keeps a running instance. -->
+      <Repetition>
+        <Interval>PT5M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
       <UserId>` + escapedUser + `</UserId>
     </LogonTrigger>
   </Triggers>
