@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -410,27 +411,47 @@ func (d *Daemon) startRun(ctx context.Context, spec protocol.RunSpec) {
 }
 
 // commandFor wraps script shims so that Windows npm CLIs start correctly.
-func commandFor(path string, args []string) (string, []string) {
+// cmd.exe re-parses the arguments it is given, so shim arguments must not
+// contain anything that would split the command or expand a variable.
+func commandFor(path string, args []string) (string, []string, error) {
 	if runtime.GOOS != "windows" {
-		return path, args
+		return path, args, nil
 	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".cmd", ".bat":
+		if bad, ok := cmdUnsafe(append([]string{path}, args...)); ok {
+			return "", nil, fmt.Errorf("argument %q is not safe to pass to a .cmd/.bat launcher", bad)
+		}
 		comspec := os.Getenv("COMSPEC")
 		if comspec == "" {
 			comspec = "cmd.exe"
 		}
-		return comspec, append([]string{"/D", "/S", "/C", path}, args...)
+		return comspec, append([]string{"/D", "/S", "/C", path}, args...), nil
 	case ".ps1":
-		return "powershell.exe", append([]string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path}, args...)
+		return "powershell.exe", append([]string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path}, args...), nil
 	}
-	return path, args
+	return path, args, nil
+}
+
+// cmdUnsafe finds the first argument cmd.exe would treat as a command
+// separator, redirection, caret escape or variable expansion. Parentheses are
+// allowed because paths such as "Program Files (x86)" need them.
+func cmdUnsafe(parts []string) (string, bool) {
+	for _, part := range parts {
+		if strings.ContainsAny(part, "&|<>^\"%\r\n") {
+			return part, true
+		}
+	}
+	return "", false
 }
 
 func versionOf(path string, timeout time.Duration) string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	name, args := commandFor(path, []string{"--version"})
+	name, args, err := commandFor(path, []string{"--version"})
+	if err != nil {
+		return "unknown"
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil && len(out) == 0 {

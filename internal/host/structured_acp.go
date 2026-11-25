@@ -112,7 +112,11 @@ func (d *Daemon) startACPStructured(parent context.Context, spec protocol.RunSpe
 		fail("ACP adapter not found: " + parts[0])
 		return
 	}
-	path, args := commandFor(bin, parts[1:])
+	path, args, err := commandFor(bin, parts[1:])
+	if err != nil {
+		fail(err.Error())
+		return
+	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)
 	cmd.Dir = cwd

@@ -26,7 +26,10 @@ type openCodeService struct {
 func openCodeStateDir(bin string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	name, args := commandFor(bin, []string{"debug", "paths"})
+	name, args, err := commandFor(bin, []string{"debug", "paths"})
+	if err != nil {
+		return ""
+	}
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {
 		return ""

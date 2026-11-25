@@ -43,7 +43,10 @@ func TestOpenCodeAPIContract(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	path, args := commandFor(bin, []string{"serve", "--hostname", "127.0.0.1", "--port", fmt.Sprint(port)})
+	path, args, err := commandFor(bin, []string{"serve", "--hostname", "127.0.0.1", "--port", fmt.Sprint(port)})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = filepath.Join(root, "workspace")
 	cmd.Env = append(os.Environ(),

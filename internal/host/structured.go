@@ -147,7 +147,11 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		}
 		return
 	}
-	path, args := commandFor(binPath, []string{"serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port)})
+	path, args, err := commandFor(binPath, []string{"serve", "--hostname", "127.0.0.1", "--port", strconv.Itoa(port)})
+	if err != nil {
+		fail(err.Error())
+		return
+	}
 	password := serverPassword()
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)

@@ -141,7 +141,11 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 		fail("codex executable not found")
 		return
 	}
-	path, args := commandFor(bin, []string{"app-server", "--stdio"})
+	path, args, err := commandFor(bin, []string{"app-server", "--stdio"})
+	if err != nil {
+		fail(err.Error())
+		return
+	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(runCtx, path, args...)
 	cmd.Dir = cwd

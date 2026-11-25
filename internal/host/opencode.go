@@ -33,7 +33,11 @@ func openCodeDBPath(bin string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	name, args := commandFor(bin, []string{"debug", "paths"})
+	name, args, err := commandFor(bin, []string{"debug", "paths"})
+	if err != nil {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".local", "share", "opencode", "opencode.db")
+	}
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
@@ -575,6 +579,9 @@ func (a *OpenCodeAdapter) BuildCommand(action Action) (Command, error) {
 	default:
 		return Command{}, fmt.Errorf("unsupported action %q", action.Kind)
 	}
-	path, argv := commandFor(a.bin, args)
+	path, argv, err := commandFor(a.bin, args)
+	if err != nil {
+		return Command{}, err
+	}
 	return Command{Path: path, Args: argv, Cwd: action.Cwd}, nil
 }

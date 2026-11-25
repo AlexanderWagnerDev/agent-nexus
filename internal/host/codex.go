@@ -310,7 +310,10 @@ func (a *CodexAdapter) BuildCommand(action Action) (Command, error) {
 	default:
 		return Command{}, fmt.Errorf("unsupported action %q", action.Kind)
 	}
-	path, argv := commandFor(a.bin, args)
+	path, argv, err := commandFor(a.bin, args)
+	if err != nil {
+		return Command{}, err
+	}
 	return Command{Path: path, Args: argv, Cwd: action.Cwd}, nil
 }
 
