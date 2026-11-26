@@ -19,6 +19,7 @@ export async function pageStructuredRun(id, run) {
   // The detail level belongs to the user and may have changed on another
   // device; read it before the transcript is rendered.
   await loadUserTheme();
+  if (pageGen !== state.pageGen) return;
   let session = null;
   if (run.session_id) {
     session = await api(`/sessions/${encodeURIComponent(run.session_id)}`).catch(() => null);
@@ -543,7 +544,6 @@ export async function pageStructuredRun(id, run) {
   };
 
   const updateTool = (callID, name, input, output, status) => {
-    if (transcriptDetail() === 'chat') return;
     const key = callID || ('tool-' + toolRecords.size);
     let rec = toolRecords.get(key);
     if (!rec) {
@@ -558,6 +558,9 @@ export async function pageStructuredRun(id, run) {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = toolCardHtml(described, rec.status);
     const node = wrapper.firstElementChild;
+    // Keep the card in the DOM so a later switch to Normal or Full can reveal
+    // it without losing the live stream.
+    node.hidden = transcriptDetail() === 'chat';
     if (rec.node) {
       node.open = rec.node.open || rec.status === 'error';
       rec.node.replaceWith(node);
@@ -565,17 +568,18 @@ export async function pageStructuredRun(id, run) {
       messagesEl.appendChild(node);
     }
     rec.node = node;
-    scrollBottom();
+    if (!node.hidden) scrollBottom();
   };
 
   const updateReasoning = (messageID, text) => {
-    if (!text || transcriptDetail() === 'chat') return;
+    if (!text) return;
     const key = messageID || 'reasoning';
     let rec = reasoningRecords.get(key);
     if (!rec) {
       const wrapper = document.createElement('div');
       wrapper.innerHTML = reasoningHtml(text);
       const node = wrapper.firstElementChild;
+      node.hidden = transcriptDetail() === 'chat';
       messagesEl.appendChild(node);
       rec = { node, raw: text, timer: null };
       reasoningRecords.set(key, rec);
@@ -862,10 +866,11 @@ export async function pageStructuredRun(id, run) {
   // stream; existing reasoning and tool cards only need visibility updated.
   const syncLiveDetail = () => {
     const detail = transcriptDetail();
-    messagesEl.querySelectorAll('.reasoning-card, .tool-card').forEach((node) => {
+    messagesEl.querySelectorAll('.turn-reasoning, .tool-card').forEach((node) => {
       node.hidden = detail === 'chat';
       if (detail === 'full') {
-        node.open = true;
+        const card = node.matches('details') ? node : node.querySelector('.reasoning-card');
+        if (card) card.open = true;
         node.querySelectorAll('.tool-raw').forEach((raw) => { raw.open = true; });
       }
     });
