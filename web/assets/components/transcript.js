@@ -1,3 +1,4 @@
+import { api } from '../api.js';
 import { state, storeGet, storeSet } from '../state.js';
 import { agentGlyph } from '../ui.js';
 import { describeTool } from '../chat-format.js';
@@ -24,6 +25,26 @@ export function setTranscriptDetail(level) {
   const value = DETAIL_LEVELS.includes(level) ? level : 'normal';
   state.settings = { ...state.settings, transcript_detail: value };
   storeSet(DETAIL_KEY, value);
+}
+
+/** Options for a compact detail selector that mirrors the settings page. */
+export function transcriptDetailOptions() {
+  return [['chat', 'Chat only'], ['normal', 'Normal'], ['full', 'Full']]
+    .map(([value, label]) => `<option value="${value}" ${transcriptDetail() === value ? 'selected' : ''}>${t(label)}</option>`)
+    .join('');
+}
+
+/** Save the choice on the hub, restoring the previous value on failure. */
+export async function saveTranscriptDetail(level) {
+  const previous = transcriptDetail();
+  setTranscriptDetail(level);
+  try {
+    const saved = await api('/me/settings', { method: 'PUT', body: { transcript_detail: transcriptDetail() } });
+    state.settings = { ...state.settings, ...saved };
+  } catch (err) {
+    setTranscriptDetail(previous);
+    throw err;
+  }
 }
 
 export function inlineAttachmentLabel(name, path) {

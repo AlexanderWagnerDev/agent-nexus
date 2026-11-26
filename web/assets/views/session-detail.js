@@ -5,7 +5,7 @@ import { loadSidebar, renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, closeModal, modal, stateBadge, toast } from '../ui.js';
-import { renderDiffBlock, renderTranscriptMessages } from '../components/transcript.js';
+import { renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, transcriptDetail, transcriptDetailOptions } from '../components/transcript.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { agentMeta, cwdKey, esc, fmtRelative, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
@@ -65,6 +65,9 @@ export async function pageSession(id) {
         ${s.active_elsewhere ? `<div class="notice info mt-1">${t('An agent process appears to have this session open in a native terminal. Opening the chat can conflict with that writer; the hub asks before forcing a resume.')}</div>` : ''}
         ${s.warning ? `<div class="notice mt-1">${esc(s.warning)}</div>` : ''}
         ${versionWarning ? `<div class="notice info mt-1">${t('Untested agent version')}: ${esc(versionWarning)}</div>` : ''}
+        <div class="transcript-toolbar">
+          <select class="select select-mini" id="transcript-detail" aria-label="${t('Transcript detail')}" title="${t('Transcript detail')}">${transcriptDetailOptions()}</select>
+        </div>
         <div id="transcript" class="transcript"><div class="empty"><span class="spinner"></span></div></div>
         <div id="transcript-warning"></div>
         <div class="load-more" id="load-more-wrap"></div>
@@ -268,6 +271,22 @@ export async function pageSession(id) {
       scroller.scrollTop = scroller.scrollHeight;
     } finally { liveBusy = false; }
   };
+  document.getElementById('transcript-detail').addEventListener('change', async (event) => {
+    const select = event.target;
+    const previous = transcriptDetail();
+    select.disabled = true;
+    try {
+      await saveTranscriptDetail(select.value);
+      lastMark = '';
+      await loadLatest();
+      toast(t('Transcript detail saved'));
+    } catch (err) {
+      select.value = previous;
+      toast(err.message, true);
+    } finally {
+      select.disabled = false;
+    }
+  });
   // Native OpenCode/TUI writes do not go through a hub run, and a missed hub
   // delta must not need F5 either. Poll the host transcript while the page is
   // visible and refresh when its content or a message text actually changed.

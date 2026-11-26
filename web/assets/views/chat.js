@@ -6,7 +6,7 @@ import { draftKey, state, storeGet, storeSet } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, badge, closeModal, modal, toast } from '../ui.js';
 import { wsSend } from '../ws.js';
-import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, toolCardHtml, transcriptDetail, workingHtml } from '../components/transcript.js';
+import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, toolCardHtml, transcriptDetail, transcriptDetailOptions, workingHtml } from '../components/transcript.js';
 import { startRun } from './session-detail.js';
 import { describeTool, parseDiffStat } from '../chat-format.js';
 import { getLang, t } from '../i18n.js';
@@ -64,6 +64,7 @@ export async function pageStructuredRun(id, run) {
           <span class="chat-host">${esc(host)}</span>
           ${nativeActivityBadge(session?.active_elsewhere, true)}
           ${branch ? `<span class="branch-chip">${svgIcon('branch', 12)}${esc(branch)}</span>` : ''}
+          <select class="select select-mini chat-detail" id="chat-detail" aria-label="${t('Transcript detail')}" title="${t('Transcript detail')}">${transcriptDetailOptions()}</select>
           <button class="icon-btn chat-inline-context" id="chat-inline-context" type="button" title="${t('Toggle session details')}" aria-label="${t('Toggle session details')}">${svgIcon('panelRight')}</button>
           <span class="chat-connection" id="run-note" role="status" aria-live="polite"><span class="connection-dot"></span>${t('Connecting…')}</span>
         </div>
@@ -853,6 +854,35 @@ export async function pageStructuredRun(id, run) {
     if (!run.session_id || !historyReady || !isNearBottom() || currentState !== 'idle') return;
     loadHistory(true).catch(() => {});
   };
+
+  // An idle chat can be rebuilt from the transcript. A live run keeps its
+  // stream; existing reasoning and tool cards only need visibility updated.
+  const syncLiveDetail = () => {
+    const detail = transcriptDetail();
+    messagesEl.querySelectorAll('.reasoning-card, .tool-card').forEach((node) => {
+      node.hidden = detail === 'chat';
+      if (detail === 'full') {
+        node.open = true;
+        node.querySelectorAll('.tool-raw').forEach((raw) => { raw.open = true; });
+      }
+    });
+  };
+  const detailSelect = document.getElementById('chat-detail');
+  detailSelect.addEventListener('change', async () => {
+    const previous = transcriptDetail();
+    detailSelect.disabled = true;
+    try {
+      await saveTranscriptDetail(detailSelect.value);
+      if (currentState === 'idle' && run.session_id) await loadHistory();
+      else syncLiveDetail();
+      toast(t('Transcript detail saved'));
+    } catch (err) {
+      detailSelect.value = previous;
+      toast(err.message, true);
+    } finally {
+      detailSelect.disabled = false;
+    }
+  });
 
   api(`/runs/${id}/lease`, { method: 'POST' }).then(() => {
     noteText(t('You have control of this run'), true);

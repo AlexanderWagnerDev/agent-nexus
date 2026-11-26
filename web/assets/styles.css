@@ -372,6 +372,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   background: var(--input-bg); border: 1px solid var(--line); border-radius: 4px;
   color: var(--text); outline: none; font-size: 14px;
 }
+.select-mini { width: auto; min-width: 0; min-height: 24px; height: 24px; padding: 2px 20px 2px 7px; font-size: 11.5px; }
 .input:hover, .select:hover { border-color: var(--line-strong); }
 .input:focus, .select:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--focus-soft); }
 .input::placeholder { color: var(--muted-2); }
@@ -734,6 +735,8 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
   color: var(--muted); font-size: 12px; flex: 0 0 auto;
 }
 .chat-agent { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 500; }
+.chat-detail { flex: 0 0 auto; }
+.transcript-toolbar { display: flex; justify-content: flex-end; margin: 2px 0 8px; }
 .chat-agent .agent-glyph { width: 18px; height: 18px; font-size: 7px; }
 .chat-sep { color: var(--muted-2); }
 .chat-host { color: var(--muted); }

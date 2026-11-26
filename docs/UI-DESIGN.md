@@ -89,7 +89,9 @@ can be dragged between 240 and 520 px; its width is stored locally.
   replies), **Normal** (reasoning and tools collapsed) and **Full** (reasoning,
   tool output and raw input expanded). The choice is stored on the hub per user
   and applies to every agent, chat and session transcript; until a hub choice
-  exists, the browser keeps its device-local preference.
+  exists, the browser keeps its device-local preference. The same selector sits
+  in the chat status bar and above a read-only transcript, so the level can be
+  switched without leaving the page.
 - Streaming is throttled to keep long sessions responsive; auto-scroll pauses
   when the reader scrolls up and offers “Jump to latest”.
 - Native history loads the latest 200 messages and offers earlier pages without
