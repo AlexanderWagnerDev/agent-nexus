@@ -16,12 +16,18 @@ import (
 )
 
 type indexTestAdapter struct {
+	name        string
 	sessions    []protocol.Session
 	transcripts map[string]protocol.Transcript
 	failList    bool
 }
 
-func (a *indexTestAdapter) Name() string { return "opencode" }
+func (a *indexTestAdapter) Name() string {
+	if a.name != "" {
+		return a.name
+	}
+	return "opencode"
+}
 func (a *indexTestAdapter) Detect(context.Context) (protocol.AgentInfo, error) {
 	return protocol.AgentInfo{Name: "opencode", Supported: true}, nil
 }
@@ -136,6 +142,45 @@ func TestSearchIndexBuildSearchAndIncrementalRefresh(t *testing.T) {
 	}
 	if hits, _ := index.Search(context.Background(), "never stops", 10); len(hits) != 0 {
 		t.Fatalf("stale text remained: %+v", hits)
+	}
+}
+
+func TestSearchIndexReindexesGeminiAfterParserUpgrade(t *testing.T) {
+	index, adapter, root := newIndexFixture(t)
+	adapter.name = "gemini"
+	updated := time.Now().UTC()
+	adapter.sessions = []protocol.Session{{
+		Agent: "gemini", NativeID: "gem", Title: "Gemini session",
+		Cwd: filepath.Join(root, "project"), UpdatedAt: updated, MessageCount: 2,
+	}}
+	adapter.transcripts = map[string]protocol.Transcript{
+		"gem": {Total: 2, Messages: []protocol.Message{
+			{Role: "user", Text: "Investigate uploads", Timestamp: updated},
+			{Role: "assistant", Kind: "reasoning", Text: "check retry cap", Timestamp: updated},
+		}},
+	}
+	// Simulate a document indexed before the parser change: the session file
+	// did not move, so only the parser version can invalidate this entry.
+	oldFingerprint := fmt.Sprintf("%d|%d|%s", updated.UnixNano(), 2, "Gemini session")
+	if _, err := index.db.Exec(`INSERT INTO documents(agent,native_id,title,cwd,updated_at,fingerprint) VALUES(?,?,?,?,?,?)`,
+		"gemini", "gem", "Gemini session", filepath.Join(root, "project"), updated.UnixMilli(), oldFingerprint); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := index.db.QueryRow(`SELECT id FROM documents WHERE agent=? AND native_id=?`, "gemini", "gem").Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := index.db.Exec(`INSERT INTO documents_fts(rowid,body,agent,native_id) VALUES(?,?,?,?)`,
+		id, "old body without thoughts", "gemini", "gem"); err != nil {
+		t.Fatal(err)
+	}
+	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"gemini"}}
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, nil); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := index.Search(context.Background(), "retry cap", 10)
+	if err != nil || len(hits) != 1 {
+		t.Fatalf("thought was not reindexed: %+v %v", hits, err)
 	}
 }
 

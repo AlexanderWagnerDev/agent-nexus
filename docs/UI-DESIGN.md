@@ -84,7 +84,12 @@ can be dragged between 240 and 520 px; its width is stored locally.
   read, edit, search, web, Git, tests, plans, delegated tasks and MCP calls have
   distinct labels.
 - Diffs render as a structured review panel: unified or side-by-side, old/new line numbers, per-file headers with change totals, file chips, syntax highlighting and a persisted layout choice.
-- Reasoning is a collapsed “Thinking” row.
+- Reasoning is a compact, borderless “Thinking” row; tool rows stay compact.
+- Settings offers three transcript detail levels: **Chat only** (prompts and
+  replies), **Normal** (reasoning and tools collapsed) and **Full** (reasoning,
+  tool output and raw input expanded). The choice is stored on the hub per user
+  and applies to every agent, chat and session transcript; until a hub choice
+  exists, the browser keeps its device-local preference.
 - Streaming is throttled to keep long sessions responsive; auto-scroll pauses
   when the reader scrolls up and offers “Jump to latest”.
 - Native history loads the latest 200 messages and offers earlier pages without

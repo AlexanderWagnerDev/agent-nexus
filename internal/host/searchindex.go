@@ -256,7 +256,7 @@ func collectIndexSessions(ctx context.Context, adapters []Adapter, policy Policy
 }
 
 func (x *SearchIndex) indexOne(ctx context.Context, adapters []Adapter, sess indexedSession, rebuild bool) error {
-	fingerprint := fmt.Sprintf("%d|%d|%s", sess.updated.UnixNano(), sess.count, sess.title)
+	fingerprint := fmt.Sprintf("%d|%d|%s%s", sess.updated.UnixNano(), sess.count, sess.title, indexParserVersion(sess.agent))
 	if !rebuild {
 		var current string
 		err := x.db.QueryRow(`SELECT fingerprint FROM documents WHERE agent=? AND native_id=?`, sess.agent, sess.nativeID).Scan(&current)
@@ -318,6 +318,19 @@ func (x *SearchIndex) indexOne(ctx context.Context, adapters []Adapter, sess ind
 		return err
 	}
 	return nil
+}
+
+// indexParserVersion invalidates an adapter's cached documents when its
+// transcript parser starts returning text it used to drop. Bump it when the
+// readable transcript and the indexed body would otherwise diverge. An empty
+// suffix keeps the historical fingerprint, so unaffected agents are not
+// reindexed on upgrade.
+func indexParserVersion(agent string) string {
+	if agent == "gemini" {
+		// 2 adds recorded thoughts and the type-based message format.
+		return "|2"
+	}
+	return ""
 }
 
 func displayIndexTitle(title, nativeID string) string {
