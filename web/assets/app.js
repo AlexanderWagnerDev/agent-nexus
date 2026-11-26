@@ -59,9 +59,6 @@ const pages = {
 
 setPageHandler(async () => {
   const target = parseRoute(location.hash);
-  // Preferences are user-scoped and may have changed on another device; pick
-  // them up before rendering the next page instead of only at sign-in.
-  await loadUserTheme();
   return await pages[target.page](target.id);
 });
 async function boot() {

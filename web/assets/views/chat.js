@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { ensureStepUp } from '../auth.js';
 import { rememberRecent } from '../palette.js';
-import { loadSidebar, setPage } from '../shell.js';
+import { loadSidebar, loadUserTheme, setPage } from '../shell.js';
 import { draftKey, state, storeGet, storeSet } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, badge, closeModal, modal, toast } from '../ui.js';
@@ -16,6 +16,9 @@ import { agentMeta, countLabel, cwdKey, esc, fmtRelative, fmtStamp, fmtTime, nat
 
 export async function pageStructuredRun(id, run) {
   const pageGen = state.pageGen;
+  // The detail level belongs to the user and may have changed on another
+  // device; read it before the transcript is rendered.
+  await loadUserTheme();
   let session = null;
   if (run.session_id) {
     session = await api(`/sessions/${encodeURIComponent(run.session_id)}`).catch(() => null);
