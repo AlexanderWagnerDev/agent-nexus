@@ -45,6 +45,74 @@ func TestOpenCodeLegacyReasoning(t *testing.T) {
 	}
 }
 
+func TestOpenCodeV2AssistantParts(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "opencode.db")
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`
+		CREATE TABLE session_v2 (id TEXT PRIMARY KEY, directory TEXT, title TEXT,
+			time_created INTEGER, time_updated INTEGER);
+		CREATE TABLE session_message (
+			id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER,
+			time_created INTEGER, time_updated INTEGER, data TEXT
+		);
+		CREATE TABLE session_part (
+			message_id TEXT, session_id TEXT, ordinal INTEGER, type TEXT, call_id TEXT,
+			time_created INTEGER, time_updated INTEGER, data TEXT
+		);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO session_v2(id,directory,title,time_created,time_updated) VALUES(?,?,?,?,?)`,
+		"ses_parts", "C:/tmp/project", "v2 parts", 1000, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO session_message(id,session_id,type,seq,time_created,time_updated,data) VALUES(?,?,?,?,?,?,?)`,
+		"msg1", "ses_parts", "user", 1, 1000, 1000, `{"text":"hello parts"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2.4 keeps assistant content in session_part and leaves content empty.
+	_, err = db.Exec(`INSERT INTO session_message(id,session_id,type,seq,time_created,time_updated,data) VALUES(?,?,?,?,?,?,?)`,
+		"msg2", "ses_parts", "assistant", 2, 2000, 2000, `{"content":[]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range []struct {
+		ordinal int
+		data    string
+	}{
+		{0, `{"type":"reasoning","text":"we should reply"}`},
+		{1, `{"type":"text","text":"hi from a part"}`},
+		{2, `{"type":"tool","name":"bash","state":{"input":{"command":"echo hi"},"content":[{"type":"text","text":"hi\n"}]}}`},
+	} {
+		if _, err := db.Exec(`INSERT INTO session_part(message_id,session_id,ordinal,type,time_created,time_updated,data) VALUES(?,?,?,?,?,?,?)`,
+			"msg2", "ses_parts", part.ordinal, "part", 2000, 2000, part.data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := &OpenCodeAdapter{bin: os.DevNull, db: dbPath}
+	tr, err := a.Transcript(context.Background(), "ses_parts", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Total != 4 {
+		t.Fatalf("expected 4 transcript entries, got %d: %+v", tr.Total, tr.Messages)
+	}
+	if tr.Messages[1].Kind != "reasoning" || tr.Messages[1].Text != "we should reply" {
+		t.Fatalf("reasoning part was dropped: %+v", tr.Messages)
+	}
+	if tr.Messages[2].Text != "hi from a part" || tr.Messages[3].ToolName != "bash" {
+		t.Fatalf("assistant parts were dropped: %+v", tr.Messages)
+	}
+}
+
 func TestOpenCodeV2(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "opencode.db")

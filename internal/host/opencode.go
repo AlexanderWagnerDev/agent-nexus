@@ -285,8 +285,36 @@ func (a *OpenCodeAdapter) Transcript(ctx context.Context, nativeID string, offse
 }
 
 func (a *OpenCodeAdapter) v2Transcript(ctx context.Context, db *sql.DB, nativeID string, offset, limit int) (protocol.Transcript, error) {
+	// OpenCode 2.4 moved assistant parts into session_part and left the
+	// message's inline content empty; older 2.x versions kept them inline.
+	parts := map[string][]opencodePart{}
+	if a.tableExists(db, "session_part") {
+		rows, err := db.QueryContext(ctx, `
+			SELECT message_id, data FROM session_part
+			WHERE session_id=? ORDER BY message_id, ordinal`, nativeID)
+		if err != nil {
+			return protocol.Transcript{}, err
+		}
+		for rows.Next() {
+			var messageID, data string
+			if err := rows.Scan(&messageID, &data); err != nil {
+				rows.Close()
+				return protocol.Transcript{}, err
+			}
+			var p opencodePart
+			if json.Unmarshal([]byte(data), &p) == nil {
+				parts[messageID] = append(parts[messageID], p)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return protocol.Transcript{}, err
+		}
+		rows.Close()
+	}
+
 	rows, err := db.QueryContext(ctx, `
-		SELECT type, time_created, data FROM session_message
+		SELECT id, type, time_created, data FROM session_message
 		WHERE session_id=? ORDER BY seq, time_created`, nativeID)
 	if err != nil {
 		return protocol.Transcript{}, err
@@ -294,9 +322,9 @@ func (a *OpenCodeAdapter) v2Transcript(ctx context.Context, db *sql.DB, nativeID
 	defer rows.Close()
 	var all []protocol.Message
 	for rows.Next() {
-		var typ, data string
+		var id, typ, data string
 		var created int64
-		if err := rows.Scan(&typ, &created, &data); err != nil {
+		if err := rows.Scan(&id, &typ, &created, &data); err != nil {
 			return protocol.Transcript{}, err
 		}
 		ts := time.UnixMilli(created).UTC()
@@ -319,7 +347,11 @@ func (a *OpenCodeAdapter) v2Transcript(ctx context.Context, db *sql.DB, nativeID
 				}
 			}
 		case "assistant":
-			for _, p := range m.Content {
+			content := parts[id]
+			if len(content) == 0 {
+				content = m.Content
+			}
+			for _, p := range content {
 				switch p.Type {
 				case "text":
 					if strings.TrimSpace(p.Text) != "" {
