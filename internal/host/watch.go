@@ -20,6 +20,10 @@ const (
 	discoveryDirtyDirLimit    = 8
 	discoveryLiveDirLimit     = 10
 	discoveryLiveHotDirs      = 10
+	// sessionActiveWindow is how long a session whose transcript was just
+	// written is treated as working. Agents do not expose a portable "a turn is
+	// running" signal, so recency is the only signal shared by every adapter.
+	sessionActiveWindow = 2 * time.Minute
 )
 
 type watchedFile struct {
@@ -405,7 +409,7 @@ func (w *storeWatcher) rebuildLive() {
 // do not implement StoreWatcher simply fall back to the periodic full refresh.
 func (d *Daemon) watchPaths() []string {
 	var out []string
-	for _, a := range d.adapters {
+	for _, a := range d.adapterList() {
 		if w, ok := a.(StoreWatcher); ok {
 			out = append(out, w.WatchPaths()...)
 		}

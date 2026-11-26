@@ -53,12 +53,12 @@ func TestTranscriptRespectsDenyAllAllowedRoots(t *testing.T) {
 		transcript: protocol.Transcript{Messages: []protocol.Message{{Role: "user", Text: "secret"}}},
 	}
 	d := &Daemon{
-		policy:   Policy{AllowedRoots: []string{}},
-		adapters: []Adapter{adapter},
+		policy: Policy{AllowedRoots: []string{}},
 		lastByAgent: map[string][]protocol.Session{
 			"claude": {{NativeID: "s1", Agent: "claude", Cwd: root}},
 		},
 	}
+	d.adapters.Store(&[]Adapter{adapter})
 	params, err := json.Marshal(map[string]any{"native_id": "s1", "agent": "claude", "offset": 0, "limit": 10})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,8 @@ func TestTranscriptRespectsDenyAllAllowedRoots(t *testing.T) {
 // hub-supplied limit. It must apply the same bound as the local index.
 func TestSearchLimitIsClampedForAdapterFallback(t *testing.T) {
 	adapter := &recordAdapter{name: "claude"}
-	d := &Daemon{adapters: []Adapter{adapter}}
+	d := &Daemon{}
+	d.adapters.Store(&[]Adapter{adapter})
 	params, err := json.Marshal(map[string]any{"query": "needle", "limit": 1 << 30})
 	if err != nil {
 		t.Fatal(err)

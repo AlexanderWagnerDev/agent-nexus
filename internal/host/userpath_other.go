@@ -7,3 +7,5 @@ package host
 func EnsureInstallDirOnPath() error {
 	return nil
 }
+
+func userPathDirs() []string { return nil }

@@ -266,7 +266,7 @@ func (d *Daemon) auditVersionOverrides() {
 	if !d.cfg.AllowUntestedAgentVersions {
 		return
 	}
-	for _, adapter := range d.adapters {
+	for _, adapter := range d.adapterList() {
 		info, err := adapter.Detect(context.Background())
 		if err != nil {
 			continue
