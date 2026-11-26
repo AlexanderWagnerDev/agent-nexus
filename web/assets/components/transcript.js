@@ -14,7 +14,9 @@ const DETAIL_LEVELS = ['chat', 'normal', 'full'];
  * stores the preference per user; localStorage keeps it steady until the
  * settings request returns and on hubs that predate the column. */
 export function transcriptDetail() {
-  const level = state.settings?.transcript_detail ?? storeGet(DETAIL_KEY, 'normal');
+  const hub = state.settings?.transcript_detail;
+  if (DETAIL_LEVELS.includes(hub)) return hub;
+  const level = storeGet(DETAIL_KEY, 'normal');
   return DETAIL_LEVELS.includes(level) ? level : 'normal';
 }
 
@@ -73,8 +75,10 @@ export function renderTranscriptMessage(m, agent = 'agent') {
 
 export function renderTranscriptMessages(messages, agent = 'agent') {
   const html = [];
+  const detail = transcriptDetail();
   for (let i = 0; i < messages.length; i += 1) {
     const message = messages[i];
+    if (detail === 'chat' && (message.kind === 'tool_call' || message.kind === 'tool_result')) continue;
     if (message.kind === 'tool_call') {
       const next = messages[i + 1];
       const output = next?.kind === 'tool_result' ? (next.tool_output || '') : '';

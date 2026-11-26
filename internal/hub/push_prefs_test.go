@@ -62,8 +62,8 @@ func TestTranscriptDetailPersistsForUser(t *testing.T) {
 	if err := json.Unmarshal(body, &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.TranscriptDetail != "normal" {
-		t.Fatalf("default detail: %s", body)
+	if settings.TranscriptDetail != "" {
+		t.Fatalf("an unset detail must stay empty for the device fallback: %s", body)
 	}
 	status, body = hub.do(nil, http.MethodPut, "/api/v1/me/settings", map[string]any{"transcript_detail": "full"}, nil)
 	expectStatus(t, status, http.StatusOK, body, "update detail")

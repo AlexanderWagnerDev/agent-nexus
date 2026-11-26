@@ -11,7 +11,7 @@ globalThis.localStorage = {
 
 const { state } = await import('../assets/state.js');
 const {
-  reasoningHtml, renderTranscriptMessage, setTranscriptDetail, toolCardHtml, transcriptDetail,
+  reasoningHtml, renderTranscriptMessage, renderTranscriptMessages, setTranscriptDetail, toolCardHtml, transcriptDetail,
 } = await import('../assets/components/transcript.js');
 
 test('defaults to normal and rejects unknown levels', () => {
@@ -25,6 +25,21 @@ test('hub preference wins over the device cache', () => {
   state.settings = { ...state.settings, transcript_detail: 'full' };
   assert.equal(transcriptDetail(), 'full');
   state.settings = { ...state.settings, transcript_detail: undefined };
+});
+
+test('an unset hub preference keeps the device choice', () => {
+  setTranscriptDetail('full');
+  state.settings = { ...state.settings, transcript_detail: '' };
+  assert.equal(transcriptDetail(), 'full');
+  state.settings = { ...state.settings, transcript_detail: undefined };
+});
+
+test('chat level hides reasoning and tool calls in history rendering', () => {
+  setTranscriptDetail('chat');
+  assert.equal(renderTranscriptMessages([
+    { kind: 'tool_call', tool_name: 'bash', tool_input: '{}' },
+    { kind: 'tool_result', tool_output: 'ok' },
+  ]), '');
 });
 
 test('chat level hides reasoning and tool calls', () => {

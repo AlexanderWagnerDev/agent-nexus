@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   theme TEXT NOT NULL DEFAULT 'system',
   notify_prefs TEXT NOT NULL DEFAULT '{}',
-  transcript_detail TEXT NOT NULL DEFAULT 'normal',
+  transcript_detail TEXT NOT NULL DEFAULT '',
   updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS host_confirmations (
@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS device_keys (
 	// does not revert an administrator's rename.
 	_, _ = s.db.Exec(`UPDATE hosts SET host_name_reported=name WHERE host_name_reported=''`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
-	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN transcript_detail TEXT NOT NULL DEFAULT 'normal'`)
+	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN transcript_detail TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN error_code TEXT NOT NULL DEFAULT ''`)
@@ -473,12 +473,13 @@ func (s *Store) SetUserTheme(userID, theme string) error {
 }
 
 // UserTranscriptDetail returns how much of a transcript the user wants shown:
-// chat, normal or full. It follows the user across devices.
+// chat, normal or full. An empty value means the user never saved a hub
+// preference, so the browser keeps its device-local choice.
 func (s *Store) UserTranscriptDetail(userID string) (string, error) {
 	var detail string
 	err := s.db.QueryRow(`SELECT transcript_detail FROM user_settings WHERE user_id=?`, userID).Scan(&detail)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && detail == "") {
-		return "normal", nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
 	}
 	return detail, err
 }
