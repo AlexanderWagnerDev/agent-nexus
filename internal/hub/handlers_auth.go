@@ -248,6 +248,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
+	// Validate every supplied field before the first write so a combined update
+	// cannot persist one value and then fail on another.
 	if req.Theme != nil {
 		switch *req.Theme {
 		case "system", "dark", "light":
@@ -255,6 +257,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "theme must be system, dark or light")
 			return
 		}
+	}
+	if req.TranscriptDetail != nil {
+		switch *req.TranscriptDetail {
+		case "chat", "normal", "full":
+		default:
+			writeError(w, http.StatusBadRequest, "transcript_detail must be chat, normal or full")
+			return
+		}
+	}
+	if req.Theme != nil {
 		if err := s.store.SetUserTheme(u.ID, *req.Theme); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -274,12 +286,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.TranscriptDetail != nil {
-		switch *req.TranscriptDetail {
-		case "chat", "normal", "full":
-		default:
-			writeError(w, http.StatusBadRequest, "transcript_detail must be chat, normal or full")
-			return
-		}
 		if err := s.store.SetUserTranscriptDetail(u.ID, *req.TranscriptDetail); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return

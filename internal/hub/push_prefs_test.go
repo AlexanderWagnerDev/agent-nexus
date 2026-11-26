@@ -77,6 +77,21 @@ func TestTranscriptDetailPersistsForUser(t *testing.T) {
 	}
 	status, body = hub.do(nil, http.MethodPut, "/api/v1/me/settings", map[string]any{"transcript_detail": "neon"}, nil)
 	expectStatus(t, status, http.StatusBadRequest, body, "invalid detail")
+	// A rejected field must not leave an earlier field of the same request saved.
+	status, body = hub.do(nil, http.MethodPut, "/api/v1/me/settings", map[string]any{"theme": "dark", "transcript_detail": "neon"}, nil)
+	expectStatus(t, status, http.StatusBadRequest, body, "invalid combined update")
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/me/settings", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "settings after rejected update")
+	var after struct {
+		Theme            string `json:"theme"`
+		TranscriptDetail string `json:"transcript_detail"`
+	}
+	if err := json.Unmarshal(body, &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.Theme != "system" || after.TranscriptDetail != "full" {
+		t.Fatalf("rejected update wrote a field: %s", body)
+	}
 }
 
 func TestSavePushSubscriptionDoesNotRebindAnotherAccount(t *testing.T) {
