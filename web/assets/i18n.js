@@ -171,8 +171,8 @@ const de = {
   'Load earlier messages': 'Frühere Nachrichten laden',
   'Transcript unavailable': 'Transkript nicht verfügbar',
   'Transcript detail': 'Transkript-Detailgrad',
-  'Choose how much of the agent transcript is shown in chats and session transcripts. Stored on this device.':
-    'Wähle, wie viel vom Agenten-Transkript in Chats und Session-Transkripten angezeigt wird. Wird auf diesem Gerät gespeichert.',
+  'Choose how much of the agent transcript is shown in chats and session transcripts. Stored on the hub for your user and follows you across devices.':
+    'Wähle, wie viel vom Agenten-Transkript in Chats und Session-Transkripten angezeigt wird. Wird im Benutzerprofil auf dem Hub gespeichert und gilt auf allen Geräten.',
   'Detail level': 'Detailgrad',
   'Chat only': 'Nur Chat',
   'Only your prompts and the agent replies.':

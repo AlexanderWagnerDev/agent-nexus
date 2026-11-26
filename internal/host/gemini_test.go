@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,8 +19,8 @@ func geminiFixture(t *testing.T) *GeminiAdapter {
 		"sessionId": "gem-1",
 		"startTime": "2025-01-02T03:04:05Z",
 		"messages": [
-			{"role": "user", "content": "Investigate the retry loop in uploads"},
-			{"role": "model", "content": [{"text": "The retry cap is missing; add one."}]}
+			{"type": "user", "content": "Investigate the retry loop in uploads"},
+			{"type": "gemini", "content": "The retry cap is missing; add one.", "thoughts": [{"subject": "Inspect the loop", "description": "The cap is never incremented."}]}
 		]
 	}`
 	if err := os.WriteFile(filepath.Join(dir, "session-1.json"), []byte(doc), 0o600); err != nil {
@@ -76,8 +77,11 @@ func TestGeminiTranscriptAndSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tr.Messages) != 2 || tr.Messages[1].Role != "assistant" {
+	if len(tr.Messages) != 3 || tr.Messages[1].Kind != "reasoning" || tr.Messages[2].Role != "assistant" {
 		t.Fatalf("transcript: %+v", tr)
+	}
+	if !strings.Contains(tr.Messages[1].Text, "Inspect the loop") {
+		t.Fatalf("gemini thoughts were dropped: %+v", tr.Messages[1])
 	}
 	if _, err := a.Transcript(context.Background(), "missing", 0, 10); err == nil {
 		t.Fatal("unknown transcript was accepted")

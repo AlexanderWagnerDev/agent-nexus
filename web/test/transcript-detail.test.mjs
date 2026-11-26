@@ -9,6 +9,7 @@ globalThis.localStorage = {
   setItem: (key, value) => memory.set(key, String(value)),
 };
 
+const { state } = await import('../assets/state.js');
 const {
   reasoningHtml, renderTranscriptMessage, setTranscriptDetail, toolCardHtml, transcriptDetail,
 } = await import('../assets/components/transcript.js');
@@ -17,6 +18,13 @@ test('defaults to normal and rejects unknown levels', () => {
   assert.equal(transcriptDetail(), 'normal');
   setTranscriptDetail('neon');
   assert.equal(transcriptDetail(), 'normal');
+});
+
+test('hub preference wins over the device cache', () => {
+  setTranscriptDetail('chat');
+  state.settings = { ...state.settings, transcript_detail: 'full' };
+  assert.equal(transcriptDetail(), 'full');
+  state.settings = { ...state.settings, transcript_detail: undefined };
 });
 
 test('chat level hides reasoning and tool calls', () => {

@@ -944,7 +944,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 .tool-card, .reasoning-card { border: 1px solid var(--line); border-radius: 4px; background: var(--bg-elev); overflow: hidden; }
 .tool-card > summary, .reasoning-card > summary {
   list-style: none; display: flex; align-items: center; gap: 8px;
-  min-height: 38px; padding: 5px 10px; cursor: pointer; user-select: none;
+  min-height: 32px; padding: 3px 9px; cursor: pointer; user-select: none;
 }
 .tool-card > summary::-webkit-details-marker, .reasoning-card > summary::-webkit-details-marker { display: none; }
 .tool-card > summary:hover, .reasoning-card > summary:hover { background: var(--bg-hover); }
@@ -959,7 +959,7 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 .tool-chevron { color: var(--muted-2); display: flex; }
 .tool-chevron svg { transition: transform .12s ease; }
 .tool-card[open] .tool-chevron svg { transform: rotate(180deg); }
-.tool-body { border-top: 1px solid var(--line-soft); padding: 10px; display: grid; gap: 9px; }
+.tool-body { border-top: 1px solid var(--line-soft); padding: 8px; display: grid; gap: 8px; }
 .tool-block { display: grid; gap: 4px; }
 .tool-label { color: var(--muted-2); font-size: 9.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .tool-pre, .tool-output { margin: 0; padding: 9px 10px; background: var(--code-bg); border: 1px solid var(--line-soft); border-radius: 3px; color: var(--tool-text); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
@@ -968,12 +968,12 @@ button.tag-chip:hover { color: var(--fg); border-color: var(--line-strong, var(-
 .tool-raw { border-top: 1px solid var(--line-soft); padding-top: 8px; }
 .tool-raw summary { color: var(--muted-2); font-size: 11px; cursor: pointer; }
 .tool-raw pre { margin: 7px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; color: var(--muted); }
-.reasoning-card { background: transparent; }
-.reasoning-card > summary { color: var(--muted); font-size: 11.5px; min-height: 32px; }
+.reasoning-card { background: transparent; border: 0; border-radius: 0; }
+.reasoning-card > summary { color: var(--muted); font-size: 11.5px; min-height: 26px; padding: 2px 4px; }
 .reasoning-card > summary svg:first-child { color: var(--muted-2); }
 .reasoning-toggle { margin-left: auto; display: flex; }
 .reasoning-card[open] .reasoning-toggle svg { transform: rotate(180deg); }
-.reasoning-body { padding: 2px 12px 11px 34px; color: var(--muted); font-size: 12.5px; }
+.reasoning-body { padding: 2px 8px 8px 26px; color: var(--muted); font-size: 12px; }
 .reasoning-body.md p { margin-bottom: .5em; }
 
 /* ---------- terminal ---------- */

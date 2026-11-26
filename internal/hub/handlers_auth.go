@@ -164,8 +164,14 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	detail, err := s.store.UserTranscriptDetail(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"theme": theme, "notifications": notificationDefaults(prefs), "notifications_by_host": byHost,
+		"transcript_detail": detail,
 	})
 }
 
@@ -234,8 +240,9 @@ func (s *Server) handleDeleteHostNotificationPrefs(w http.ResponseWriter, r *htt
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	var req struct {
-		Theme         *string          `json:"theme"`
-		Notifications *map[string]bool `json:"notifications"`
+		Theme            *string          `json:"theme"`
+		Notifications    *map[string]bool `json:"notifications"`
+		TranscriptDetail *string          `json:"transcript_detail"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
@@ -266,6 +273,18 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.TranscriptDetail != nil {
+		switch *req.TranscriptDetail {
+		case "chat", "normal", "full":
+		default:
+			writeError(w, http.StatusBadRequest, "transcript_detail must be chat, normal or full")
+			return
+		}
+		if err := s.store.SetUserTranscriptDetail(u.ID, *req.TranscriptDetail); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	theme, err := s.store.UserTheme(u.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -281,9 +300,15 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.audit(u.Username, "user.settings_updated", map[string]any{"theme": theme, "notifications": notificationDefaults(prefs)})
+	detail, err := s.store.UserTranscriptDetail(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.audit(u.Username, "user.settings_updated", map[string]any{"theme": theme, "notifications": notificationDefaults(prefs), "transcript_detail": detail})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"theme": theme, "notifications": notificationDefaults(prefs), "notifications_by_host": byHost,
+		"transcript_detail": detail,
 	})
 }
 
