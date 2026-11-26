@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { ensureStepUp } from '../auth.js';
 import { rememberRecent } from '../palette.js';
-import { loadSidebar, renderShell, setPage } from '../shell.js';
+import { loadSidebar, loadUserTheme, renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, closeModal, modal, stateBadge, toast } from '../ui.js';
@@ -12,6 +12,9 @@ import { agentMeta, cwdKey, esc, fmtRelative, fmtTime, nativeActivityBadge, proj
 
 export async function pageSession(id) {
   const pageGen = state.pageGen;
+  // The detail level belongs to the user and may have changed on another
+  // device; read it before the transcript is rendered.
+  await loadUserTheme();
   renderShell('sessions');
   const view = setPage(t('Session'), t('Loading transcript…'), `<a class="btn small" href="#/sessions">${t('Back')}</a>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
