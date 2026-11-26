@@ -11,7 +11,8 @@ globalThis.localStorage = {
 
 const { state } = await import('../assets/state.js');
 const {
-  reasoningHtml, renderTranscriptMessage, renderTranscriptMessages, setTranscriptDetail, toolCardHtml, transcriptDetail,
+  reasoningHtml, renderTranscriptMessage, renderTranscriptMessages, setTranscriptDetail, toolCardHtml,
+  transcriptDetail, transcriptDetailOptions,
 } = await import('../assets/components/transcript.js');
 
 test('defaults to normal and rejects unknown levels', () => {
@@ -52,6 +53,12 @@ test('full level expands reasoning and tool cards', () => {
   setTranscriptDetail('full');
   assert.match(reasoningHtml('thinking'), /<details class="reasoning-card" open>/);
   assert.match(toolCardHtml({ label: 'Run echo', kind: 'terminal' }, 'done'), /<details class="tool-card done" open>/);
+});
+
+test('the inline selector reflects the active level', () => {
+  setTranscriptDetail('full');
+  assert.match(transcriptDetailOptions(), /<option value="full" selected>/);
+  assert.doesNotMatch(transcriptDetailOptions(), /<option value="chat" selected>/);
 });
 
 test('synthetic agent prompts are only shown at full detail', () => {
