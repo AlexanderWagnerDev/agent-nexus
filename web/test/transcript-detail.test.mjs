@@ -35,18 +35,16 @@ test('an unset hub preference keeps the device choice', () => {
   state.settings = { ...state.settings, transcript_detail: undefined };
 });
 
-test('chat level hides reasoning and tool calls in history rendering', () => {
+test('chat level keeps tool rows in the DOM but hidden', () => {
   setTranscriptDetail('chat');
-  assert.equal(renderTranscriptMessages([
-    { kind: 'tool_call', tool_name: 'bash', tool_input: '{}' },
-    { kind: 'tool_result', tool_output: 'ok' },
-  ]), '');
+  const html = renderTranscriptMessages([{ kind: 'tool_call', tool_name: 'bash', tool_input: '{}' }]);
+  assert.match(html, /<details class="tool-card done" hidden/);
 });
 
-test('chat level hides reasoning and tool calls', () => {
+test('chat level keeps reasoning and tool calls hidden instead of dropping them', () => {
   setTranscriptDetail('chat');
-  assert.equal(renderTranscriptMessage({ kind: 'reasoning', text: 'thinking' }), '');
-  assert.equal(renderTranscriptMessage({ kind: 'tool_call', tool_name: 'bash', tool_input: '{}' }), '');
+  assert.match(renderTranscriptMessage({ kind: 'reasoning', text: 'thinking' }), /turn-reasoning" hidden/);
+  assert.match(renderTranscriptMessage({ kind: 'tool_call', tool_name: 'bash', tool_input: '{}' }), /tool-card done" hidden/);
 });
 
 test('full level expands reasoning and tool cards', () => {

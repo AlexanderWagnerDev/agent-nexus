@@ -78,13 +78,11 @@ export function renderTranscriptMessage(m, agent = 'agent') {
   const detail = transcriptDetail();
   if (detail !== 'full' && m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
   if (m.kind === 'tool_call' || m.kind === 'tool_result') {
-    if (detail === 'chat') return '';
     const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '');
-    return historyToolCard(described, m);
+    return historyToolCard(described, m, detail === 'chat');
   }
   if (m.kind === 'reasoning' && m.text) {
-    if (detail === 'chat') return '';
-    return `<article class="turn turn-assistant turn-reasoning">${reasoningHtml(m.text, detail === 'full')}</article>`;
+    return `<article class="turn turn-assistant turn-reasoning"${detail === 'chat' ? ' hidden' : ''}>${reasoningHtml(m.text, detail === 'full')}</article>`;
   }
   if (m.role === 'user') {
     const body = renderUserText(m.text);
@@ -99,16 +97,15 @@ export function renderTranscriptMessages(messages, agent = 'agent') {
   const detail = transcriptDetail();
   for (let i = 0; i < messages.length; i += 1) {
     const message = messages[i];
-    if (detail === 'chat' && (message.kind === 'tool_call' || message.kind === 'tool_result')) continue;
     if (message.kind === 'tool_call') {
       const next = messages[i + 1];
       const output = next?.kind === 'tool_result' ? (next.tool_output || '') : '';
       if (next?.kind === 'tool_result') i += 1;
       const described = describeTool(message.tool_name || 'Tool', message.tool_input || '', output);
-      html.push(historyToolCard(described, { ...message, tool_output: output }));
+      html.push(historyToolCard(described, { ...message, tool_output: output }, detail === 'chat'));
     } else if (message.kind === 'tool_result') {
       const described = describeTool(message.tool_name || 'Tool result', '', message.tool_output || '');
-      html.push(historyToolCard(described, message));
+      html.push(historyToolCard(described, message, detail === 'chat'));
     } else {
       html.push(renderTranscriptMessage(message, agent));
     }
@@ -159,7 +156,7 @@ export function outputBlock(text) {
   return `<pre class="tool-output">${esc(value)}</pre>`;
 }
 
-export function toolCardHtml(described, status = 'done') {
+export function toolCardHtml(described, status = 'done', hidden = false) {
   const detail = described.detail ? `<code>${esc(described.detail)}</code>` : '';
   const statusMark = status === 'running'
     ? `<span class="spinner tiny"></span>${t('Running')}`
@@ -178,7 +175,7 @@ export function toolCardHtml(described, status = 'done') {
   const raw = described.inputText && described.inputText !== '{}' && described.inputText !== 'null'
     ? `<details class="tool-raw" ${transcriptDetail() === 'full' ? 'open' : ''}><summary>${t('Raw input')}</summary><pre>${esc(described.inputText)}</pre></details>`
     : '';
-  return `<details class="tool-card ${status}" ${status === 'error' || transcriptDetail() === 'full' ? 'open' : ''}>
+  return `<details class="tool-card ${status}"${hidden ? ' hidden' : ''} ${status === 'error' || transcriptDetail() === 'full' ? 'open' : ''}>
     <summary>
       <span class="tool-icon">${svgIcon(toolIcon(described.kind), 15)}</span>
       <span class="tool-line"><strong>${esc(described.label)}</strong>${detail}</span>
@@ -189,9 +186,9 @@ export function toolCardHtml(described, status = 'done') {
   </details>`;
 }
 
-export function historyToolCard(described, message) {
+export function historyToolCard(described, message, hidden = false) {
   const status = message.kind === 'tool_result' && /(^|\n)(error|failed|exit code [1-9])/i.test(message.tool_output || '') ? 'error' : 'done';
-  return toolCardHtml(described, status);
+  return toolCardHtml(described, status, hidden);
 }
 
 export function reasoningHtml(text, open = transcriptDetail() === 'full') {

@@ -15,6 +15,7 @@ export async function pageSession(id) {
   // The detail level belongs to the user and may have changed on another
   // device; read it before the transcript is rendered.
   await loadUserTheme();
+  if (pageGen !== state.pageGen) return;
   renderShell('sessions');
   const view = setPage(t('Session'), t('Loading transcript…'), `<a class="btn small" href="#/sessions">${t('Back')}</a>`);
   view.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
