@@ -8,6 +8,19 @@ import (
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
 
+func TestIsRecentlyActive(t *testing.T) {
+	now := time.Now()
+	if !isRecentlyActive(protocol.Session{UpdatedAt: now.Add(-10 * time.Second)}, now) {
+		t.Fatal("a transcript written seconds ago must count as working")
+	}
+	if isRecentlyActive(protocol.Session{UpdatedAt: now.Add(-10 * time.Minute)}, now) {
+		t.Fatal("a transcript written minutes ago must not count as working")
+	}
+	if isRecentlyActive(protocol.Session{}, now) {
+		t.Fatal("a session without an update time must not count as working")
+	}
+}
+
 func TestDiffSessionSnapshot(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	base := []protocol.Session{

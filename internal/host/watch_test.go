@@ -23,12 +23,13 @@ func waitForWatcherChange(w *storeWatcher, timeout time.Duration) bool {
 }
 
 func TestWatchPathsComeFromAdapters(t *testing.T) {
-	d := &Daemon{adapters: []Adapter{
+	d := &Daemon{}
+	d.adapters.Store(&[]Adapter{
 		NewClaudeAdapter("claude"),
 		NewCodexAdapter("codex"),
 		NewOpenCodeAdapter("opencode"),
 		NewGeminiAdapter("gemini"),
-	}}
+	})
 	for _, path := range d.watchPaths() {
 		if path == "" {
 			t.Fatal("adapter returned an empty watch path")

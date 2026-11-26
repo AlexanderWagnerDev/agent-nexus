@@ -13,9 +13,9 @@ import (
 // must reflect that without claiming a verified native integration.
 func TestInventoryAdvertisesConfiguredACPForGemini(t *testing.T) {
 	d := &Daemon{
-		cfg:      Config{ACPCommands: map[string]string{"gemini": "gemini --acp"}},
-		adapters: []Adapter{NewGeminiAdapter("definitely-not-installed-gemini")},
+		cfg: Config{ACPCommands: map[string]string{"gemini": "gemini --acp"}},
 	}
+	d.adapters.Store(&[]Adapter{NewGeminiAdapter("definitely-not-installed-gemini")})
 	agents := d.inventoryAgents()
 	if len(agents) != 1 {
 		t.Fatalf("expected one agent, got %+v", agents)
@@ -26,9 +26,8 @@ func TestInventoryAdvertisesConfiguredACPForGemini(t *testing.T) {
 }
 
 func TestInventoryDoesNotInventStructuredWithoutACP(t *testing.T) {
-	d := &Daemon{
-		adapters: []Adapter{NewGeminiAdapter("definitely-not-installed-gemini")},
-	}
+	d := &Daemon{}
+	d.adapters.Store(&[]Adapter{NewGeminiAdapter("definitely-not-installed-gemini")})
 	agents := d.inventoryAgents()
 	if len(agents) != 1 {
 		t.Fatalf("expected one agent, got %+v", agents)

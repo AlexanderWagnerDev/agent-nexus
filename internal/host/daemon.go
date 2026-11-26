@@ -26,7 +26,9 @@ type Daemon struct {
 	cfg      Config
 	policy   Policy
 	log      *slog.Logger
-	adapters []Adapter
+	adapters atomic.Pointer[[]Adapter]
+	// fixedAdapters disables re-detection when an embedder supplied the set.
+	fixedAdapters bool
 
 	runMu        sync.Mutex
 	runs         map[string]*Run
@@ -90,7 +92,8 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 		updateWake:   make(chan struct{}, 1),
 		versions:     map[string]string{},
 	}
-	d.adapters = DetectAdapters(logger)
+	list := DetectAdapters(logger)
+	d.adapters.Store(&list)
 	name := strings.TrimSpace(cfg.HostName)
 	if name == "" {
 		name = ReadHostname()
@@ -103,11 +106,19 @@ func NewDaemon(cfg Config, logger *slog.Logger) *Daemon {
 // used by tests and by embedding scenarios; production uses DetectAdapters.
 func NewDaemonWithAdapters(cfg Config, logger *slog.Logger, adapters []Adapter) *Daemon {
 	d := NewDaemon(cfg, logger)
-	d.adapters = adapters
+	d.adapters.Store(&adapters)
+	d.fixedAdapters = true
 	return d
 }
 
-func (d *Daemon) Adapters() []Adapter { return d.adapters }
+func (d *Daemon) Adapters() []Adapter { return d.adapterList() }
+
+func (d *Daemon) adapterList() []Adapter {
+	if list := d.adapters.Load(); list != nil {
+		return *list
+	}
+	return nil
+}
 
 func (d *Daemon) Run(ctx context.Context) error {
 	defer d.stopAllRuns()
@@ -485,7 +496,7 @@ func (d *Daemon) refreshSearchIndex(ctx context.Context) {
 	}()
 	d.indexMu.Lock()
 	defer d.indexMu.Unlock()
-	if err := d.index.Refresh(ctx, d.adapters, d.policy, d.log); err != nil && ctx.Err() == nil {
+	if err := d.index.Refresh(ctx, d.adapterList(), d.policy, d.log); err != nil && ctx.Err() == nil {
 		d.index.setStatus(0, 0, "error", err.Error())
 		d.log.Warn("search index refresh failed", "error", err)
 	}
@@ -530,8 +541,8 @@ func (d *Daemon) sendInventory() error {
 // configured adapter rather than the agent's own binary. Keeping this separate
 // from the hub link makes the capability rules testable.
 func (d *Daemon) inventoryAgents() []protocol.AgentInfo {
-	agents := make([]protocol.AgentInfo, 0, len(d.adapters))
-	for _, a := range d.adapters {
+	agents := make([]protocol.AgentInfo, 0, len(d.adapterList()))
+	for _, a := range d.adapterList() {
 		info, err := a.Detect(context.Background())
 		if err != nil {
 			continue
@@ -649,10 +660,38 @@ func (d *Daemon) inventoryLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			d.refreshAdapters()
 			if err := d.sendInventory(); err != nil {
 				return
 			}
 		}
+	}
+}
+
+// refreshAdapters adds agents that were installed or became visible after the
+// daemon started. It only adds, so running adapters and their caches stay
+// stable. A restart is still required if an existing agent's CLI appears after
+// its store was discovered first.
+func (d *Daemon) refreshAdapters() {
+	if d.fixedAdapters {
+		return
+	}
+	current := d.adapterList()
+	have := make(map[string]bool, len(current))
+	for _, a := range current {
+		have[a.Name()] = true
+	}
+	merged := current
+	for _, a := range DetectAdapters(discardLogger()) {
+		if have[a.Name()] {
+			continue
+		}
+		have[a.Name()] = true
+		merged = append(merged, a)
+		d.log.Info("agent detected after start", "agent", a.Name())
+	}
+	if len(merged) != len(current) {
+		d.adapters.Store(&merged)
 	}
 }
 
@@ -722,7 +761,7 @@ func (d *Daemon) resolveRunCwd(ctx context.Context, spec protocol.RunSpec) (stri
 
 func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 	var out []protocol.Session
-	for _, a := range d.adapters {
+	for _, a := range d.adapterList() {
 		sessions, err := a.ListSessions(ctx)
 		if err != nil {
 			// A broken parser must not look like "all sessions disappeared".
@@ -807,9 +846,23 @@ func (d *Daemon) listSessions(ctx context.Context) ([]protocol.Session, error) {
 		if outside[key] && !ours[key] {
 			out[i].ActiveElsewhere = true
 			out[i].State = protocol.StateRunning
+			continue
+		}
+		// A session that was just appended to is being worked on, whether the
+		// run belongs to us (a terminal "new" run cannot know the native id)
+		// or to a native terminal the process scan cannot match.
+		if isRecentlyActive(out[i], time.Now()) {
+			out[i].State = protocol.StateRunning
 		}
 	}
 	return out, nil
+}
+
+// isRecentlyActive treats a transcript written within the active window as a
+// running turn. Agents expose no portable turn signal, so recency is the only
+// signal shared by every adapter.
+func isRecentlyActive(s protocol.Session, now time.Time) bool {
+	return !s.UpdatedAt.IsZero() && now.Sub(s.UpdatedAt) < sessionActiveWindow
 }
 
 func (d *Daemon) handleMessage(ctx context.Context, msg protocol.Envelope) {
@@ -1036,7 +1089,7 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 			}
 		}
 		var hits []protocol.SearchHit
-		for _, a := range d.adapters {
+		for _, a := range d.adapterList() {
 			h, err := a.Search(context.Background(), p.Query, p.Limit)
 			if err != nil {
 				d.log.Debug("search failed", "agent", a.Name(), "error", err)
@@ -1121,7 +1174,7 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 }
 
 func (d *Daemon) adapter(name string) Adapter {
-	for _, a := range d.adapters {
+	for _, a := range d.adapterList() {
 		if a.Name() == name {
 			return a
 		}

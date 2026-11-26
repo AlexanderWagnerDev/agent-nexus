@@ -56,6 +56,28 @@ func ensureUserPath(dir string) error {
 	return nil
 }
 
+// userPathDirs returns the current per-user PATH from the registry. A daemon
+// started by a logon task keeps the environment from start time, so a PATH
+// entry added later is otherwise invisible to exec.LookPath until it restarts.
+func userPathDirs() []string {
+	key, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.QUERY_VALUE)
+	if err != nil {
+		return nil
+	}
+	defer key.Close()
+	value, _, err := key.GetStringValue("Path")
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, entry := range strings.Split(os.ExpandEnv(value), ";") {
+		if entry = strings.Trim(strings.TrimSpace(entry), `"`); entry != "" {
+			dirs = append(dirs, entry)
+		}
+	}
+	return dirs
+}
+
 // mergeUserPath reports the updated PATH and whether dir was missing. Entries
 // are compared case-insensitively and without trailing backslashes, as Windows
 // does for PATH lookups; existing entries and their order are preserved.

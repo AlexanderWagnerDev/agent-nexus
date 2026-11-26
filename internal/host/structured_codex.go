@@ -131,7 +131,7 @@ func (d *Daemon) startCodexStructured(parent context.Context, spec protocol.RunS
 	}()
 
 	bin := ""
-	for _, a := range d.adapters {
+	for _, a := range d.adapterList() {
 		if a.Name() == "codex" {
 			bin = d.agentBinary(a)
 			break

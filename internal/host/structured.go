@@ -122,7 +122,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		return
 	}
 	binPath := ""
-	for _, a := range d.adapters {
+	for _, a := range d.adapterList() {
 		if a.Name() == "opencode" {
 			binPath = d.agentBinary(a)
 			break
