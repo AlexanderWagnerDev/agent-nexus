@@ -119,6 +119,9 @@ func (a *GeminiAdapter) readSession(path string) (protocol.Session, map[string]a
 		for _, raw := range msgs {
 			m, _ := raw.(map[string]any)
 			role, _ := m["role"].(string)
+			if role == "" {
+				role, _ = m["type"].(string)
+			}
 			text := geminiText(m["content"])
 			if role == "user" && s.Title == "" && text != "" {
 				s.Title = cleanTitle(text)
@@ -142,11 +145,17 @@ func (a *GeminiAdapter) Transcript(ctx context.Context, nativeID string, offset,
 			for _, raw := range msgs {
 				m, _ := raw.(map[string]any)
 				role, _ := m["role"].(string)
-				if role != "user" && role != "assistant" && role != "model" {
+				if role == "" {
+					role, _ = m["type"].(string)
+				}
+				if role == "model" || role == "gemini" {
+					role = "assistant"
+				}
+				if role != "user" && role != "assistant" {
 					continue
 				}
-				if role == "model" {
-					role = "assistant"
+				if thought := geminiThoughts(m["thoughts"]); thought != "" {
+					all = append(all, protocol.Message{Role: "assistant", Kind: "reasoning", Text: thought, Timestamp: s.UpdatedAt})
 				}
 				text := geminiText(m["content"])
 				if strings.TrimSpace(text) == "" {
@@ -216,6 +225,33 @@ func (a *GeminiAdapter) BuildCommand(action Action) (Command, error) {
 		return Command{}, err
 	}
 	return Command{Path: path, Args: argv, Cwd: action.Cwd}, nil
+}
+
+// geminiThoughts flattens the per-message thought summaries that Gemini CLI
+// records next to the final answer.
+func geminiThoughts(v any) string {
+	items, _ := v.([]any)
+	var parts []string
+	for _, item := range items {
+		switch thought := item.(type) {
+		case string:
+			parts = append(parts, thought)
+		case map[string]any:
+			subject, _ := thought["subject"].(string)
+			description, _ := thought["description"].(string)
+			label := strings.TrimSpace(strings.Trim(subject, "*- "))
+			body := strings.TrimSpace(description)
+			switch {
+			case label != "" && body != "":
+				parts = append(parts, "**"+label+"**\n\n"+body)
+			case body != "":
+				parts = append(parts, body)
+			case label != "":
+				parts = append(parts, label)
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func geminiText(v any) string {

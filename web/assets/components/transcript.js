@@ -10,14 +10,18 @@ import { agentMeta, countLabel, esc, fmtStamp } from '../ui-format.js';
 const DETAIL_KEY = 'nexus-transcript-detail';
 const DETAIL_LEVELS = ['chat', 'normal', 'full'];
 
-/** How much of a transcript is rendered: chat only, normal or full. */
+/** How much of a transcript is rendered: chat only, normal or full. The hub
+ * stores the preference per user; localStorage keeps it steady until the
+ * settings request returns and on hubs that predate the column. */
 export function transcriptDetail() {
-  const level = storeGet(DETAIL_KEY, 'normal');
+  const level = state.settings?.transcript_detail ?? storeGet(DETAIL_KEY, 'normal');
   return DETAIL_LEVELS.includes(level) ? level : 'normal';
 }
 
 export function setTranscriptDetail(level) {
-  storeSet(DETAIL_KEY, DETAIL_LEVELS.includes(level) ? level : 'normal');
+  const value = DETAIL_LEVELS.includes(level) ? level : 'normal';
+  state.settings = { ...state.settings, transcript_detail: value };
+  storeSet(DETAIL_KEY, value);
 }
 
 export function inlineAttachmentLabel(name, path) {

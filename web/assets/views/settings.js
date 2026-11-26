@@ -46,7 +46,7 @@ export async function pageSettings() {
       </section>
       <section class="card">
         <h2 class="mt-0">${t('Transcript detail')}</h2>
-        <p class="hint">${t('Choose how much of the agent transcript is shown in chats and session transcripts. Stored on this device.')}</p>
+        <p class="hint">${t('Choose how much of the agent transcript is shown in chats and session transcripts. Stored on the hub for your user and follows you across devices.')}</p>
         <label class="label">${t('Detail level')}<select class="select" id="settings-transcript-detail">
           ${[
             ['chat', t('Chat only'), t('Only your prompts and the agent replies.')],
@@ -114,9 +114,19 @@ export async function pageSettings() {
     setLang(event.target.value);
     location.reload();
   });
-  document.getElementById('settings-transcript-detail').addEventListener('change', (event) => {
-    setTranscriptDetail(event.target.value);
-    toast(t('Transcript detail saved'));
+  document.getElementById('settings-transcript-detail').addEventListener('change', async (event) => {
+    const previous = transcriptDetail();
+    const level = event.target.value;
+    setTranscriptDetail(level);
+    try {
+      const saved = await api('/me/settings', { method: 'PUT', body: { transcript_detail: level } });
+      state.settings = { ...state.settings, ...saved };
+      toast(t('Transcript detail saved'));
+    } catch (err) {
+      setTranscriptDetail(previous);
+      event.target.value = previous;
+      toast(err.message, true);
+    }
   });
   view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {
     try {

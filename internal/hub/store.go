@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   theme TEXT NOT NULL DEFAULT 'system',
   notify_prefs TEXT NOT NULL DEFAULT '{}',
+  transcript_detail TEXT NOT NULL DEFAULT 'normal',
   updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS host_confirmations (
@@ -408,6 +409,7 @@ CREATE TABLE IF NOT EXISTS device_keys (
 	// does not revert an administrator's rename.
 	_, _ = s.db.Exec(`UPDATE hosts SET host_name_reported=name WHERE host_name_reported=''`)
 	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`)
+	_, _ = s.db.Exec(`ALTER TABLE user_settings ADD COLUMN transcript_detail TEXT NOT NULL DEFAULT 'normal'`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN cwd TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE runs ADD COLUMN error_code TEXT NOT NULL DEFAULT ''`)
@@ -467,6 +469,24 @@ func (s *Store) SetUserTheme(userID, theme string) error {
 	_, err := s.db.Exec(`INSERT INTO user_settings(user_id,theme,updated_at) VALUES(?,?,?)
 		ON CONFLICT(user_id) DO UPDATE SET theme=excluded.theme, updated_at=excluded.updated_at`,
 		userID, theme, ms(time.Now()))
+	return err
+}
+
+// UserTranscriptDetail returns how much of a transcript the user wants shown:
+// chat, normal or full. It follows the user across devices.
+func (s *Store) UserTranscriptDetail(userID string) (string, error) {
+	var detail string
+	err := s.db.QueryRow(`SELECT transcript_detail FROM user_settings WHERE user_id=?`, userID).Scan(&detail)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && detail == "") {
+		return "normal", nil
+	}
+	return detail, err
+}
+
+func (s *Store) SetUserTranscriptDetail(userID, detail string) error {
+	_, err := s.db.Exec(`INSERT INTO user_settings(user_id,theme,transcript_detail,updated_at) VALUES(?,'system',?,?)
+		ON CONFLICT(user_id) DO UPDATE SET transcript_detail=excluded.transcript_detail, updated_at=excluded.updated_at`,
+		userID, detail, ms(time.Now()))
 	return err
 }
 

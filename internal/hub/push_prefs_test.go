@@ -51,6 +51,34 @@ func TestNotificationPreferencesPersistAndDefault(t *testing.T) {
 	}
 }
 
+func TestTranscriptDetailPersistsForUser(t *testing.T) {
+	hub := newAPITestHub(t, Config{})
+	hub.setupOK()
+	var settings struct {
+		TranscriptDetail string `json:"transcript_detail"`
+	}
+	status, body := hub.do(nil, http.MethodGet, "/api/v1/me/settings", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "settings")
+	if err := json.Unmarshal(body, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.TranscriptDetail != "normal" {
+		t.Fatalf("default detail: %s", body)
+	}
+	status, body = hub.do(nil, http.MethodPut, "/api/v1/me/settings", map[string]any{"transcript_detail": "full"}, nil)
+	expectStatus(t, status, http.StatusOK, body, "update detail")
+	status, body = hub.do(nil, http.MethodGet, "/api/v1/me/settings", nil, nil)
+	expectStatus(t, status, http.StatusOK, body, "settings after update")
+	if err := json.Unmarshal(body, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.TranscriptDetail != "full" {
+		t.Fatalf("detail not persisted: %s", body)
+	}
+	status, body = hub.do(nil, http.MethodPut, "/api/v1/me/settings", map[string]any{"transcript_detail": "neon"}, nil)
+	expectStatus(t, status, http.StatusBadRequest, body, "invalid detail")
+}
+
 func TestSavePushSubscriptionDoesNotRebindAnotherAccount(t *testing.T) {
 	hub := newAPITestHub(t, Config{})
 	hub.setupOK()
