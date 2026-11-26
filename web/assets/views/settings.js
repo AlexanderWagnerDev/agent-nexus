@@ -115,8 +115,10 @@ export async function pageSettings() {
     location.reload();
   });
   document.getElementById('settings-transcript-detail').addEventListener('change', async (event) => {
+    const select = event.target;
     const previous = transcriptDetail();
-    const level = event.target.value;
+    const level = select.value;
+    select.disabled = true;
     setTranscriptDetail(level);
     try {
       const saved = await api('/me/settings', { method: 'PUT', body: { transcript_detail: level } });
@@ -124,8 +126,10 @@ export async function pageSettings() {
       toast(t('Transcript detail saved'));
     } catch (err) {
       setTranscriptDetail(previous);
-      event.target.value = previous;
+      select.value = previous;
       toast(err.message, true);
+    } finally {
+      select.disabled = false;
     }
   });
   view.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', async () => {

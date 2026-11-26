@@ -223,11 +223,12 @@ export async function saveTheme(theme) {
   }
 }
 
+/** Load the user's hub-scoped preferences (theme, transcript detail, push). */
 export async function loadUserTheme() {
   try {
     state.settings = await api('/me/settings');
     window.NexusTheme?.apply(state.settings.theme || 'system');
-  } catch { /* keep the local/system theme */ }
+  } catch { /* keep the previous values */ }
 }
 
 export function setPage(title, sub = '', actions = '') {
