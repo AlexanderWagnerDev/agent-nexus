@@ -475,6 +475,7 @@ export async function pageStructuredRun(id, run) {
 
   let gitRefreshHook = null;
   let refreshTranscript = () => {};
+  let scheduleTranscriptRefresh = () => {};
   const setState = (state) => {
     const wasBusy = currentState === 'running' || currentState === 'starting';
     currentState = state || 'unknown';
@@ -638,7 +639,7 @@ export async function pageStructuredRun(id, run) {
   const appendError = (text) => {
     const node = document.createElement('div');
     node.className = 'chat-error';
-    node.innerHTML = `${svgIcon('alert', 15)}<div><strong>${t('Run error')}</strong><pre>${esc(text)}</pre></div>`;
+    node.innerHTML = `${svgIcon('alert', 15)}<div><strong>${t('Run error')}</strong><pre>${esc(text)}</pre>${session ? `<a class="btn small mt-1" href="#/sessions/${esc(session.id)}?chat=1">${t('Reopen chat')}</a>` : ''}</div>`;
     messagesEl.appendChild(node);
     scrollBottom(true);
   };
@@ -726,12 +727,23 @@ export async function pageStructuredRun(id, run) {
 
   const handler = (msg) => {
     // A native CLI writing to the same session does not publish run events;
-    // its transcript only shows up as a session change on the host.
+    // its transcript only shows up as a session change on the host. Debounce:
+    // one host delta per changed session can arrive in bursts.
     if (msg.type === 'sessions.changed') {
-      if (session && msg.message === session.host_id) refreshTranscript();
+      if (session && msg.message === session.host_id) scheduleTranscriptRefresh();
       return;
     }
     if (msg.run_id !== id && msg.type !== 'ready') return;
+    // The hub fails runs when the host link drops (update, restart, network).
+    // The host sends this as a run event; the hub sends the same type as a
+    // plain envelope, which used to leave the chat spinning forever.
+    if (msg.type === 'run.error') {
+      const errorText = msg.error || t('run failed');
+      setState('failed');
+      noteText(errorText);
+      appendError(errorText);
+      return;
+    }
     if (msg.type === 'queue.changed') loadQueue().catch(() => {});
     if (msg.type === 'run.prompt.sent' && msg.message) appendUser(msg.message);
     if (msg.type === 'run.event' && msg.event) handleEvent(msg.event);
@@ -872,6 +884,14 @@ export async function pageStructuredRun(id, run) {
   refreshTranscript = () => {
     if (!run.session_id || !historyReady || !isNearBottom() || currentState !== 'idle') return;
     loadHistory(true).catch(() => {});
+  };
+  let transcriptRefreshTimer = null;
+  scheduleTranscriptRefresh = () => {
+    clearTimeout(transcriptRefreshTimer);
+    transcriptRefreshTimer = setTimeout(() => {
+      transcriptRefreshTimer = null;
+      refreshTranscript();
+    }, 600);
   };
 
   // An idle chat can be rebuilt from the transcript. A live run keeps its
@@ -1358,6 +1378,7 @@ export async function pageStructuredRun(id, run) {
   state.pageCleanup = () => {
     clearInterval(timer);
     clearInterval(transcriptTimer);
+    clearTimeout(transcriptRefreshTimer);
     clearInterval(gitTimer);
     gitRefreshHook = null;
     document.removeEventListener('keydown', shortcutHandler);

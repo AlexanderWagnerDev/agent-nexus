@@ -157,6 +157,7 @@ const de = {
   'Copy native id': 'Native ID kopieren',
   'Copy working directory': 'Arbeitsverzeichnis kopieren',
   Actions: 'Aktionen',
+  'Reopen chat': 'Chat neu öffnen',
   'Review changes': 'Änderungen prüfen',
   'Fork session': 'Session forken',
   'Fork in structured mode': 'Im Structured-Modus forken',

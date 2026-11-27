@@ -26,3 +26,10 @@ test('an open chat follows writes made in the native CLI', () => {
   assert.ok(chat.includes("msg.type === 'sessions.changed'"), 'chat does not listen for native session changes');
   assert.ok(chat.includes('clearInterval(transcriptTimer)'), 'the transcript poll is not cleared with the page');
 });
+
+// A host restart (for example an update) reaches the client as a plain
+// run.error envelope, not as a run event.
+test('a failed run leaves a way back into the chat', () => {
+  assert.ok(chat.includes("msg.type === 'run.error'"), 'the hub run.error envelope is ignored');
+  assert.ok(chat.includes('Reopen chat'), 'no way to reopen the chat after a failed run');
+});
