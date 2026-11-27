@@ -2,13 +2,13 @@
 
 A self-hosted control plane to discover, manage, and continue existing AI coding-agent sessions across Windows, Linux, and macOS.
 
-> **Status: v0.1.18 — current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini/Cursor/Devin model turns and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
+> **Status: v0.1.19 - current release.** Hub, host daemon, SAS host pairing, native session discovery, terminal resume, OpenCode/Codex structured chat, Claude through an ACP adapter, structured OpenCode/Codex/ACP forks, projects, pinned sessions, notification inbox and external channels, passkeys, Web Push with per-host preferences, transcript export and search, read-only Git review with live refresh, prompt templates and a durable prompt queue, a task board with dependencies and delegation, token/cost usage, multi-agent fan-out, project activity heatmaps, a keyboard shortcut overview, multi-user grants, a two-pane workspace, hub-signed and replay-protected host commands, signed and checksum-verified host auto-updates with idle gating and rollback, Windows process-tree termination, optional Prometheus metrics, a tested agent version matrix, host health and detail views, pixel-diff visual regression, a read-only MCP endpoint, the `nexus` terminal client and an English/German interface are implemented and runnable. Opt-in device-signed commands with replay protection are implemented for native clients; the browser UI remains cookie-authenticated. PostgreSQL and native apps are not implemented; real Claude/Gemini/Cursor/Devin model turns and deployment on three physical hosts have not been verified here. These are factual limitations, not release prerequisites. See [What works today](#what-works-today), [VERIFICATION.md](docs/VERIFICATION.md) and [Roadmap status](#roadmap-status).
 
-**v0.1.18 is the current release; v0.1.0 was the first official release.**
+**v0.1.19 is the current release; v0.1.0 was the first official release.**
 Releases are published through the manual release workflow as
 [GitHub releases](https://github.com/AlexanderWagnerDev/agent-nexus/releases)
-with signed archives and as multi-arch container images tagged `v0.1.18`,
-`0.1.18`, `latest` and `alpha`; the v0.1.0 through v0.1.17 releases remain
+with signed archives and as multi-arch container images tagged `v0.1.19`,
+`0.1.19`, `latest` and `alpha`; the v0.1.0 through v0.1.18 releases remain
 available under their own tags (`v0.1.7` was withdrawn after a Windows
 hidden-start regression). The `alpha` tag continues to move with `main` as the
 development channel. Official tags and releases still require explicit
@@ -173,14 +173,15 @@ install the newest CI build as an explicit fallback; that path requires
 make build          # produces bin/nexus-hub, bin/nexusd and bin/nexus
 ```
 
-Official images are published for the v0.1.18 release:
+Official images are published for the v0.1.19 release:
 
 ```bash
 docker pull alexanderwagnerdev/agent-nexus:latest
 ```
 
-`latest` follows the newest stable release; `v0.1.18` and `0.1.18` pin this
-release; `v0.1.17`/`0.1.17` stays the previous stable release, and `v0.1.16`/`0.1.16`,
+`latest` follows the newest stable release; `v0.1.19` and `0.1.19` pin this
+release; `v0.1.18`/`0.1.18` stays the previous stable release, and `v0.1.17`/`0.1.17`,
+`v0.1.16`/`0.1.16`,
 `v0.1.15`/`0.1.15`, `v0.1.14`/`0.1.14`,
 `v0.1.13`/`0.1.13`, `v0.1.12`/`0.1.12`,
 `v0.1.11`/`0.1.11`,
@@ -227,7 +228,7 @@ docker compose up -d
 To build the image from this checkout instead of pulling it, add the development
 override: `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
-Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.18`/`0.1.18` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
+Caddy terminates TLS; the hub is not exposed directly. See [deploy/Caddyfile](deploy/Caddyfile). Multi-arch images are published as `alexanderwagnerdev/agent-nexus:latest`, with `v0.1.19`/`0.1.19` for the release and `alpha` for `main`; see [docs/OPERATIONS.md](docs/OPERATIONS.md) for Portainer and reverse-proxy setups.
 
 ## Host updates
 
@@ -285,7 +286,7 @@ Remote control of a coding agent is remote code execution. AgentNexus treats it 
 - Passwords use Argon2id; TOTP is available as a second factor; sessions are HttpOnly, SameSite=Strict (and Secure with TLS). Sensitive actions require a five-minute step-up confirmation.
 - Security-relevant actions go to a hash-chained hub audit log and a local JSONL host audit log.
 
-**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.18 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
+**Before exposing the hub to the internet**, put it behind a TLS reverse proxy, register a passkey, keep a strong password + TOTP fallback, and read [docs/SECURITY.md](docs/SECURITY.md). This v0.1.19 build has not received an external security audit. Hub-to-host commands are signed and native clients can opt into device-signed writes, but the browser UI remains cookie-authenticated, host-side device-identity verification is not implemented, and PostgreSQL is not implemented; do not treat this as a 1.0 security posture. `/metrics` is disabled unless `NEXUS_METRICS=true` and `NEXUS_METRICS_TOKEN` is set.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 

@@ -6,6 +6,45 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-11-27
+
+### Added
+
+- The transcript detail level (Chat only, Normal, Full) is stored per user on the
+  hub instead of per device, so it follows an account across browsers. The
+  selector sits in the chat status bar and on the read-only transcript page; an
+  idle chat rebuilds from history, a live run reveals existing reasoning and tool
+  cards immediately. An unset hub preference stays empty so existing per-device
+  choices survive the upgrade.
+- Gemini transcripts include their recorded thought summaries.
+
+### Fixed
+
+- The host finds agents that were installed after the logon task started or that
+  live only in per-user install directories. Binaries are resolved through
+  `PATH`, the current user `PATH` from the registry (including `%VAR%` entries)
+  and the usual installer directories, the inventory is re-checked every five
+  minutes without swapping running adapters, the discovery watcher is rebuilt
+  when an adapter is added, non-executable Unix files are rejected, and Cursor is
+  also found through its newer `agent` binary name. ACP commands use the CLI path
+  found during discovery, so Cursor or installer-directory agents get structured
+  mode; explicit overrides still win.
+- Sessions whose transcript was written in the last two minutes report running,
+  which covers native terminals and new terminal runs whose session key never
+  becomes the native id.
+- OpenCode 2.4 transcripts showed user prompts but no agent replies or thinking.
+  Assistant text, reasoning and tool parts moved to `session_part` while the
+  message content stays empty; both layouts are joined and the inline content
+  remains the fallback for older 2.x stores. Assistant replies are searchable
+  again, and a transcript parser revision in the index fingerprint reindexes
+  existing documents once.
+- The web UI guards against stale routes: a newer navigation is no longer
+  overwritten by a late settings response. Hub-scoped preferences reload before
+  every route so another device's change applies on the next navigation, all
+  supplied settings are validated before any is written, and the detail selector
+  stays disabled during its save. Settings load only on pages that render
+  transcripts.
+
 ## [0.1.18] - 2026-11-25
 
 ### Fixed
