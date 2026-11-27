@@ -99,7 +99,7 @@ function buildDiff(obj) {
 }
 
 /** Convert a raw tool call into the compact data used by the chat cards. */
-export function describeTool(name, input, output = '') {
+export function describeTool(name, input, output = '', callID = '') {
   const obj = parseToolInput(input);
   const kind = classifyTool(name, obj);
   const command = commandText(obj);
@@ -129,6 +129,10 @@ export function describeTool(name, input, output = '') {
     path,
     paths,
     diff,
+    // The host caps live and transcript output; the full text is fetched by
+    // call id when the reader expands the card.
+    callID: callID || '',
+    truncated: /\(truncated\)\s*$/.test(rawOutput),
     inputText: typeof input === 'string' ? input : JSON.stringify(input ?? '', null, 2),
     output: rawOutput,
   };

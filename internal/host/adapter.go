@@ -34,6 +34,10 @@ type Adapter interface {
 	BuildCommand(Action) (Command, error)
 }
 
+type ToolOutputProvider interface {
+	ToolOutput(ctx context.Context, nativeID, callID string) (string, error)
+}
+
 // StoreWatcher is implemented by adapters that can name the local files whose
 // mtimes change when a session is created or extended. The daemon polls this
 // small fingerprint instead of rescanning every session file on every tick.

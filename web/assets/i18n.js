@@ -158,6 +158,7 @@ const de = {
   'Copy working directory': 'Arbeitsverzeichnis kopieren',
   Actions: 'Aktionen',
   'Reopen chat': 'Chat neu öffnen',
+  'Load full output': 'Vollständige Ausgabe laden',
   'Review changes': 'Änderungen prüfen',
   'Fork session': 'Session forken',
   'Fork in structured mode': 'Im Structured-Modus forken',

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 	"github.com/coder/websocket"
@@ -731,6 +732,45 @@ func (d *Daemon) sessionWithinRoots(agent, nativeID string) bool {
 	return ok && d.policy.WithinRoots(cwd)
 }
 
+// toolOutputChunkSize keeps a tool-output response well below the 32 MiB host
+// link limit. The browser asks for the next slice until next is 0.
+const toolOutputChunkSize = 4 << 20
+
+// toolOutputChunk returns a UTF-8-safe slice starting at offset and the byte
+// offset of the next slice, or 0 when the end was reached.
+func toolOutputChunk(s string, offset int) (string, int) {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(s) {
+		offset = len(s)
+	}
+	end := offset + toolOutputChunkSize
+	if end > len(s) {
+		end = len(s)
+	}
+	for end > offset && end < len(s) && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	if end >= len(s) {
+		return s[offset:], 0
+	}
+	return s[offset:end], end
+}
+
+// checkSessionReadable returns the reason a direct read is refused so the
+// transcript and tool-output paths cannot drift apart.
+func (d *Daemon) checkSessionReadable(agent, nativeID string) error {
+	cwd, known := d.sessionCwd(agent, nativeID)
+	if !known || cwd == "" {
+		return errors.New("session metadata is not available yet; retry after discovery")
+	}
+	if !d.policy.WithinRoots(cwd) {
+		return errors.New("session is outside the allowed roots")
+	}
+	return nil
+}
+
 // resolveRunCwd returns the working directory a run must use and enforces the
 // host policy on it. When the agent store can report the session's own
 // directory, that directory wins over the one supplied by the hub: otherwise a
@@ -1045,14 +1085,40 @@ func (d *Daemon) dispatchRequest(method string, params []byte) (any, error) {
 		// restricted host does not expose unrelated personal notes. An
 		// explicitly empty root list is a deny-all policy (docs/SECURITY.md),
 		// so the check must run even then.
-		cwd, known := d.sessionCwd(p.Agent, p.NativeID)
-		if !known || cwd == "" {
-			return nil, errors.New("session metadata is not available yet; retry after discovery")
-		}
-		if !d.policy.WithinRoots(cwd) {
-			return nil, errors.New("session is outside the allowed roots")
+		if err := d.checkSessionReadable(p.Agent, p.NativeID); err != nil {
+			return nil, err
 		}
 		return a.Transcript(context.Background(), p.NativeID, p.Offset, p.Limit)
+	case "tool_output":
+		var p struct {
+			NativeID string `json:"native_id"`
+			Agent    string `json:"agent"`
+			CallID   string `json:"call_id"`
+			Offset   int    `json:"offset"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if p.CallID == "" {
+			return nil, errors.New("call_id is required")
+		}
+		a := d.adapter(p.Agent)
+		if a == nil {
+			return nil, errors.New("agent not available")
+		}
+		provider, ok := a.(ToolOutputProvider)
+		if !ok {
+			return nil, errors.New("agent does not expose tool output")
+		}
+		if err := d.checkSessionReadable(p.Agent, p.NativeID); err != nil {
+			return nil, err
+		}
+		output, err := provider.ToolOutput(context.Background(), p.NativeID, p.CallID)
+		if err != nil {
+			return nil, err
+		}
+		chunk, next := toolOutputChunk(output, p.Offset)
+		return map[string]any{"output": chunk, "next": next}, nil
 	case "search":
 		var p struct {
 			Query string `json:"query"`

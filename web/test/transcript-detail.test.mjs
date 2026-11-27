@@ -10,6 +10,7 @@ globalThis.localStorage = {
 };
 
 const { state } = await import('../assets/state.js');
+const { describeTool } = await import('../assets/chat-format.js');
 const {
   reasoningHtml, renderTranscriptMessage, renderTranscriptMessages, setTranscriptDetail, toolCardHtml,
   transcriptDetail, transcriptDetailOptions,
@@ -65,4 +66,22 @@ test('synthetic agent prompts are only shown at full detail', () => {
   assert.equal(renderTranscriptMessage(message), '');
   setTranscriptDetail('full');
   assert.match(renderTranscriptMessage(message), /environment_context/);
+});
+
+test('a truncated tool preview offers the full output by call id', () => {
+  setTranscriptDetail('normal');
+  const html = toolCardHtml(describeTool('bash', '{"command":"go test"}', 'ok\n... (truncated)', 'call_1'), 'done');
+  assert.match(html, /data-load-output="call_1"/);
+  assert.match(html, /Load full output/);
+  const complete = toolCardHtml(describeTool('bash', '{"command":"go test"}', 'ok', 'call_1'), 'done');
+  assert.doesNotMatch(complete, /data-load-output/);
+});
+
+test('a tool call keeps its own output when no separate result row follows', () => {
+  setTranscriptDetail('normal');
+  const html = renderTranscriptMessages([{
+    role: 'assistant', kind: 'tool_call', tool_name: 'shell',
+    tool_input: '{"command":"echo hi"}', tool_output: 'hi', tool_call_id: 'call_2',
+  }]);
+  assert.match(html, /<pre class="tool-output">hi<\/pre>/);
 });

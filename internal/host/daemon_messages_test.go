@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlexanderWagnerDev/agent-nexus/internal/protocol"
 )
@@ -197,6 +198,27 @@ func TestRuntimeStatusAndAuditHelpers(t *testing.T) {
 		t.Fatal("adapters nil")
 	}
 	hostAudit("test.event", map[string]any{"run_id": "r1"})
+}
+
+func TestToolOutputChunkKeepsRunMessagesBounded(t *testing.T) {
+	big := strings.Repeat("a", toolOutputChunkSize+10)
+	first, next := toolOutputChunk(big, 0)
+	if len(first) != toolOutputChunkSize || next != toolOutputChunkSize {
+		t.Fatalf("first chunk: %d bytes, next %d", len(first), next)
+	}
+	rest, end := toolOutputChunk(big, next)
+	if len(rest) != 10 || end != 0 {
+		t.Fatalf("last chunk: %d bytes, next %d", len(rest), end)
+	}
+	// A slice must never split a UTF-8 rune.
+	multibyte := strings.Repeat("ä", toolOutputChunkSize/2+1)
+	chunk, next := toolOutputChunk(multibyte, 0)
+	if !utf8.ValidString(chunk) || next == 0 || next > len(multibyte) {
+		t.Fatalf("multi-byte chunk split a rune: valid=%v next=%d", utf8.ValidString(chunk), next)
+	}
+	if empty, end := toolOutputChunk(big, len(big)+1); empty != "" || end != 0 {
+		t.Fatalf("offset past the end: %q %d", empty, end)
+	}
 }
 
 func TestIdleChatDoesNotCountAsActiveRun(t *testing.T) {

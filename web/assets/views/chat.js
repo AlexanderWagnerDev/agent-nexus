@@ -6,7 +6,7 @@ import { draftKey, state, storeGet, storeSet } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, badge, closeModal, modal, toast } from '../ui.js';
 import { wsSend } from '../ws.js';
-import { reasoningHtml, renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, toolCardHtml, transcriptDetail, transcriptDetailOptions, workingHtml } from '../components/transcript.js';
+import { loadToolOutput, reasoningHtml, renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, toolCardHtml, transcriptDetail, transcriptDetailOptions, workingHtml } from '../components/transcript.js';
 import { startRun } from './session-detail.js';
 import { describeTool, parseDiffStat } from '../chat-format.js';
 import { getLang, t } from '../i18n.js';
@@ -161,6 +161,17 @@ export async function pageStructuredRun(id, run) {
   const chat = document.getElementById('chat');
   const messagesEl = document.getElementById('messages');
   messagesEl.dataset.empty = t('Send a message to continue this native session.');
+  messagesEl.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-load-output]');
+    if (button) loadToolOutput(button, run.session_id).catch((err) => toast(err.message, true));
+  });
+  // Expanding a truncated card loads the full output automatically; toggle
+  // does not bubble, so capture it on the container.
+  messagesEl.addEventListener('toggle', (event) => {
+    if (!event.target.matches('details.tool-card') || !event.target.open) return;
+    const button = event.target.querySelector('[data-load-output]');
+    if (button) loadToolOutput(button, run.session_id).catch((err) => toast(err.message, true));
+  }, true);
   const historyTop = document.getElementById('history-top');
   const workingSlot = document.getElementById('working-slot');
   const stateNode = document.getElementById('chat-state');
@@ -549,14 +560,15 @@ export async function pageStructuredRun(id, run) {
     const key = callID || ('tool-' + toolRecords.size);
     let rec = toolRecords.get(key);
     if (!rec) {
-      rec = { name: name || 'tool', input: input || '', output: '', status: 'running', node: null };
+      rec = { name: name || 'tool', callID: callID || '', input: input || '', output: '', status: 'running', node: null };
       toolRecords.set(key, rec);
     }
     if (name) rec.name = name;
+    if (callID) rec.callID = callID;
     if (input !== undefined) rec.input = input || '';
     if (output !== undefined) rec.output = output || '';
     if (status) rec.status = status;
-    const described = describeTool(rec.name, rec.input, rec.output);
+    const described = describeTool(rec.name, rec.input, rec.output, rec.callID);
     const wrapper = document.createElement('div');
     wrapper.innerHTML = toolCardHtml(described, rec.status);
     const node = wrapper.firstElementChild;

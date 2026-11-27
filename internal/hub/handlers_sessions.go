@@ -318,6 +318,52 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tr)
 }
 
+// handleSessionToolOutput returns the full output of one tool call. The
+// transcript and the live stream carry an 8 KB preview so a large test log
+// cannot exceed the host link limit; the browser loads the rest on demand.
+func (s *Server) handleSessionToolOutput(w http.ResponseWriter, r *http.Request) {
+	u := userFrom(r)
+	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if !s.sessionPermission(u, sess, "read_transcript") {
+		writeError(w, http.StatusForbidden, "read_transcript permission required")
+		return
+	}
+	if !s.hostOnline(sess.HostID) {
+		writeError(w, http.StatusServiceUnavailable, "host is offline")
+		return
+	}
+	callID := strings.TrimSpace(r.URL.Query().Get("call"))
+	if callID == "" {
+		writeError(w, http.StatusBadRequest, "call is required")
+		return
+	}
+	offset := atoiOr(r.URL.Query().Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+	params, _ := json.Marshal(map[string]any{"native_id": sess.NativeID, "agent": sess.Agent, "call_id": callID, "offset": offset})
+	ctx, cancel := context.WithTimeout(r.Context(), transcriptTimeout)
+	defer cancel()
+	result, err := s.hostRequest(ctx, sess.HostID, "tool_output", params)
+	if err != nil {
+		s.writeHostError(w, sess.HostID, "tool_output", transcriptTimeout, err)
+		return
+	}
+	var out struct {
+		Output string `json:"output"`
+		Next   int    `json:"next"`
+	}
+	if err := json.Unmarshal(result, &out); err != nil {
+		writeError(w, http.StatusBadGateway, "invalid host response")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) handleSessionGit(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
 	sess, err := s.store.SessionByID(u.ID, r.PathValue("id"), isAdminRole(u.Role))

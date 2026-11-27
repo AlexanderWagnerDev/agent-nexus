@@ -78,7 +78,7 @@ export function renderTranscriptMessage(m, agent = 'agent') {
   const detail = transcriptDetail();
   if (detail !== 'full' && m.role === 'user' && /^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || '')) return '';
   if (m.kind === 'tool_call' || m.kind === 'tool_result') {
-    const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '');
+    const described = describeTool(m.tool_name || (m.kind === 'tool_result' ? 'Tool result' : 'Tool'), m.tool_input || '', m.tool_output || '', m.tool_call_id || '');
     return historyToolCard(described, m, detail === 'chat');
   }
   if (m.kind === 'reasoning' && m.text) {
@@ -99,12 +99,14 @@ export function renderTranscriptMessages(messages, agent = 'agent') {
     const message = messages[i];
     if (message.kind === 'tool_call') {
       const next = messages[i + 1];
-      const output = next?.kind === 'tool_result' ? (next.tool_output || '') : '';
+      // OpenCode 2.x stores the output on the tool call itself; older stores
+      // emit a separate tool_result row immediately after it.
+      const output = next?.kind === 'tool_result' ? (next.tool_output || '') : (message.tool_output || '');
       if (next?.kind === 'tool_result') i += 1;
-      const described = describeTool(message.tool_name || 'Tool', message.tool_input || '', output);
+      const described = describeTool(message.tool_name || 'Tool', message.tool_input || '', output, message.tool_call_id || '');
       html.push(historyToolCard(described, { ...message, tool_output: output }, detail === 'chat'));
     } else if (message.kind === 'tool_result') {
-      const described = describeTool(message.tool_name || 'Tool result', '', message.tool_output || '');
+      const described = describeTool(message.tool_name || 'Tool result', '', message.tool_output || '', message.tool_call_id || '');
       html.push(historyToolCard(described, message, detail === 'chat'));
     } else {
       html.push(renderTranscriptMessage(message, agent));
@@ -172,6 +174,9 @@ export function toolCardHtml(described, status = 'done', hidden = false) {
   const diffBlock = described.diff ? renderDiffBlock(described.diff) : '';
   const output = described.kind !== 'edit' && described.output ? `<div class="tool-block"><div class="tool-label">${t('Output')}</div>${outputBlock(described.output)}</div>` : '';
   const hasStructured = commandBlock || pathBlock || diffBlock || output;
+  const fullButton = described.truncated && described.callID
+    ? `<button class="btn ghost small tool-load-output" type="button" data-load-output="${esc(described.callID)}">${t('Load full output')}</button>`
+    : '';
   const raw = described.inputText && described.inputText !== '{}' && described.inputText !== 'null'
     ? `<details class="tool-raw" ${transcriptDetail() === 'full' ? 'open' : ''}><summary>${t('Raw input')}</summary><pre>${esc(described.inputText)}</pre></details>`
     : '';
@@ -182,8 +187,43 @@ export function toolCardHtml(described, status = 'done', hidden = false) {
       <span class="tool-state ${status}">${statusMark}</span>
       <span class="tool-chevron">${svgIcon('chevronDown', 14)}</span>
     </summary>
-    <div class="tool-body">${hasStructured ? commandBlock + pathBlock + diffBlock + output : `<div class="tool-empty">${t('No further details.')}</div>`}${raw}</div>
+    <div class="tool-body">${hasStructured ? commandBlock + pathBlock + diffBlock + output : `<div class="tool-empty">${t('No further details.')}</div>`}${fullButton}${raw}</div>
   </details>`;
+}
+
+/** Replace a truncated tool preview with the full host-side output. The
+ * session page and the live chat both delegate clicks to this function. */
+export async function loadToolOutput(button, sessionId) {
+  const callID = button?.dataset.loadOutput;
+  if (!callID || !sessionId) return;
+  button.disabled = true;
+  try {
+    // The host slices the output below the WebSocket message limit; the
+    // browser reassembles it so very large logs still load in full.
+    let offset = 0;
+    const parts = [];
+    for (;;) {
+      const data = await api(`/sessions/${encodeURIComponent(sessionId)}/tool?call=${encodeURIComponent(callID)}&offset=${offset}`);
+      parts.push(data.output || '');
+      if (!data.next || data.next <= offset) break;
+      offset = data.next;
+    }
+    const text = parts.join('');
+    const body = button.closest('.tool-body') || button.parentElement;
+    let pre = body?.querySelector('pre.tool-output');
+    if (!pre && body) {
+      const block = document.createElement('div');
+      block.className = 'tool-block';
+      block.innerHTML = `<div class="tool-label">${t('Output')}</div><pre class="tool-output"></pre>`;
+      body.insertBefore(block, button);
+      pre = block.querySelector('pre');
+    }
+    if (pre) pre.textContent = text;
+    button.remove();
+  } catch (err) {
+    button.disabled = false;
+    throw err;
+  }
 }
 
 export function historyToolCard(described, message, hidden = false) {

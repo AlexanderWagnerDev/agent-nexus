@@ -223,6 +223,7 @@ type Message struct {
 	Kind       string    `json:"kind,omitempty"` // text, tool_call, tool_result
 	Text       string    `json:"text,omitempty"`
 	ToolName   string    `json:"tool_name,omitempty"`
+	ToolCallID string    `json:"tool_call_id,omitempty"`
 	ToolInput  string    `json:"tool_input,omitempty"`
 	ToolOutput string    `json:"tool_output,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`

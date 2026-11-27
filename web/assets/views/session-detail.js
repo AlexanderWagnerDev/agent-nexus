@@ -5,7 +5,7 @@ import { loadSidebar, loadUserTheme, renderShell, setPage } from '../shell.js';
 import { state } from '../state.js';
 import { openTab } from '../tabs.js';
 import { agentGlyph, closeModal, modal, stateBadge, toast } from '../ui.js';
-import { renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, transcriptDetail, transcriptDetailOptions } from '../components/transcript.js';
+import { loadToolOutput, renderDiffBlock, renderTranscriptMessages, saveTranscriptDetail, transcriptDetail, transcriptDetailOptions } from '../components/transcript.js';
 import { t } from '../i18n.js';
 import { svgIcon } from '../icons.js';
 import { agentMeta, cwdKey, esc, fmtRelative, fmtTime, nativeActivityBadge, projectName, repoLink } from '../ui-format.js';
@@ -141,8 +141,16 @@ export async function pageSession(id) {
         </div>
       </aside>
     </div>`;
-  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));
-  document.getElementById('fork-session-structured')?.addEventListener('click', () => startRun(s, true, 'structured'));
+  document.getElementById('transcript').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-load-output]');
+    if (button) loadToolOutput(button, s.id).catch((err) => toast(err.message, true));
+  });
+  document.getElementById('transcript').addEventListener('toggle', (event) => {
+    if (!event.target.matches('details.tool-card') || !event.target.open) return;
+    const button = event.target.querySelector('[data-load-output]');
+    if (button) loadToolOutput(button, s.id).catch((err) => toast(err.message, true));
+  }, true);
+  document.getElementById('fork-session')?.addEventListener('click', () => startRun(s, true, 'terminal'));  document.getElementById('fork-session-structured')?.addEventListener('click', () => startRun(s, true, 'structured'));
   document.getElementById('task-from-session')?.addEventListener('click', () => {
     modal(`
       <h2>${t('Create task')}</h2>

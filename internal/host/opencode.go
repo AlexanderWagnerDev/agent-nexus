@@ -259,6 +259,7 @@ type opencodePart struct {
 		Text string `json:"text"`
 	} `json:"content"`
 	Files []string `json:"files"`
+	ID    string   `json:"id"`
 }
 
 type v2Message struct {
@@ -379,6 +380,20 @@ func toolMessage(p opencodePart, ts time.Time) protocol.Message {
 	if input == "" {
 		input = p.State.Title
 	}
+	name := p.Tool
+	if name == "" {
+		name = p.Name
+	}
+	return protocol.Message{
+		Role: "assistant", Kind: "tool_call", ToolName: name, ToolCallID: p.ID,
+		ToolInput: truncate(input, 8000), ToolOutput: truncate(toolOutputText(p), 8000), Timestamp: ts,
+	}
+}
+
+// toolOutputText prefers the part content and falls back to the fields older
+// stores used. The live event path caps this at 8000 bytes; this helper keeps
+// the full text for the on-demand tool output endpoint.
+func toolOutputText(p opencodePart) string {
 	var out strings.Builder
 	for _, item := range p.State.Content {
 		if item.Text != "" {
@@ -399,14 +414,50 @@ func toolMessage(p opencodePart, ts time.Time) protocol.Message {
 	if out.Len() == 0 && len(p.State.Error) > 0 {
 		out.WriteString(rawErrorText(p.State.Error))
 	}
-	name := p.Tool
-	if name == "" {
-		name = p.Name
+	return out.String()
+}
+
+// ToolOutput returns one tool call's full output. The transcript and the live
+// event stream carry only a preview; the web client asks for the rest when the
+// user expands a tool card.
+func (a *OpenCodeAdapter) ToolOutput(ctx context.Context, nativeID, callID string) (string, error) {
+	db, err := a.open()
+	if err != nil {
+		return "", err
 	}
-	return protocol.Message{
-		Role: "assistant", Kind: "tool_call", ToolName: name,
-		ToolInput: truncate(input, 8000), ToolOutput: truncate(out.String(), 8000), Timestamp: ts,
+	defer db.Close()
+	if a.tableExists(db, "session_v2") && a.tableExists(db, "session_part") {
+		var exists int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM session_v2 WHERE id=?`, nativeID).Scan(&exists); err == nil && exists > 0 {
+			return a.partOutput(ctx, db, "session_part", nativeID, callID)
+		}
 	}
+	if a.tableExists(db, "part") {
+		return a.partOutput(ctx, db, "part", nativeID, callID)
+	}
+	return "", fmt.Errorf("no tool output store for %s", nativeID)
+}
+
+func (a *OpenCodeAdapter) partOutput(ctx context.Context, db *sql.DB, table, nativeID, callID string) (string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT data FROM `+table+` WHERE session_id=?`, nativeID)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return "", err
+		}
+		var p opencodePart
+		if json.Unmarshal([]byte(data), &p) == nil && p.ID == callID {
+			return toolOutputText(p), nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("tool call %s not found in %s", callID, nativeID)
 }
 
 func rawErrorText(raw json.RawMessage) string {

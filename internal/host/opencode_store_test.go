@@ -161,7 +161,7 @@ func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 		typ, data string
 	}{
 		{"user", `{"text":"Fix the login"}`},
-		{"assistant", `{"content":[{"type":"text","text":"Done."},{"type":"tool","tool":"bash","state":{"input":{"cmd":"go test ./..."},"content":[{"type":"text","text":"ok"}]}}]}`},
+		{"assistant", `{"content":[{"type":"text","text":"Done."},{"type":"tool","id":"call_1","tool":"bash","state":{"input":{"cmd":"go test ./..."},"content":[{"type":"text","text":"ok"}]}}]}`},
 	}
 	for i, row := range rows {
 		if _, err := db.Exec(`INSERT INTO session_message(id,session_id,seq,type,time_created,data) VALUES(?,?,?,?,?,?)`,
@@ -189,7 +189,7 @@ func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 	if tr.Total != 3 {
 		t.Fatalf("expected user, text and tool entries, got %d: %+v", tr.Total, tr.Messages)
 	}
-	if tr.Messages[0].Text != "Fix the login" || tr.Messages[2].ToolName != "bash" {
+	if tr.Messages[0].Text != "Fix the login" || tr.Messages[2].ToolName != "bash" || tr.Messages[2].ToolCallID != "call_1" {
 		t.Fatalf("unexpected transcript: %+v", tr.Messages)
 	}
 	hits, err := a.Search(context.Background(), "login", 10)
@@ -207,5 +207,47 @@ func TestOpenCodeV2StoreAndResumeCommand(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(cmd.Args, " "), "--session ses_test") {
 		t.Fatalf("unexpected command: %+v", cmd)
+	}
+}
+
+func TestOpenCodeToolOutput(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`CREATE TABLE session_v2 (id TEXT PRIMARY KEY)`,
+		`CREATE TABLE session_part (message_id TEXT, session_id TEXT, ordinal INTEGER, type TEXT, data TEXT)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO session_v2(id) VALUES('ses_t')`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	part := `{"type":"tool","id":"call_1","name":"shell","state":{"input":{"command":"go test"},"content":[{"type":"text","text":"line1\nline2"}]}}`
+	if _, err := db.Exec(`INSERT INTO session_part(message_id,session_id,ordinal,type,data) VALUES('m1','ses_t',0,'tool',?)`, part); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("OPENCODE_DB", dbPath)
+	a := NewOpenCodeAdapter("opencode")
+	out, err := a.ToolOutput(context.Background(), "ses_t", "call_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "line1\nline2" {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	if _, err := a.ToolOutput(context.Background(), "ses_t", "missing"); err == nil {
+		t.Fatal("missing tool call returned no error")
 	}
 }

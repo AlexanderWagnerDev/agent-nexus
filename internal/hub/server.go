@@ -227,6 +227,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/{id}/tags", s.requireAuth(s.handleAddSessionTag))
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}/tags/{tag}", s.requireAuth(s.handleDeleteSessionTag))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/transcript", s.requireAuth(s.handleTranscript))
+	mux.HandleFunc("GET /api/v1/sessions/{id}/tool", s.requireAuth(s.handleSessionToolOutput))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/export", s.requireAuth(s.handleExport))
 	mux.HandleFunc("GET /api/v1/sessions/{id}/git", s.requireAuth(s.handleSessionGit))
 	mux.HandleFunc("POST /api/v1/sessions/{id}/runs", s.requireAuth(s.handleCreateRun))
