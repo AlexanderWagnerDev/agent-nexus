@@ -184,6 +184,30 @@ func TestSearchIndexReindexesGeminiAfterParserUpgrade(t *testing.T) {
 	}
 }
 
+func TestSearchIndexReindexesOpenCodeAfterParserUpgrade(t *testing.T) {
+	index, adapter, root := newIndexFixture(t)
+	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"opencode"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, log); err != nil {
+		t.Fatal(err)
+	}
+	// A document written before the parser revision was part of the
+	// fingerprint, with session metadata that has not changed since.
+	old := fmt.Sprintf("%d|%d|%s", adapter.sessions[0].UpdatedAt.UnixNano(), adapter.sessions[0].MessageCount, adapter.sessions[0].Title)
+	if _, err := index.db.Exec(`UPDATE documents SET fingerprint=? WHERE agent=? AND native_id=?`, old, "opencode", "inside"); err != nil {
+		t.Fatal(err)
+	}
+	adapter.transcripts["inside"] = protocol.Transcript{Total: 1, Messages: []protocol.Message{
+		{Role: "assistant", Text: "bluebird reply", Timestamp: adapter.sessions[0].UpdatedAt},
+	}}
+	if err := index.Refresh(context.Background(), []Adapter{adapter}, policy, log); err != nil {
+		t.Fatal(err)
+	}
+	if hits, err := index.Search(context.Background(), "bluebird", 10); err != nil || len(hits) != 1 {
+		t.Fatalf("stale fingerprint skipped the reindex: %+v %v", hits, err)
+	}
+}
+
 func TestSearchIndexPolicyAndDisabled(t *testing.T) {
 	index, adapter, root := newIndexFixture(t)
 	policy := Policy{AllowedRoots: []string{root}, AllowedAgents: []string{"codex"}}

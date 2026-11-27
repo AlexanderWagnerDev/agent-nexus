@@ -4,6 +4,17 @@ package host
 
 import "testing"
 
+func TestExpandRegistryPath(t *testing.T) {
+	t.Setenv("AGENTNEXUS_TEST_DIR", `C:\tools`)
+	if got, want := expandRegistryPath(`%AGENTNEXUS_TEST_DIR%\bin`), `C:\tools\bin`; got != want {
+		t.Fatalf("expandRegistryPath = %q, want %q", got, want)
+	}
+	const unset = `%AGENTNEXUS_NOT_SET_91f2%\bin`
+	if got := expandRegistryPath(unset); got != unset {
+		t.Fatalf("unknown variable was not kept literal: %q", got)
+	}
+}
+
 func TestMergeUserPath(t *testing.T) {
 	const dir = `C:\Users\me\AppData\Local\AgentNexus`
 	for name, tc := range map[string]struct {

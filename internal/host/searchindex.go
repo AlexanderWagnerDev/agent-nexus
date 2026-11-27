@@ -326,8 +326,12 @@ func (x *SearchIndex) indexOne(ctx context.Context, adapters []Adapter, sess ind
 // suffix keeps the historical fingerprint, so unaffected agents are not
 // reindexed on upgrade.
 func indexParserVersion(agent string) string {
-	if agent == "gemini" {
+	switch agent {
+	case "gemini":
 		// 2 adds recorded thoughts and the type-based message format.
+		return "|2"
+	case "opencode":
+		// 2 reads assistant parts from session_part.
 		return "|2"
 	}
 	return ""

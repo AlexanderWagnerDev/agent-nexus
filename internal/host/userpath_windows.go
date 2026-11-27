@@ -70,12 +70,38 @@ func userPathDirs() []string {
 		return nil
 	}
 	var dirs []string
-	for _, entry := range strings.Split(os.ExpandEnv(value), ";") {
+	for _, entry := range strings.Split(expandRegistryPath(value), ";") {
 		if entry = strings.Trim(strings.TrimSpace(entry), `"`); entry != "" {
 			dirs = append(dirs, entry)
 		}
 	}
 	return dirs
+}
+
+// expandRegistryPath expands Windows %VAR% references, which os.ExpandEnv
+// does not recognize. Unknown variables stay literal, like the OS behavior.
+func expandRegistryPath(value string) string {
+	var b strings.Builder
+	for {
+		start := strings.IndexByte(value, '%')
+		if start < 0 {
+			b.WriteString(value)
+			return b.String()
+		}
+		end := strings.IndexByte(value[start+1:], '%')
+		if end < 0 {
+			b.WriteString(value)
+			return b.String()
+		}
+		end += start + 1
+		b.WriteString(value[:start])
+		if expanded, ok := os.LookupEnv(value[start+1 : end]); ok {
+			b.WriteString(expanded)
+		} else {
+			b.WriteString(value[start : end+1])
+		}
+		value = value[end+1:]
+	}
 }
 
 // mergeUserPath reports the updated PATH and whether dir was missing. Entries

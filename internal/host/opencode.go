@@ -524,6 +524,29 @@ func (a *OpenCodeAdapter) Search(ctx context.Context, query string, limit int) (
 			rows.Close()
 		}
 	}
+	// 2.4 keeps assistant text and reasoning in session_part, so a message-only
+	// query would miss everything the agent wrote.
+	if a.tableExists(db, "session_part") && a.tableExists(db, "session_v2") {
+		rows, err := db.QueryContext(ctx, `
+			SELECT s.id, COALESCE(s.title,''), p.data, p.time_created
+			FROM session_part p JOIN session_v2 s ON s.id = p.session_id
+			WHERE p.data LIKE ? ESCAPE '\' AND s.time_archived IS NULL
+			ORDER BY p.time_created DESC LIMIT ?`, likePattern(query), limit)
+		if err == nil {
+			for rows.Next() {
+				var id, title, data string
+				var created int64
+				if rows.Scan(&id, &title, &data, &created) == nil && !seen[id] {
+					seen[id] = true
+					hits = append(hits, protocol.SearchHit{
+						NativeID: id, Agent: "opencode", Title: cleanTitle(title),
+						Snippet: v2Snippet(data, query), At: time.UnixMilli(created).UTC(),
+					})
+				}
+			}
+			rows.Close()
+		}
+	}
 	if len(hits) == 0 && a.tableExists(db, "part") && a.tableExists(db, "session") {
 		rows, err := db.QueryContext(ctx, `
 			SELECT s.id, COALESCE(s.title,''), p.data, p.time_created

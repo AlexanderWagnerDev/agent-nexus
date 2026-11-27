@@ -27,6 +27,8 @@ type Daemon struct {
 	policy   Policy
 	log      *slog.Logger
 	adapters atomic.Pointer[[]Adapter]
+	// adapterGen increments when the adapter set changes.
+	adapterGen atomic.Uint64
 	// fixedAdapters disables re-detection when an embedder supplied the set.
 	fixedAdapters bool
 
@@ -549,7 +551,7 @@ func (d *Daemon) inventoryAgents() []protocol.AgentInfo {
 		}
 		d.applyVersionPolicy(&info)
 		d.rememberAgentVersion(info.Name, info.Version)
-		if d.cfg.ACPCommand(info.Name) != "" && !sliceContains(info.Capabilities, "structured") &&
+		if d.acpCommand(info.Name) != "" && !sliceContains(info.Capabilities, "structured") &&
 			(!info.Untested || d.cfg.AllowUntestedAgentVersions) {
 			info.Capabilities = append(info.Capabilities, "structured")
 		}
@@ -596,6 +598,7 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 	defer poll.Stop()
 	watcher := newStoreWatcher(d.watchPaths())
 	watcher.FullScan()
+	adapterGen := d.adapterGen.Load()
 	var debounce *time.Timer
 	var debounceC <-chan time.Time
 	trigger := func() {
@@ -624,6 +627,16 @@ func (d *Daemon) discoveryLoop(ctx context.Context) {
 			}
 			return
 		case <-poll.C:
+			// A newly detected adapter brings new store roots; rebuild the
+			// watcher so its sessions get the fast poll instead of waiting
+			// for the 30-second fallback.
+			if d.adapterGen.Load() != adapterGen {
+				adapterGen = d.adapterGen.Load()
+				watcher = newStoreWatcher(d.watchPaths())
+				watcher.FullScan()
+				trigger()
+				continue
+			}
 			if watcher.FastChanged(time.Now()) {
 				trigger()
 			}
@@ -692,6 +705,7 @@ func (d *Daemon) refreshAdapters() {
 	}
 	if len(merged) != len(current) {
 		d.adapters.Store(&merged)
+		d.adapterGen.Add(1)
 	}
 }
 

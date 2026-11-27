@@ -55,7 +55,7 @@ func TestOpenCodeV2AssistantParts(t *testing.T) {
 	defer db.Close()
 	_, err = db.Exec(`
 		CREATE TABLE session_v2 (id TEXT PRIMARY KEY, directory TEXT, title TEXT,
-			time_created INTEGER, time_updated INTEGER);
+			time_created INTEGER, time_updated INTEGER, time_archived INTEGER);
 		CREATE TABLE session_message (
 			id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER,
 			time_created INTEGER, time_updated INTEGER, data TEXT
@@ -110,6 +110,13 @@ func TestOpenCodeV2AssistantParts(t *testing.T) {
 	}
 	if tr.Messages[2].Text != "hi from a part" || tr.Messages[3].ToolName != "bash" {
 		t.Fatalf("assistant parts were dropped: %+v", tr.Messages)
+	}
+	hits, err := a.Search(context.Background(), "reply", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].NativeID != "ses_parts" {
+		t.Fatalf("search missed a reply stored in session_part: %+v", hits)
 	}
 }
 
