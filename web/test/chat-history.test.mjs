@@ -19,3 +19,10 @@ test('the transcript loader cannot skip the live-event flush', () => {
   assert.ok(ready > 0, 'historyReady is never set');
   assert.ok(flush > ready, 'buffered live events are never flushed');
 });
+
+// OpenCode TUI writes bypass hub runs, so the chat only learns about them from
+// the host's session delta or the transcript poll.
+test('an open chat follows writes made in the native CLI', () => {
+  assert.ok(chat.includes("msg.type === 'sessions.changed'"), 'chat does not listen for native session changes');
+  assert.ok(chat.includes('clearInterval(transcriptTimer)'), 'the transcript poll is not cleared with the page');
+});

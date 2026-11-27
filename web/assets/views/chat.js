@@ -441,6 +441,7 @@ export async function pageStructuredRun(id, run) {
   const historyAssistantTexts = new Set();
   let historyOffset = 0;
   let historyTotal = 0;
+  let historyMark = '';
   let autoScroll = true;
   let currentState = run.state || 'starting';
 
@@ -724,6 +725,12 @@ export async function pageStructuredRun(id, run) {
   };
 
   const handler = (msg) => {
+    // A native CLI writing to the same session does not publish run events;
+    // its transcript only shows up as a session change on the host.
+    if (msg.type === 'sessions.changed') {
+      if (session && msg.message === session.host_id) refreshTranscript();
+      return;
+    }
     if (msg.run_id !== id && msg.type !== 'ready') return;
     if (msg.type === 'queue.changed') loadQueue().catch(() => {});
     if (msg.type === 'run.prompt.sent' && msg.message) appendUser(msg.message);
@@ -826,6 +833,11 @@ export async function pageStructuredRun(id, run) {
           historyOffset = offset;
           const detail = transcriptDetail();
           const visible = (tr.messages || []).filter((m) => detail === 'full' || m.kind === 'tool_call' || m.kind === 'tool_result' || m.role !== 'user' || !/^\s*<(environment_context|recommended_plugins|user_instructions|permissions|skills)/i.test(m.text || ''));
+          // A background refresh must not rebuild an unchanged transcript: it
+          // would drop the reader's text selection every few seconds.
+          const mark = visible.map((m) => [m.role, m.kind, m.tool_name, (m.text || '').length, (m.tool_output || '').length, m.timestamp].join(':')).join('|');
+          if (onlyIfIdle && mark === historyMark) return;
+          historyMark = mark;
           for (const message of visible) {
             if (message.role === 'assistant' && (!message.kind || message.kind === 'text')) {
               const text = String(message.text || '').trim();
@@ -1337,9 +1349,15 @@ export async function pageStructuredRun(id, run) {
       noteText(t('Reconnecting…'));
     }
   }, 800);
+  // The hub can miss a native-write delta (host reconnect); the transcript
+  // poll keeps both writers visible without F5.
+  const transcriptTimer = setInterval(() => {
+    if (!document.hidden) refreshTranscript();
+  }, 5000);
 
   state.pageCleanup = () => {
     clearInterval(timer);
+    clearInterval(transcriptTimer);
     clearInterval(gitTimer);
     gitRefreshHook = null;
     document.removeEventListener('keydown', shortcutHandler);
