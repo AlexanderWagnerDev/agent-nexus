@@ -115,7 +115,7 @@ export function hostRowCompact(h) {
 }
 
 export function sessionRow(s) {
-  return `<a class="session-row" href="#/sessions/${esc(s.id)}">
+  return `<a class="session-row" href="#/sessions/${esc(s.id)}?chat=1">
     ${agentGlyph(s.agent)}
     <span class="session-row-main">
       <strong>${esc(s.title || t('Untitled session'))}</strong>

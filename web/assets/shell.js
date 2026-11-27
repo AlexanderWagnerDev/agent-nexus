@@ -159,7 +159,7 @@ export function toggleSidebar() {
 
 export function sidebarSession(s) {
   const title = s.title || t('Untitled session');
-  return `<a class="side-row side-session" href="#/sessions/${esc(s.id)}" title="${esc(title)}">
+  return `<a class="side-row side-session" href="#/sessions/${esc(s.id)}?chat=1" title="${esc(title)}">
     <span class="side-state ${s.state === 'running' ? 'running' : s.state === 'waiting_for_input' ? 'waiting' : ''}"></span>
     ${agentGlyph(s.agent, 'small')}
     <span class="truncate">${esc(title)}</span>

@@ -33,6 +33,7 @@ test('routes the home and section pages', () => {
 test('extracts session and run ids', () => {
   assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'session', id: 'abc' });
   assert.deepEqual(parseRoute('#/sessions/abc/changes'), { page: 'sessionChanges', id: 'abc' });
+  assert.deepEqual(parseRoute('#/sessions/abc?chat=1'), { page: 'session', id: 'abc' });
   assert.deepEqual(parseRoute('#/runs/run-1'), { page: 'run', id: 'run-1' });
 });
 

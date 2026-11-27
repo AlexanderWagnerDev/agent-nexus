@@ -53,7 +53,7 @@ function groupHead(group) {
 
 function row(session, group) {
   return `<div class="session-row virtual-row">
-    <a class="session-row-link" href="#/sessions/${esc(session.id)}">
+    <a class="session-row-link" href="#/sessions/${esc(session.id)}?chat=1">
       ${agentGlyph(session.agent)}
       <span class="session-row-main"><strong>${esc(session.local_title || session.title || t('Untitled session'))}</strong><small>${group.hosts.size > 1 ? `${esc(session.host_name || session.host_id)} &middot; ` : ''}${esc(fmtRelative(session.updated_at))} &middot; ${countLabel(session.message_count || 0, 'message', 'messages')}${group.roots.size > 1 && session.repo_root ? ` &middot; ${esc(projectName(session.repo_root))}` : ''}</small></span>
     </a>

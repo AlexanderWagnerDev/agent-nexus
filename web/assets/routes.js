@@ -2,7 +2,7 @@
 
 /** Map a hash to the page name and its path id. Pure and unit-tested. */
 export function parseRoute(hash) {
-  const h = hash || '#/';
+  const h = (hash || '#/').split('?')[0] || '#/';
   if (h.startsWith('#/hosts/')) return { page: 'host', id: h.split('/')[2] };
   if (h.startsWith('#/hosts')) return { page: 'hosts' };
   if (h.startsWith('#/projects')) return { page: 'projects' };

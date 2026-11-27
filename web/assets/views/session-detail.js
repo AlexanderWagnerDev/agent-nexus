@@ -35,6 +35,15 @@ export async function pageSession(id) {
     structuredAllowed = Boolean(info?.capabilities?.includes('structured'));
   } catch { /* keep the previous capability assumption */ }
   if (pageGen !== state.pageGen) return;
+  // The session list opens the chat directly; the read-only transcript stays
+  // reachable from the chat's details panel and every plain session link.
+  const wantsChat = new URLSearchParams(location.hash.split('?')[1] || '').get('chat') === '1';
+  // A failed start (conflict dialog, read-only host) falls through to the
+  // transcript instead of leaving the loading spinner behind.
+  if (wantsChat && structuredAllowed) {
+    await startRun(s, false, 'structured');
+    if (location.hash.startsWith('#/runs/')) return;
+  }
   openTab({ id: s.id, key: s.id, session_id: s.id, kind: 'session', href: `#/sessions/${s.id}`, title: s.local_title || s.title || 'Untitled session', agent: s.agent });
   rememberRecent({ id: s.id, title: s.local_title || s.title || 'Untitled session', agent: s.agent, hint: `${agent.label} · ${s.host_name} · ${projectName(s.cwd)}`, href: `#/sessions/${s.id}` });
   const title = s.local_title || s.title || 'Session';
