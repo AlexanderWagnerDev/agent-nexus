@@ -1389,10 +1389,40 @@ type runtimeStatus struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// activeRunCount counts runs that would lose work if the daemon restarted
+// now. An idle structured chat between turns does not count: chat runs stay
+// open while a browser tab is open, so counting them blocked auto-updates for
+// days. Terminal runs are always interactive and always count.
 func (d *Daemon) activeRunCount() int {
 	d.runMu.Lock()
 	defer d.runMu.Unlock()
-	return len(d.runs) + len(d.structured) + len(d.codexRuns) + len(d.acpRuns) + len(d.startingRuns)
+	n := len(d.runs) + len(d.startingRuns)
+	for _, r := range d.structured {
+		if runBusy(r.currentState()) {
+			n++
+		}
+	}
+	for _, r := range d.codexRuns {
+		if runBusy(r.currentState()) {
+			n++
+		}
+	}
+	for _, r := range d.acpRuns {
+		if runBusy(r.currentState()) {
+			n++
+		}
+	}
+	return n
+}
+
+// runBusy treats unknown driver states as busy so a state bug cannot lose a
+// turn during an update.
+func runBusy(state string) bool {
+	switch state {
+	case protocol.StateIdle, protocol.StateCompleted, protocol.StateFailed, protocol.StateExited:
+		return false
+	}
+	return true
 }
 
 // writeRuntimeStatus publishes the active-run count for the updater. A stale

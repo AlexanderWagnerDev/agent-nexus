@@ -199,6 +199,29 @@ func TestRuntimeStatusAndAuditHelpers(t *testing.T) {
 	hostAudit("test.event", map[string]any{"run_id": "r1"})
 }
 
+func TestIdleChatDoesNotCountAsActiveRun(t *testing.T) {
+	d := silentDaemon(echoTestAdapter{})
+	d.structured["idle"] = &StructuredRun{id: "idle", state: protocol.StateIdle}
+	if got := d.activeRunCount(); got != 0 {
+		t.Fatalf("idle chat blocked updates: %d", got)
+	}
+	d.structured["busy"] = &StructuredRun{id: "busy", state: protocol.StateRunning}
+	d.structured["waiting"] = &StructuredRun{id: "waiting", state: protocol.StateWaiting}
+	if got := d.activeRunCount(); got != 2 {
+		t.Fatalf("running or waiting chats were not counted: %d", got)
+	}
+	// An unknown driver state must stay busy so a state bug cannot lose a turn.
+	d.structured["unknown"] = &StructuredRun{id: "unknown", state: protocol.StateUnknown}
+	if got := d.activeRunCount(); got != 3 {
+		t.Fatalf("unknown chat state was treated as idle: %d", got)
+	}
+	// Terminal runs are interactive until they exit.
+	d.runs["terminal"] = &Run{id: "terminal"}
+	if got := d.activeRunCount(); got != 4 {
+		t.Fatalf("terminal run was not counted: %d", got)
+	}
+}
+
 type nopWriteCloser struct{}
 
 func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
