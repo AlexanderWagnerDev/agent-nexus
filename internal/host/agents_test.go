@@ -41,6 +41,19 @@ func TestFindAgentBinaryFindsUserInstallDir(t *testing.T) {
 	}
 }
 
+func TestFindAgentBinaryRejectsNonExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows resolves executables by extension")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "opencode"), []byte("not a program"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findAgentBinary(agentSpec{name: "opencode", binary: "opencode"}, []string{dir}); ok {
+		t.Fatal("a non-executable file was accepted as an agent binary")
+	}
+}
+
 func TestFindAgentBinaryUsesCursorAlias(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	var dir string

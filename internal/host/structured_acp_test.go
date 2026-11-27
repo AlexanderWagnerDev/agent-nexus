@@ -55,6 +55,20 @@ func TestACPCommandOverride(t *testing.T) {
 	}
 }
 
+func TestACPCommandUsesDetectedBinary(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "agent")
+	d := &Daemon{}
+	list := []Adapter{&CursorAdapter{bin: bin, root: t.TempDir()}}
+	d.adapters.Store(&list)
+	if got, want := d.acpCommand("cursor"), `"`+bin+`" acp`; got != want {
+		t.Fatalf("acpCommand(cursor) = %q, want %q", got, want)
+	}
+	d.cfg.ACPCommands = map[string]string{"cursor": "custom --stdio"}
+	if got := d.acpCommand("cursor"); got != "custom --stdio" {
+		t.Fatalf("explicit override = %q", got)
+	}
+}
+
 func TestACPCommandAutoDetectsCommandCode(t *testing.T) {
 	dir := t.TempDir()
 	name := "command-code"

@@ -77,7 +77,7 @@ func (d *Daemon) startStructuredRun(parent context.Context, spec protocol.RunSpe
 		d.startCodexStructured(parent, spec)
 		return
 	}
-	if command := d.cfg.ACPCommand(spec.Agent); command != "" {
+	if command := d.acpCommand(spec.Agent); command != "" {
 		d.startACPStructured(parent, spec, command)
 		return
 	}
@@ -323,8 +323,34 @@ func (d *Daemon) agentBinary(a Adapter) string {
 		return v.bin
 	case *GeminiAdapter:
 		return v.bin
+	case *CommandCodeAdapter:
+		return v.bin
+	case *CursorAdapter:
+		return v.bin
+	case *DevinAdapter:
+		return v.bin
 	}
 	return ""
+}
+
+// acpCommand returns the configured ACP adapter or builds "<binary> acp" from
+// the CLI path found during discovery. Without that path, an agent detected
+// through an alias or an installer directory stayed out of structured mode.
+func (d *Daemon) acpCommand(agent string) string {
+	if d.cfg.ACPCommands != nil {
+		if cmd := strings.TrimSpace(d.cfg.ACPCommands[agent]); cmd != "" {
+			return cmd
+		}
+	}
+	switch agent {
+	case "commandcode", "cursor", "devin":
+		if a := d.adapter(agent); a != nil {
+			if bin := d.agentBinary(a); bin != "" {
+				return `"` + bin + `" acp`
+			}
+		}
+	}
+	return d.cfg.ACPCommand(agent)
 }
 
 func forkSource(spec protocol.RunSpec) string {

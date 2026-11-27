@@ -91,9 +91,16 @@ func findAgentBinary(spec agentSpec, dirs []string) (string, bool) {
 		for _, ext := range executableExtensions() {
 			for _, dir := range dirs {
 				path := filepath.Join(dir, name+ext)
-				if info, err := os.Stat(path); err == nil && !info.IsDir() {
-					return path, true
+				info, err := os.Stat(path)
+				if err != nil || info.IsDir() {
+					continue
 				}
+				// exec.LookPath rejects non-executable files on Unix; the
+				// fallback must not shadow a usable install further down.
+				if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+					continue
+				}
+				return path, true
 			}
 		}
 	}
