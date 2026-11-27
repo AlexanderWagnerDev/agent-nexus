@@ -852,19 +852,19 @@ func (r *StructuredRun) handleEvent(typ string, data map[string]any) {
 		r.mu.Unlock()
 		send(protocol.RunEvent{Type: "tool.started", CallID: callID, ToolName: str(data["name"])})
 	case "session.tool.input.ended":
-		send(protocol.RunEvent{Type: "tool.input", CallID: str(data["id"]), ToolInput: str(data["text"])})
+		send(protocol.RunEvent{Type: "tool.input", CallID: str(data["id"]), ToolInput: truncate(str(data["text"]), 8000)})
 	case "session.tool.called":
 		callID := str(data["id"])
 		input := ""
 		if data["input"] != nil {
-			input = jsonText(data["input"])
+			input = truncate(jsonText(data["input"]), 8000)
 		}
 		r.mu.Lock()
 		name := r.calls[callID]
 		r.mu.Unlock()
 		send(protocol.RunEvent{Type: "tool.started", CallID: callID, ToolName: name, ToolInput: input})
 	case "session.tool.success", "session.tool.failed":
-		ev := protocol.RunEvent{Type: "tool.completed", CallID: str(data["id"]), ToolOutput: contentText(data["content"])}
+		ev := protocol.RunEvent{Type: "tool.completed", CallID: str(data["id"]), ToolOutput: truncate(contentText(data["content"]), 8000)}
 		if typ == "session.tool.failed" {
 			ev.Error = errorText(data["error"])
 			ev.Decision = "failed"

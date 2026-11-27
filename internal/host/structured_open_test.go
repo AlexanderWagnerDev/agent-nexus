@@ -316,21 +316,36 @@ func TestStructuredHandleEvent(t *testing.T) {
 	run.handleEvent("session.status", map[string]any{"status": map[string]any{"type": "busy"}})
 	run.handleEvent("session.status", map[string]any{"status": map[string]any{"type": "idle"}})
 	run.handleEvent("unknown.event", nil)
+	big := strings.Repeat("x", 20000)
+	run.handleEvent("session.tool.success", map[string]any{"id": "c3", "content": []any{map[string]any{"text": big}}})
 
 	if run.currentState() != "idle" {
 		t.Fatalf("state: %s", run.currentState())
 	}
 	var got []string
+	var output string
 	timeout := time.After(2 * time.Second)
-	for len(got) < 16 {
+	for {
 		select {
 		case event := <-events:
 			got = append(got, event.Type)
+			if event.Type == "tool.completed" && event.CallID == "c3" {
+				output = event.ToolOutput
+			}
 		case <-timeout:
-			t.Fatalf("only received %d events: %v", len(got), got)
+			if len(got) < 16 {
+				t.Fatalf("only received %d events: %v", len(got), got)
+			}
+			if output == "" {
+				t.Fatal("missing tool result")
+			}
+			if len(output) >= len(big) || !strings.Contains(output, "(truncated)") {
+				t.Fatalf("live tool output was not truncated: %d bytes", len(output))
+			}
+			run.Stop()
+			return
 		}
 	}
-	run.Stop()
 }
 
 func TestStructuredStreamEvents(t *testing.T) {
