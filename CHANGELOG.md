@@ -6,6 +6,39 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-11-28
+
+### Added
+
+- Session links in the session list, sidebar and home open the structured chat
+  directly instead of a read-only transcript that needed a second click. The
+  transcript stays reachable from the chat details panel and from every plain
+  session link, search result and run link.
+- Tool cards can load the complete output. The transcript and the live stream
+  carry an 8 KB preview; expanding a truncated card fetches the full text from
+  the host by tool-call id in 4 MiB UTF-8-safe slices, so large logs arrive in
+  full without exceeding the host link limit.
+
+### Fixed
+
+- An open chat follows writes made in the native OpenCode TUI or desktop: it
+  refreshes when the host reports a session change, polls while the run is idle,
+  debounces event bursts and skips an unchanged transcript.
+- OpenCode 2.x transcripts dropped the output of tool calls because the output is
+  stored on the tool call itself while the renderer expected a separate result
+  row. Shell output and other tool results now appear in the read-only
+  transcript.
+- A host disconnect (update, restart or network) left the chat on "Agent is
+  working": the hub sends a plain `run.error` envelope that the chat ignored. It
+  now shows the error with a "Reopen chat" action.
+- Live OpenCode tool events forward an 8 KB preview of the command input and
+  output. A large shell log could exceed the 32 MiB host link limit and drop the
+  event stream, which hid later tool cards until a reload.
+- Host auto-updates no longer wait forever while a chat tab is open. Idle
+  structured chats do not count as active runs; terminal runs and turns that are
+  running or waiting for a decision still block the restart. Hosts still on
+  0.1.19 need one `nexusd update --install --force` for this fix to apply.
+
 ## [0.1.19] - 2026-11-27
 
 ### Added

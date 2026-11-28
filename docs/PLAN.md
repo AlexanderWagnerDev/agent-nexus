@@ -2,10 +2,10 @@
 
 This document is the single source of truth for **what** AgentNexus must do (requirements), **how** it will be built (technical decisions) and **in which steps** (work packages). Component details live in [ARCHITECTURE.md](ARCHITECTURE.md), per-agent details in [AGENT-INTEGRATIONS.md](AGENT-INTEGRATIONS.md), security details in [SECURITY.md](SECURITY.md), and the schedule with acceptance criteria in [ROADMAP.md](ROADMAP.md).
 
-- **Status:** v0.1.19 is the current release (v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.9, v0.1.8, v0.1.7, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 were the published releases before it); later phases continue without a new major version. See [ROADMAP.md - Implementation status](ROADMAP.md#implementation-status)
-- **Last reviewed:** 2026-11-27
+- **Status:** v0.1.20 is the current release (v0.1.19, v0.1.18, v0.1.17, v0.1.16, v0.1.15, v0.1.14, v0.1.13, v0.1.12, v0.1.11, v0.1.10, v0.1.9, v0.1.8, v0.1.7, v0.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, v0.1.1 and v0.1.0 were the published releases before it); later phases continue without a new major version. See [ROADMAP.md - Implementation status](ROADMAP.md#implementation-status)
+- **Last reviewed:** 2026-11-28
 
-### Implementation snapshot (v0.1.19)
+### Implementation snapshot (v0.1.20)
 
 - **Implemented:** hub/daemon, SAS host pairing, discovery/transcripts for
   Claude/Codex/OpenCode (Gemini best effort), terminal resume, OpenCode/Codex
